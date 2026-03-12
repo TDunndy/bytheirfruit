@@ -89,6 +89,7 @@ function dbChurchToLocal(c) {
     address: c.address || "",
     zip: c.zip || "",
     phone: c.phone || "",
+    email: c.email || "",
     website: c.website || "",
     size: c.size || "",
     serviceStyle: c.service_style || "",
@@ -1007,21 +1008,18 @@ export default function ByTheirFruit() {
       {/* PROFILE */}
       {!loading && page === "profile" && currentChurch && (() => {
         const c = currentChurch; const overall = avg(c.scores); const rated = hasScores(c);
+        const mapUrl = c.address && c.city ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c.name}, ${c.address}, ${c.city}, ${c.state}`)}` : null;
         return (
           <div style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px" }}>
             <FadeIn>
               <button onClick={() => setPage("discover")} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 24, fontFamily: T.body }}>← Back</button>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
-                <div>
+                <div style={{ flex: 1 }}>
                   <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 5px", letterSpacing: "-0.035em" }}>{c.name}</h1>
-                  <div style={{ fontSize: 13, color: T.textSoft }}>{c.denomination} · {c.city}, {c.state}{c.size ? ` · ${c.size}` : ""}{c.serviceStyle ? ` · ${c.serviceStyle}` : ""}</div>
-                  <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{c.address}{c.serviceTimes ? ` · ${c.serviceTimes}` : ""}</div>
-                  {(c.phone || c.website) && (
-                    <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 12 }}>
-                      {c.phone && <span style={{ color: T.textSoft }}>☎ {c.phone}</span>}
-                      {c.website && <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" style={{ color: T.accent, textDecoration: "none", fontWeight: 500 }}>🌐 Website</a>}
-                    </div>
-                  )}
+                  <div style={{ fontSize: 14, color: T.textSoft, fontWeight: 500 }}>{c.denomination}</div>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 10 }}>
+                    {c.tags.map((tag, j) => <span key={j} style={{ fontSize: 11.5, padding: "4px 12px", borderRadius: T.radiusFull, background: T.accentSoft, color: T.accent, fontWeight: 600, border: `1px solid ${T.accentBorder}` }}>{tag}</span>)}
+                  </div>
                 </div>
                 {rated ? (
                   <div style={{ padding: "12px 20px", borderRadius: T.radius, textAlign: "center", background: scoreBg(overall), border: `1.5px solid ${scoreBorder2(overall)}` }}>
@@ -1035,12 +1033,72 @@ export default function ByTheirFruit() {
                   </div>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", margin: "12px 0 28px" }}>
-                {c.tags.map((tag, j) => <span key={j} style={{ fontSize: 11.5, padding: "4px 12px", borderRadius: T.radiusFull, background: T.accentSoft, color: T.accent, fontWeight: 600, border: `1px solid ${T.accentBorder}` }}>{tag}</span>)}
+
+              {/* Contact & Info Card */}
+              <div style={{ marginTop: 20, padding: "20px 24px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px 32px" }}>
+                  {c.address && !c.address.toLowerCase().startsWith("po box") && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: T.textMuted, marginBottom: 4 }}>Address</div>
+                      {mapUrl ? (
+                        <a href={mapUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: T.accent, textDecoration: "none", lineHeight: 1.5, fontWeight: 500 }}>{c.address}, {c.city}, {c.state} {c.zip}</a>
+                      ) : (
+                        <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{c.address}, {c.city}, {c.state} {c.zip}</div>
+                      )}
+                    </div>
+                  )}
+                  {c.address && c.address.toLowerCase().startsWith("po box") && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: T.textMuted, marginBottom: 4 }}>Location</div>
+                      <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>{c.city}, {c.state} {c.zip}</div>
+                    </div>
+                  )}
+                  {c.phone && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: T.textMuted, marginBottom: 4 }}>Phone</div>
+                      <a href={`tel:${c.phone}`} style={{ fontSize: 13, color: T.accent, textDecoration: "none", fontWeight: 500 }}>{c.phone}</a>
+                    </div>
+                  )}
+                  {c.email && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: T.textMuted, marginBottom: 4 }}>Email</div>
+                      <a href={`mailto:${c.email}`} style={{ fontSize: 13, color: T.accent, textDecoration: "none", fontWeight: 500 }}>{c.email}</a>
+                    </div>
+                  )}
+                  {c.website && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: T.textMuted, marginBottom: 4 }}>Website</div>
+                      <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: T.accent, textDecoration: "none", fontWeight: 500, wordBreak: "break-all" }}>{c.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a>
+                    </div>
+                  )}
+                  {c.serviceTimes && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: T.textMuted, marginBottom: 4 }}>Service Times</div>
+                      <div style={{ fontSize: 13, color: T.text }}>{c.serviceTimes}</div>
+                    </div>
+                  )}
+                  {c.size && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: T.textMuted, marginBottom: 4 }}>Size</div>
+                      <div style={{ fontSize: 13, color: T.text }}>{c.size}</div>
+                    </div>
+                  )}
+                </div>
+                {!c.phone && !c.website && !c.email && (
+                  <div style={{ fontSize: 12, color: T.textMuted, fontStyle: "italic" }}>Contact information not yet available. If you attend this church, help us out by writing a review!</div>
+                )}
+                {mapUrl && (
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.borderLight}` }}>
+                    <a href={mapUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: T.accent, textDecoration: "none", fontWeight: 600 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                      Get Directions
+                    </a>
+                  </div>
+                )}
               </div>
             </FadeIn>
 
-            <div className="btf-profile-grid" style={{ display: "grid", gridTemplateColumns: "270px 1fr", gap: 20, alignItems: "start" }}>
+            <div className="btf-profile-grid" style={{ display: "grid", gridTemplateColumns: "270px 1fr", gap: 20, alignItems: "start", marginTop: 24 }}>
               <FadeIn delay={120}>
                 <div style={{ padding: "22px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}`, position: "sticky", top: 64 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: T.textMuted, marginBottom: 14 }}>Congregation Assessment</div>
@@ -1053,7 +1111,6 @@ export default function ByTheirFruit() {
                       <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{c.totalReviews} of {MIN_REVIEWS_FOR_SCORE}</div>
                     </div>
                   )}
-                  <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: T.radiusSm, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, fontSize: 11, color: T.amber, lineHeight: 1.5, fontWeight: 500 }}>Scores update every Saturday.</div>
                 </div>
               </FadeIn>
 
