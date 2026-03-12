@@ -14,6 +14,7 @@ const T = {
   green: "#22c55e", greenSoft: "rgba(34,197,94,0.12)",
   amber: "#f59e0b", amberSoft: "rgba(245,158,11,0.12)",
   red: "#ef4444", redSoft: "rgba(239,68,68,0.12)",
+  purple: "#a855f7", purpleSoft: "rgba(168,85,247,0.12)",
   heading: "'Sora', sans-serif", body: "'Plus Jakarta Sans', sans-serif", mono: "'JetBrains Mono', monospace",
   radius: 10, radiusSm: 6, radiusFull: 9999,
 };
@@ -26,12 +27,17 @@ const scoreColor = (s) => s >= 4.5 ? T.green : s >= 3.5 ? T.amber : T.red;
 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
 const formatDateTime = (d) => d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "—";
 
-function Stat({ label, value, sub, color }) {
+function Stat({ label, value, sub, color, icon }) {
   return (
     <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 32, fontWeight: 800, fontFamily: T.heading, color: color || T.text, letterSpacing: "-0.03em", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4 }}>{sub}</div>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{label}</div>
+          <div style={{ fontSize: 32, fontWeight: 800, fontFamily: T.heading, color: color || T.text, letterSpacing: "-0.03em", lineHeight: 1 }}>{value}</div>
+          {sub && <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4 }}>{sub}</div>}
+        </div>
+        {icon && <div style={{ fontSize: 24, opacity: 0.3 }}>{icon}</div>}
+      </div>
     </div>
   );
 }
@@ -45,6 +51,7 @@ function Badge({ status }) {
     flagged: { bg: T.amberSoft, color: T.amber, border: "transparent" },
     pending: { bg: T.accentSoft, color: T.accent, border: "transparent" },
     removed: { bg: T.surfaceAlt, color: T.textMuted, border: T.border },
+    hidden: { bg: T.purpleSoft, color: T.purple, border: "transparent" },
     admin: { bg: T.accentSoft, color: T.accent, border: "transparent" },
     moderator: { bg: "rgba(102,205,170,0.12)", color: "#66cdaa", border: "transparent" },
     user: { bg: T.surfaceAlt, color: T.textMuted, border: T.border },
@@ -59,6 +66,7 @@ function Button({ onClick, variant = "primary", children, disabled = false, styl
     green: { bg: T.green, color: "#000", hoverBg: "#16a34a", borderColor: "transparent" },
     red: { bg: T.red, color: "#fff", hoverBg: "#dc2626", borderColor: "transparent" },
     amber: { bg: T.amber, color: "#000", hoverBg: "#d97706", borderColor: "transparent" },
+    purple: { bg: T.purple, color: "#fff", hoverBg: "#9333ea", borderColor: "transparent" },
   };
   const v = variants[variant];
   return (
@@ -72,7 +80,7 @@ function Button({ onClick, variant = "primary", children, disabled = false, styl
   );
 }
 
-function Modal({ isOpen, onClose, title, children }) {
+function Modal({ isOpen, onClose, title, children, wide = false }) {
   if (!isOpen) return null;
   return (
     <div onClick={onClose} style={{
@@ -81,7 +89,7 @@ function Modal({ isOpen, onClose, title, children }) {
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radius,
-        padding: 24, maxWidth: 600, width: "90%", maxHeight: "80vh", overflow: "auto",
+        padding: 24, maxWidth: wide ? 800 : 600, width: "90%", maxHeight: "80vh", overflow: "auto",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700, fontFamily: T.heading, margin: 0 }}>{title}</h2>
@@ -89,6 +97,32 @@ function Modal({ isOpen, onClose, title, children }) {
         </div>
         {children}
       </div>
+    </div>
+  );
+}
+
+function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmLabel = "Confirm", variant = "red" }) {
+  if (!isOpen) return null;
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+      <p style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6, margin: "0 0 20px" }}>{message}</p>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <Button onClick={onClose} variant="secondary">Cancel</Button>
+        <Button onClick={() => { onConfirm(); onClose(); }} variant={variant}>{confirmLabel}</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function MiniBar({ label, value, max, color }) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 6 }}>
+      <span style={{ width: 120, color: T.textSoft, flexShrink: 0 }}>{label}</span>
+      <div style={{ flex: 1, height: 6, borderRadius: 3, background: T.surfaceAlt }}>
+        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 3, background: color || T.accent, transition: "width 0.3s" }} />
+      </div>
+      <span style={{ width: 40, textAlign: "right", fontWeight: 600, fontFamily: T.mono, color: T.text }}>{value}</span>
     </div>
   );
 }
@@ -127,7 +161,6 @@ function LoginForm({ onLoginSuccess }) {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{
               width: "100%", padding: "10px 12px", background: T.surfaceAlt, border: `1px solid ${T.border}`,
               borderRadius: T.radiusSm, color: T.text, fontFamily: T.body, fontSize: 14,
-              transition: "border-color 0.15s",
             }} />
           </div>
           <div>
@@ -176,6 +209,16 @@ export default function AdminDashboard() {
   const [selectedReviews, setSelectedReviews] = useState(new Set());
   const [userRoleModal, setUserRoleModal] = useState(null);
   const [recalculating, setRecalculating] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [reviewDetailModal, setReviewDetailModal] = useState(null);
+  const [churchReviewsModal, setChurchReviewsModal] = useState(null);
+  const [churchReviewsList, setChurchReviewsList] = useState([]);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg, color = T.green) => {
+    setToast({ msg, color });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   /* --- AUTH CHECK --- */
   useEffect(() => {
@@ -194,32 +237,24 @@ export default function AdminDashboard() {
 
   /* --- FETCH DATA --- */
   const [totalChurchCount, setTotalChurchCount] = useState(0);
+  const [denomCounts, setDenomCounts] = useState({});
+  const [stateCounts, setStateCounts] = useState({});
+
   const fetchData = useCallback(async () => {
     setLoadingData(true);
     const [usersRes, churchCountRes, reviewsRes, flagsRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("churches").select("*", { count: "exact", head: true }),
-      supabase.from("reviews").select("*, profiles(display_name, id), churches(name, id)").order("created_at", { ascending: false }),
+      supabase.from("reviews").select("*, profiles(display_name, id), churches(name, id, city, state)").order("created_at", { ascending: false }),
       supabase.from("review_flags").select("*").order("created_at", { ascending: false }),
     ]);
 
     if (usersRes.data) setUsers(usersRes.data);
     setTotalChurchCount(churchCountRes.count || 0);
-    // Load churches on-demand via search in Churches tab instead of all at once
     setChurches([]);
     if (reviewsRes.data) setReviews(reviewsRes.data);
     if (flagsRes.data) setReviewFlags(flagsRes.data);
     setLoadingData(false);
-  }, []);
-
-  const searchAdminChurches = useCallback(async (query) => {
-    let q = supabase.from("churches").select("*");
-    if (query) {
-      q = q.or(`name.ilike.%${query}%,city.ilike.%${query}%,denomination.ilike.%${query}%`);
-    }
-    q = q.order("total_reviews", { ascending: false }).limit(100);
-    const { data } = await q;
-    if (data) setChurches(data);
   }, []);
 
   useEffect(() => {
@@ -232,31 +267,137 @@ export default function AdminDashboard() {
   const pendingReviews = reviews.filter(r => r.status === "pending").length;
   const flaggedReviews = reviews.filter(r => r.status === "flagged").length;
   const removedReviews = reviews.filter(r => r.status === "removed").length;
-  const claimedChurches = churches.filter(c => c.claimed_by).length;
-  const avgScore = churches.length > 0
-    ? (churches.filter(c => c.score_overall).reduce((sum, c) => sum + parseFloat(c.score_overall || 0), 0) / (churches.filter(c => c.score_overall).length || 1)).toFixed(2)
-    : "N/A";
+  const hiddenReviews = reviews.filter(r => r.status === "hidden").length;
+
+  // Reviews over time
+  const reviewsByWeek = useMemo(() => {
+    const weeks = {};
+    reviews.forEach(r => {
+      const d = new Date(r.created_at);
+      const weekStart = new Date(d);
+      weekStart.setDate(d.getDate() - d.getDay());
+      const key = weekStart.toISOString().slice(0, 10);
+      weeks[key] = (weeks[key] || 0) + 1;
+    });
+    return Object.entries(weeks).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
+  }, [reviews]);
+
+  // Denomination breakdown from reviews
+  const reviewsByDenom = useMemo(() => {
+    const counts = {};
+    reviews.forEach(r => {
+      const church = r.churches;
+      if (church) {
+        // We don't have denomination from the join, but we can count by church
+      }
+    });
+    return counts;
+  }, [reviews]);
+
+  // User demographics
+  const demographics = useMemo(() => {
+    const gender = { Male: 0, Female: 0, "Prefer not to answer": 0, "Not set": 0 };
+    const age = {};
+    const income = {};
+    users.forEach(u => {
+      if (u.gender && gender[u.gender] !== undefined) gender[u.gender]++;
+      else if (u.gender) gender[u.gender] = (gender[u.gender] || 0) + 1;
+      else gender["Not set"]++;
+
+      if (u.age_range) age[u.age_range] = (age[u.age_range] || 0) + 1;
+      else age["Not set"] = (age["Not set"] || 0) + 1;
+
+      if (u.income_bracket) income[u.income_bracket] = (income[u.income_bracket] || 0) + 1;
+      else income["Not set"] = (income["Not set"] || 0) + 1;
+    });
+    return { gender, age, income };
+  }, [users]);
+
+  // Top reviewed churches
+  const topReviewedChurches = useMemo(() => {
+    const counts = {};
+    reviews.forEach(r => {
+      if (r.churches?.name) {
+        const key = r.churches.id;
+        if (!counts[key]) counts[key] = { name: r.churches.name, city: r.churches.city, state: r.churches.state, count: 0, totalScore: 0 };
+        counts[key].count++;
+        if (r.score_overall) counts[key].totalScore += parseFloat(r.score_overall);
+      }
+    });
+    return Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 10);
+  }, [reviews]);
+
+  // User roles breakdown
+  const roleBreakdown = useMemo(() => {
+    const roles = { admin: 0, moderator: 0, user: 0 };
+    users.forEach(u => { roles[u.role] = (roles[u.role] || 0) + 1; });
+    return roles;
+  }, [users]);
+
+  // Review status breakdown
+  const statusBreakdown = useMemo(() => {
+    return { published: publishedReviews, pending: pendingReviews, flagged: flaggedReviews, removed: removedReviews, hidden: hiddenReviews };
+  }, [publishedReviews, pendingReviews, flaggedReviews, removedReviews, hiddenReviews]);
 
   /* --- ACTIONS --- */
   const updateReviewStatus = async (reviewId, status) => {
     const { error } = await supabase.from("reviews").update({ status }).eq("id", reviewId);
     if (!error) {
       setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, status } : r));
+      showToast(`Review ${status === "published" ? "published" : status === "hidden" ? "hidden" : status === "removed" ? "removed" : "updated"}`);
     }
   };
 
   const bulkUpdateReviews = async (status) => {
+    const count = selectedReviews.size;
     for (const reviewId of selectedReviews) {
       await supabase.from("reviews").update({ status }).eq("id", reviewId);
     }
     setReviews(prev => prev.map(r => selectedReviews.has(r.id) ? { ...r, status } : r));
     setSelectedReviews(new Set());
+    showToast(`${count} reviews ${status === "published" ? "published" : status === "removed" ? "removed" : status === "hidden" ? "hidden" : "updated"}`);
+  };
+
+  const deleteReview = async (reviewId) => {
+    const { error } = await supabase.from("reviews").delete().eq("id", reviewId);
+    if (!error) {
+      setReviews(prev => prev.filter(r => r.id !== reviewId));
+      showToast("Review permanently deleted", T.red);
+    }
+  };
+
+  const resetChurchReviews = async (churchId, churchName) => {
+    setConfirmDialog({
+      title: "Reset All Reviews",
+      message: `This will permanently delete ALL reviews for "${churchName}" and reset its scores to zero. This action cannot be undone.`,
+      confirmLabel: "Reset All Reviews",
+      variant: "red",
+      onConfirm: async () => {
+        const { error: delErr } = await supabase.from("reviews").delete().eq("church_id", churchId);
+        if (!delErr) {
+          const scoreReset = {};
+          SCORE_FIELDS.forEach(f => { scoreReset[`score_${f}`] = null; });
+          scoreReset.score_overall = null;
+          scoreReset.total_reviews = 0;
+          await supabase.from("churches").update(scoreReset).eq("id", churchId);
+          setReviews(prev => prev.filter(r => r.church_id !== churchId));
+          showToast(`All reviews for "${churchName}" have been reset`, T.amber);
+        }
+      },
+    });
+  };
+
+  const viewChurchReviews = async (churchId, churchName) => {
+    const { data } = await supabase.from("reviews").select("*, profiles(display_name)").eq("church_id", churchId).order("created_at", { ascending: false });
+    setChurchReviewsList(data || []);
+    setChurchReviewsModal({ id: churchId, name: churchName });
   };
 
   const updateUserRole = async (userId, role) => {
     const { error } = await supabase.from("profiles").update({ role }).eq("id", userId);
     if (!error) {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
+      showToast(`User role updated to ${role}`);
     }
     setUserRoleModal(null);
   };
@@ -265,6 +406,7 @@ export default function AdminDashboard() {
     const { error } = await supabase.from("profiles").update({ status }).eq("id", userId);
     if (!error) {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, status } : u));
+      showToast(`User status updated to ${status}`);
     }
   };
 
@@ -273,15 +415,25 @@ export default function AdminDashboard() {
     if (!error) {
       setChurches(prev => prev.map(c => c.id === churchId ? { ...c, ...updates } : c));
       setEditingChurch(null);
+      showToast("Church updated");
     }
   };
 
-  const deleteChurch = async (churchId) => {
-    if (!window.confirm("Are you sure? This will delete the church and all its reviews.")) return;
-    const { error } = await supabase.from("churches").delete().eq("id", churchId);
-    if (!error) {
-      setChurches(prev => prev.filter(c => c.id !== churchId));
-    }
+  const deleteChurch = async (churchId, churchName) => {
+    setConfirmDialog({
+      title: "Delete Church",
+      message: `This will permanently delete "${churchName}" and all its reviews. This action cannot be undone.`,
+      confirmLabel: "Delete Forever",
+      variant: "red",
+      onConfirm: async () => {
+        await supabase.from("reviews").delete().eq("church_id", churchId);
+        const { error } = await supabase.from("churches").delete().eq("id", churchId);
+        if (!error) {
+          setChurches(prev => prev.filter(c => c.id !== churchId));
+          showToast("Church deleted", T.red);
+        }
+      },
+    });
   };
 
   const recalculateScores = async () => {
@@ -289,6 +441,7 @@ export default function AdminDashboard() {
     try {
       const { error } = await supabase.rpc("recalculate_church_scores");
       if (!error) {
+        showToast("Scores recalculated");
         setTimeout(() => fetchData(), 500);
       }
     } catch (e) {
@@ -305,7 +458,8 @@ export default function AdminDashboard() {
         const q = reviewSearchQuery.toLowerCase();
         const churchName = r.churches?.name?.toLowerCase() || "";
         const reviewerName = r.profiles?.display_name?.toLowerCase() || "";
-        if (!churchName.includes(q) && !reviewerName.includes(q)) return false;
+        const text = r.text?.toLowerCase() || "";
+        if (!churchName.includes(q) && !reviewerName.includes(q) && !text.includes(q)) return false;
       }
       return true;
     });
@@ -315,7 +469,7 @@ export default function AdminDashboard() {
     return users.filter(u => {
       if (!userSearchQuery) return true;
       const q = userSearchQuery.toLowerCase();
-      return u.display_name?.toLowerCase().includes(q);
+      return u.display_name?.toLowerCase().includes(q) || u.id?.toLowerCase().includes(q);
     });
   }, [users, userSearchQuery]);
 
@@ -343,13 +497,14 @@ export default function AdminDashboard() {
     return () => clearTimeout(timer);
   }, [churchSearchQuery, churchDenomFilter, tab]);
 
-  const denominations = ["Non-Denominational", "Baptist", "Catholic", "Methodist", "Lutheran", "Presbyterian", "Episcopal", "Pentecostal", "Assemblies of God", "Church of God", "Church of Christ", "Eastern Orthodox", "Calvary Chapel", "Apostolic", "Church of God in Christ", "AME", "Seventh-day Adventist", "United Methodist", "Vineyard", "Church of the Nazarene", "United Church of Christ", "Southern Baptist"];
+  const denominations = ["Non-Denominational", "Baptist", "Catholic", "Methodist", "Lutheran", "Presbyterian", "Episcopal", "Pentecostal", "Assemblies of God", "Church of God", "Church of Christ", "Orthodox", "Calvary Chapel", "Apostolic", "Church of God in Christ", "AME", "Seventh-day Adventist", "United Methodist", "Vineyard", "Church of the Nazarene", "United Church of Christ", "Southern Baptist", "Holiness", "Wesleyan", "Reformed", "Brethren", "Mennonite", "Foursquare", "Congregational"];
 
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "reviews", label: "Reviews" },
     { id: "users", label: "Users" },
     { id: "churches", label: "Churches" },
+    { id: "demographics", label: "Demographics" },
     { id: "settings", label: "Settings" },
   ];
 
@@ -376,7 +531,7 @@ export default function AdminDashboard() {
         <style>{fonts}</style>
         <div style={{ textAlign: "center", maxWidth: 400 }}>
           <div style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 12 }}>Access Denied</div>
-          <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 24 }}>You don't have permission to access the admin panel. This area is restricted to administrators and moderators only.</div>
+          <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 24 }}>You don't have permission to access the admin panel.</div>
           <Button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} variant="secondary">Sign Out</Button>
         </div>
       </div>
@@ -385,7 +540,30 @@ export default function AdminDashboard() {
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.body, color: T.text }}>
-      <style>{fonts}{`::selection{background:${T.accentSoft};color:${T.accent}}*{box-sizing:border-box}input::placeholder,textarea::placeholder{color:${T.textMuted}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{fonts}{`::selection{background:${T.accentSoft};color:${T.accent}}*{box-sizing:border-box}input::placeholder,textarea::placeholder{color:${T.textMuted}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div style={{
+          position: "fixed", top: 20, right: 20, zIndex: 100, padding: "12px 20px",
+          borderRadius: T.radius, background: T.surface, border: `1px solid ${toast.color}`,
+          color: toast.color, fontSize: 13, fontWeight: 600, fontFamily: T.body,
+          animation: "fadeIn 0.2s ease", boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+        }}>{toast.msg}</div>
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={true}
+          onClose={() => setConfirmDialog(null)}
+          onConfirm={confirmDialog.onConfirm}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          variant={confirmDialog.variant}
+        />
+      )}
 
       {/* --- NAVIGATION --- */}
       <nav style={{ padding: "14px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border}`, position: "sticky", top: 0, background: T.bg, zIndex: 40 }}>
@@ -427,44 +605,98 @@ export default function AdminDashboard() {
           <>
             <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 20px", letterSpacing: "-0.03em" }}>Dashboard</h1>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 24 }}>
-              <Stat label="Active Users" value={activeUsers} sub={`${users.length} total`} color={T.accent} />
-              <Stat label="Churches" value={totalChurchCount.toLocaleString()} sub={`${claimedChurches} claimed`} />
-              <Stat label="Reviews" value={reviews.length} sub={`${publishedReviews} published`} color={T.green} />
-              <Stat label="Flagged" value={flaggedReviews} sub={`${pendingReviews} pending`} color={T.amber} />
-              <Stat label="Avg Score" value={avgScore} sub="Overall rating" color={T.amber} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
+              <Stat label="Total Users" value={users.length} sub={`${activeUsers} active`} color={T.accent} icon="👥" />
+              <Stat label="Churches" value={totalChurchCount.toLocaleString()} icon="⛪" />
+              <Stat label="Total Reviews" value={reviews.length} sub={`${publishedReviews} published`} color={T.green} icon="📝" />
+              <Stat label="Pending" value={pendingReviews} sub="Awaiting moderation" color={T.accent} icon="⏳" />
+              <Stat label="Flagged" value={flaggedReviews} sub="Needs attention" color={T.amber} icon="⚠️" />
+              <Stat label="Hidden" value={hiddenReviews} sub="Temporarily hidden" color={T.purple} icon="👁️" />
+              <Stat label="Removed" value={removedReviews} sub="Permanently removed" color={T.red} icon="🗑️" />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-              {/* Recent Activity */}
+            {/* Review Status Breakdown */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
               <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 12, letterSpacing: "-0.02em" }}>Recent Reviews</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                  {reviews.slice(0, 8).map(r => (
-                    <div key={r.id} style={{ padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, fontSize: 12 }}>
-                      <div style={{ fontWeight: 600, color: T.text }}>{r.profiles?.display_name || "Anonymous"} → {r.churches?.name || "Unknown"}</div>
-                      <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{r.reviewer_role} · {formatDateTime(r.created_at)}</div>
-                    </div>
-                  ))}
-                  {reviews.length === 0 && <div style={{ fontSize: 12, color: T.textMuted, padding: "20px 0", textAlign: "center" }}>No reviews yet</div>}
+                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>Review Status Breakdown</div>
+                {Object.entries(statusBreakdown).map(([status, count]) => (
+                  <MiniBar key={status} label={status.charAt(0).toUpperCase() + status.slice(1)} value={count} max={reviews.length} color={
+                    status === "published" ? T.green : status === "flagged" ? T.amber : status === "pending" ? T.accent : status === "hidden" ? T.purple : T.red
+                  } />
+                ))}
+              </div>
+
+              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>User Roles</div>
+                <MiniBar label="Admins" value={roleBreakdown.admin} max={users.length} color={T.accent} />
+                <MiniBar label="Moderators" value={roleBreakdown.moderator} max={users.length} color="#66cdaa" />
+                <MiniBar label="Users" value={roleBreakdown.user} max={users.length} color={T.textMuted} />
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.borderLight}` }}>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>User signups this week: {users.filter(u => new Date(u.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length}</div>
                 </div>
               </div>
 
-              {/* Flagged Items */}
               <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 12, letterSpacing: "-0.02em" }}>Flagged for Review</div>
+                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>Reviews This Week</div>
+                {reviewsByWeek.length > 0 ? (
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 80 }}>
+                    {reviewsByWeek.map(([week, count]) => {
+                      const maxCount = Math.max(...reviewsByWeek.map(w => w[1]));
+                      const height = maxCount > 0 ? (count / maxCount) * 70 : 0;
+                      return (
+                        <div key={week} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                          <div style={{ fontSize: 9, color: T.textMuted, fontFamily: T.mono }}>{count}</div>
+                          <div style={{ width: "100%", height: Math.max(height, 2), borderRadius: 2, background: T.accent }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No review data yet</div>
+                )}
+                <div style={{ fontSize: 10, color: T.textMuted, textAlign: "center", marginTop: 6 }}>Last 12 weeks</div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+              {/* Top Reviewed Churches */}
+              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 12, letterSpacing: "-0.02em" }}>Top Reviewed Churches</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                  {topReviewedChurches.length > 0 ? topReviewedChurches.map((c, i) => (
+                    <div key={i} style={{ padding: "8px 0", borderBottom: `1px solid ${T.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{c.name}</div>
+                        <div style={{ fontSize: 10, color: T.textMuted }}>{c.city}, {c.state}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, fontFamily: T.heading, color: T.accent }}>{c.count} reviews</div>
+                        <div style={{ fontSize: 10, color: T.textMuted }}>avg {(c.totalScore / c.count).toFixed(1)}</div>
+                      </div>
+                    </div>
+                  )) : <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No reviewed churches yet</div>}
+                </div>
+              </div>
+
+              {/* Flagged Items Queue */}
+              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 12, letterSpacing: "-0.02em" }}>Moderation Queue ({flaggedReviews + pendingReviews})</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {reviews.filter(r => r.status === "flagged").slice(0, 5).map(r => (
-                    <div key={r.id} style={{ padding: "12px", borderRadius: T.radiusSm, background: T.amberSoft, border: `1px solid rgba(245,158,11,0.2)` }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: T.amber }}>{r.profiles?.display_name} → {r.churches?.name}</div>
-                      <div style={{ fontSize: 11, color: T.textSoft, marginTop: 4, lineHeight: 1.5 }}>{r.text?.slice(0, 100)}...</div>
-                      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                        <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>
+                  {reviews.filter(r => r.status === "flagged" || r.status === "pending").slice(0, 6).map(r => (
+                    <div key={r.id} style={{ padding: "12px", borderRadius: T.radiusSm, background: r.status === "flagged" ? T.amberSoft : T.accentSoft, border: `1px solid ${r.status === "flagged" ? "rgba(245,158,11,0.2)" : T.accentBorder}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: r.status === "flagged" ? T.amber : T.accent }}>{r.profiles?.display_name} → {r.churches?.name}</div>
+                        <Badge status={r.status} />
+                      </div>
+                      <div style={{ fontSize: 11, color: T.textSoft, lineHeight: 1.5, marginBottom: 8 }}>{r.text?.slice(0, 80)}...</div>
+                      <div style={{ display: "flex", gap: 6 }}>
                         <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">Approve</Button>
+                        <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>
+                        <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>
                       </div>
                     </div>
                   ))}
-                  {reviews.filter(r => r.status === "flagged").length === 0 && <div style={{ fontSize: 12, color: T.textMuted, padding: "20px 0", textAlign: "center" }}>No flagged reviews</div>}
+                  {flaggedReviews + pendingReviews === 0 && <div style={{ fontSize: 12, color: T.textMuted, padding: "20px 0", textAlign: "center" }}>Queue is clear!</div>}
                 </div>
               </div>
             </div>
@@ -475,9 +707,11 @@ export default function AdminDashboard() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
                 {users.slice(0, 6).map(u => (
                   <div key={u.id} style={{ padding: 12, borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
-                    <div style={{ fontWeight: 600, fontSize: 12 }}>{u.display_name}</div>
-                    <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{u.provider || "email"}</div>
-                    <div style={{ fontSize: 10, color: T.textMuted }}>Joined {formatDate(u.created_at)}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontWeight: 600, fontSize: 12 }}>{u.display_name}</div>
+                      <Badge status={u.role} />
+                    </div>
+                    <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{u.provider || "email"} · Joined {formatDate(u.created_at)}</div>
                   </div>
                 ))}
               </div>
@@ -491,17 +725,20 @@ export default function AdminDashboard() {
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Reviews ({filteredReviews.length})</h1>
-                {selectedReviews.size > 0 && (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Button onClick={() => bulkUpdateReviews("published")} variant="green">Approve All ({selectedReviews.size})</Button>
-                    <Button onClick={() => bulkUpdateReviews("removed")} variant="red">Remove All ({selectedReviews.size})</Button>
-                  </div>
-                )}
+                <div style={{ display: "flex", gap: 8 }}>
+                  {selectedReviews.size > 0 && (
+                    <>
+                      <Button onClick={() => bulkUpdateReviews("published")} variant="green">Approve ({selectedReviews.size})</Button>
+                      <Button onClick={() => bulkUpdateReviews("hidden")} variant="purple">Hide ({selectedReviews.size})</Button>
+                      <Button onClick={() => bulkUpdateReviews("removed")} variant="red">Remove ({selectedReviews.size})</Button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Filters */}
               <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-                <input type="text" placeholder="Search by church or reviewer..." value={reviewSearchQuery} onChange={(e) => setReviewSearchQuery(e.target.value)} style={{
+                <input type="text" placeholder="Search by church, reviewer, or text..." value={reviewSearchQuery} onChange={(e) => setReviewSearchQuery(e.target.value)} style={{
                   padding: "8px 12px", background: T.surfaceAlt, border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
                   color: T.text, fontFamily: T.body, fontSize: 13, flex: 1, minWidth: 200,
                 }} />
@@ -513,8 +750,18 @@ export default function AdminDashboard() {
                   <option value="published">Published</option>
                   <option value="pending">Pending</option>
                   <option value="flagged">Flagged</option>
+                  <option value="hidden">Hidden</option>
                   <option value="removed">Removed</option>
                 </select>
+                {selectedReviews.size === 0 && (
+                  <Button onClick={() => {
+                    const allIds = new Set(filteredReviews.map(r => r.id));
+                    setSelectedReviews(allIds);
+                  }} variant="secondary">Select All</Button>
+                )}
+                {selectedReviews.size > 0 && (
+                  <Button onClick={() => setSelectedReviews(new Set())} variant="secondary">Deselect All</Button>
+                )}
               </div>
             </div>
 
@@ -524,7 +771,7 @@ export default function AdminDashboard() {
                 SCORE_FIELDS.forEach(f => { if (r[`score_${f}`] != null) scores[f] = r[`score_${f}`]; });
                 const isExpanded = expandedReview === r.id;
                 return (
-                  <div key={r.id} style={{ borderRadius: T.radius, background: T.surface, border: `1px solid ${r.status === "flagged" ? "rgba(245,158,11,0.3)" : T.border}`, overflow: "hidden" }}>
+                  <div key={r.id} style={{ borderRadius: T.radius, background: T.surface, border: `1px solid ${r.status === "flagged" ? "rgba(245,158,11,0.3)" : r.status === "hidden" ? "rgba(168,85,247,0.3)" : T.border}`, overflow: "hidden" }}>
                     <div style={{ padding: "16px 20px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 12 }}>
                         <div style={{ flex: 1 }}>
@@ -579,16 +826,28 @@ export default function AdminDashboard() {
                       </div>
 
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {r.status !== "published" && <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">{r.status === "removed" || r.status === "hidden" ? "Restore" : "Publish"}</Button>}
+                        {r.status === "published" && <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>}
                         {r.status === "published" && <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>}
                         {r.status === "flagged" && <>
                           <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">Approve</Button>
+                          <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>
                           <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>
                         </>}
                         {r.status === "pending" && <>
                           <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">Publish</Button>
+                          <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>
                           <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>
                         </>}
-                        {r.status === "removed" && <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">Restore</Button>}
+                        {(r.status === "removed" || r.status === "hidden") && (
+                          <Button onClick={() => setConfirmDialog({
+                            title: "Permanently Delete Review",
+                            message: "This will permanently delete this review from the database. This cannot be undone.",
+                            confirmLabel: "Delete Forever",
+                            variant: "red",
+                            onConfirm: () => deleteReview(r.id),
+                          })} variant="red" style={{ marginLeft: 8 }}>Delete Forever</Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -612,13 +871,16 @@ export default function AdminDashboard() {
             }} />
 
             <div style={{ borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 1.2fr 1.2fr 1.2fr 0.8fr", padding: "12px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 0.8fr", padding: "12px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 <span>Name</span><span>Provider</span><span>Role</span><span>Status</span><span>Joined</span><span>Actions</span>
               </div>
               {filteredUsers.map(u => (
                 <div key={u.id}>
-                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 1.2fr 1.2fr 1.2fr 0.8fr", padding: "12px 16px", borderBottom: `1px solid ${T.borderLight}`, fontSize: 13, alignItems: "center" }}>
-                    <span style={{ fontWeight: 600 }}>{u.display_name}</span>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 0.8fr", padding: "12px 16px", borderBottom: `1px solid ${T.borderLight}`, fontSize: 13, alignItems: "center" }}>
+                    <div>
+                      <span style={{ fontWeight: 600 }}>{u.display_name}</span>
+                      {u.gender && <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 6 }}>({u.gender})</span>}
+                    </div>
                     <span style={{ fontSize: 11, color: T.textSoft }}>{u.provider || "email"}</span>
                     <Badge status={u.role} />
                     <Badge status={u.status} />
@@ -627,22 +889,29 @@ export default function AdminDashboard() {
                   </div>
                   {expandedUser === u.id && (
                     <div style={{ padding: "16px", background: T.surfaceAlt, borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+                        <div><span style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase" }}>Gender</span><br />{u.gender || "Not set"}</div>
+                        <div><span style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase" }}>Age Range</span><br />{u.age_range || "Not set"}</div>
+                        <div><span style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase" }}>Income</span><br />{u.income_bracket || "Not set"}</div>
+                      </div>
                       <div style={{ marginBottom: 12 }}>
-                        <div style={{ fontWeight: 600, color: T.textMuted, fontSize: 11, marginBottom: 6, textTransform: "uppercase" }}>User Reviews</div>
+                        <div style={{ fontWeight: 600, color: T.textMuted, fontSize: 11, marginBottom: 6, textTransform: "uppercase" }}>User Reviews ({reviews.filter(r => r.user_id === u.id).length})</div>
                         {reviews.filter(r => r.user_id === u.id).slice(0, 5).map(r => (
-                          <div key={r.id} style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
-                            <div style={{ fontWeight: 600 }}>{r.churches?.name}</div>
-                            <div style={{ fontSize: 11, color: T.textMuted }}>Status: {r.status}</div>
+                          <div key={r.id} style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontWeight: 600 }}>{r.churches?.name}</div>
+                              <div style={{ fontSize: 11, color: T.textMuted }}>{formatDate(r.created_at)}</div>
+                            </div>
+                            <Badge status={r.status} />
                           </div>
                         ))}
+                        {reviews.filter(r => r.user_id === u.id).length === 0 && <div style={{ fontSize: 11, color: T.textMuted }}>No reviews</div>}
                       </div>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <Button onClick={() => setExpandedUser(null)} variant="secondary">Hide</Button>
-                      </div>
+                      <Button onClick={() => setExpandedUser(null)} variant="secondary">Collapse</Button>
                     </div>
                   )}
                   {expandedUser !== u.id && (
-                    <button onClick={() => setExpandedUser(u.id)} style={{ width: "100%", padding: "8px", fontSize: 11, color: T.accent, fontWeight: 600, background: "none", border: `1px dashed ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Show reviews</button>
+                    <button onClick={() => setExpandedUser(u.id)} style={{ width: "100%", padding: "6px", fontSize: 10, color: T.accent, fontWeight: 600, background: "none", border: "none", borderBottom: `1px solid ${T.borderLight}`, cursor: "pointer", fontFamily: T.body }}>Details</button>
                   )}
                 </div>
               ))}
@@ -689,7 +958,6 @@ export default function AdminDashboard() {
               <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Churches ({totalChurchCount.toLocaleString()} total)</h1>
             </div>
 
-            {/* Filters */}
             <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
               <input type="text" placeholder="Search by name or city..." value={churchSearchQuery} onChange={(e) => setChurchSearchQuery(e.target.value)} style={{
                 padding: "8px 12px", background: T.surfaceAlt, border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
@@ -712,9 +980,8 @@ export default function AdminDashboard() {
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{c.name}</div>
                         <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4, lineHeight: 1.6 }}>
-                          {c.denomination} · {c.city}, {c.state} · {c.address}<br />
-                          Size: {c.size || "—"} · Style: {c.service_style || "—"} · Source: {c.source}
-                          {c.claimed_by && <span> · Claimed by {c.claimed_at ? formatDate(c.claimed_at) : "unknown"}</span>}
+                          {c.denomination} · {c.city}, {c.state} {c.zip || ""} · {c.address || "No address"}<br />
+                          Phone: {c.phone || "—"} · Website: {c.website ? "Yes" : "—"} · Source: {c.source}
                         </div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
@@ -730,9 +997,9 @@ export default function AdminDashboard() {
                     <div style={{ padding: "16px", background: T.surfaceAlt, borderRadius: "0 0 10px 10px", border: `1px solid ${T.border}`, borderTop: "none" }}>
                       {editingChurch === c.id ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                          {["name", "denomination", "address", "city", "state", "zip", "website", "phone", "service_times", "service_style", "size"].map(field => (
+                          {["name", "denomination", "address", "city", "state", "zip", "website", "phone", "email", "service_times", "service_style", "size"].map(field => (
                             <div key={field}>
-                              <label style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 4, textTransform: "uppercase" }}>{field}</label>
+                              <label style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 4, textTransform: "uppercase" }}>{field.replace("_", " ")}</label>
                               {field === "service_style" ? (
                                 <select value={c[field] || ""} onChange={(e) => setChurches(prev => prev.map(ch => ch.id === c.id ? { ...ch, [field]: e.target.value } : ch))} style={{
                                   width: "100%", padding: "8px 12px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
@@ -741,8 +1008,16 @@ export default function AdminDashboard() {
                                   <option value="">—</option>
                                   {["Contemporary", "Traditional", "Blended", "Charismatic", "Liturgical"].map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
+                              ) : field === "denomination" ? (
+                                <select value={c[field] || ""} onChange={(e) => setChurches(prev => prev.map(ch => ch.id === c.id ? { ...ch, [field]: e.target.value } : ch))} style={{
+                                  width: "100%", padding: "8px 12px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
+                                  color: T.text, fontFamily: T.body, fontSize: 12,
+                                }}>
+                                  <option value="">—</option>
+                                  {denominations.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
                               ) : (
-                                <input type={field === "service_times" ? "text" : "text"} value={c[field] || ""} onChange={(e) => setChurches(prev => prev.map(ch => ch.id === c.id ? { ...ch, [field]: e.target.value } : ch))} style={{
+                                <input value={c[field] || ""} onChange={(e) => setChurches(prev => prev.map(ch => ch.id === c.id ? { ...ch, [field]: e.target.value } : ch))} style={{
                                   width: "100%", padding: "8px 12px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
                                   color: T.text, fontFamily: T.body, fontSize: 12,
                                 }} />
@@ -752,7 +1027,7 @@ export default function AdminDashboard() {
                           <div style={{ display: "flex", gap: 6 }}>
                             <Button onClick={() => saveChurch(c.id, {
                               name: c.name, denomination: c.denomination, address: c.address, city: c.city,
-                              state: c.state, zip: c.zip, website: c.website, phone: c.phone,
+                              state: c.state, zip: c.zip, website: c.website, phone: c.phone, email: c.email,
                               service_times: c.service_times, service_style: c.service_style, size: c.size,
                             })} variant="green">Save</Button>
                             <Button onClick={() => setEditingChurch(null)} variant="secondary">Cancel</Button>
@@ -769,13 +1044,20 @@ export default function AdminDashboard() {
                                     <span key={f} style={{ fontSize: 10, padding: "3px 8px", borderRadius: T.radiusFull, background: scoreColor(parseFloat(c[`score_${f}`])) === T.green ? T.greenSoft : scoreColor(parseFloat(c[`score_${f}`])) === T.amber ? T.amberSoft : T.redSoft, color: scoreColor(parseFloat(c[`score_${f}`])), fontWeight: 700, fontFamily: T.heading }}>{f.slice(0, 3).toUpperCase()} {parseFloat(c[`score_${f}`]).toFixed(1)}</span>
                                   )
                                 ))}
+                                {!SCORE_FIELDS.some(f => c[`score_${f}`]) && <span style={{ fontSize: 11, color: T.textMuted }}>No scores yet</span>}
                               </div>
                             </div>
-                            <Button onClick={() => setEditingChurch(c.id)} variant="secondary">Edit</Button>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <Button onClick={() => setEditingChurch(c.id)} variant="secondary">Edit</Button>
+                              <Button onClick={() => viewChurchReviews(c.id, c.name)} variant="primary">View Reviews</Button>
+                            </div>
                           </div>
-                          <div style={{ fontSize: 11, color: T.textMuted, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>Last updated: {formatDate(c.scores_updated_at)}</div>
-                          <div style={{ marginTop: 8 }}>
-                            <Button onClick={() => deleteChurch(c.id)} variant="red">Delete Church</Button>
+                          <div style={{ fontSize: 11, color: T.textMuted, paddingTop: 8, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between" }}>
+                            <span>Lat: {c.latitude?.toFixed(4)} · Lng: {c.longitude?.toFixed(4)} · Updated: {formatDate(c.scores_updated_at)}</span>
+                          </div>
+                          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                            <Button onClick={() => resetChurchReviews(c.id, c.name)} variant="amber">Reset Reviews</Button>
+                            <Button onClick={() => deleteChurch(c.id, c.name)} variant="red">Delete Church</Button>
                           </div>
                         </>
                       )}
@@ -783,7 +1065,94 @@ export default function AdminDashboard() {
                   )}
                 </div>
               ))}
-              {filteredChurches.length === 0 && <div style={{ padding: "40px", textAlign: "center", color: T.textMuted, borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>No churches found</div>}
+              {filteredChurches.length === 0 && <div style={{ padding: "40px", textAlign: "center", color: T.textMuted, borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>{churchSearchQuery || churchDenomFilter !== "all" ? "No churches found" : "Search for a church by name or city"}</div>}
+            </div>
+
+            {/* Church Reviews Modal */}
+            <Modal isOpen={!!churchReviewsModal} onClose={() => setChurchReviewsModal(null)} title={`Reviews for ${churchReviewsModal?.name}`} wide>
+              {churchReviewsList.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {churchReviewsList.map(r => (
+                    <div key={r.id} style={{ padding: 14, borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>{r.profiles?.display_name || "Anonymous"}</span>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <Badge status={r.status} />
+                          <span style={{ fontSize: 11, color: T.textMuted }}>{formatDate(r.created_at)}</span>
+                        </div>
+                      </div>
+                      <p style={{ fontSize: 12, color: T.textSoft, lineHeight: 1.6, margin: "4px 0 8px" }}>{r.text}</p>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {r.status !== "published" && <Button onClick={() => { updateReviewStatus(r.id, "published"); setChurchReviewsList(prev => prev.map(cr => cr.id === r.id ? {...cr, status: "published"} : cr)); }} variant="green">Publish</Button>}
+                        {r.status !== "hidden" && <Button onClick={() => { updateReviewStatus(r.id, "hidden"); setChurchReviewsList(prev => prev.map(cr => cr.id === r.id ? {...cr, status: "hidden"} : cr)); }} variant="purple">Hide</Button>}
+                        {r.status !== "removed" && <Button onClick={() => { updateReviewStatus(r.id, "removed"); setChurchReviewsList(prev => prev.map(cr => cr.id === r.id ? {...cr, status: "removed"} : cr)); }} variant="red">Remove</Button>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <div style={{ textAlign: "center", color: T.textMuted, padding: "20px 0" }}>No reviews for this church</div>}
+            </Modal>
+          </>
+        )}
+
+        {/* === DEMOGRAPHICS === */}
+        {!loadingData && tab === "demographics" && (
+          <>
+            <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 20px", letterSpacing: "-0.03em" }}>User Demographics</h1>
+            <div style={{ padding: "12px 16px", borderRadius: T.radiusSm, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 20, fontSize: 12, color: T.accent, lineHeight: 1.6 }}>
+              All demographic data is anonymous and aggregated. Individual user data is never shared or sold. This data helps churches understand their community better.
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+              {/* Gender */}
+              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>Gender</div>
+                {Object.entries(demographics.gender).filter(([_, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([label, count]) => (
+                  <MiniBar key={label} label={label} value={count} max={users.length} color={label === "Male" ? T.accent : label === "Female" ? T.purple : T.textMuted} />
+                ))}
+                {Object.values(demographics.gender).every(v => v === 0) && <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No data yet</div>}
+              </div>
+
+              {/* Age Range */}
+              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>Age Range</div>
+                {Object.entries(demographics.age).filter(([_, v]) => v > 0).sort((a, b) => {
+                  const order = ["18-24", "25-34", "35-44", "45-54", "55-64", "65+", "Prefer not to answer", "Not set"];
+                  return order.indexOf(a[0]) - order.indexOf(b[0]);
+                }).map(([label, count]) => (
+                  <MiniBar key={label} label={label} value={count} max={users.length} color={label === "Not set" ? T.textMuted : T.green} />
+                ))}
+                {Object.values(demographics.age).every(v => v === 0) && <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No data yet</div>}
+              </div>
+
+              {/* Income */}
+              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>Income Bracket</div>
+                {Object.entries(demographics.income).filter(([_, v]) => v > 0).sort((a, b) => {
+                  const order = ["Under $25k", "$25k-$50k", "$50k-$75k", "$75k-$100k", "$100k-$150k", "$150k+", "Prefer not to answer", "Not set"];
+                  return order.indexOf(a[0]) - order.indexOf(b[0]);
+                }).map(([label, count]) => (
+                  <MiniBar key={label} label={label} value={count} max={users.length} color={label === "Not set" ? T.textMuted : T.amber} />
+                ))}
+                {Object.values(demographics.income).every(v => v === 0) && <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No data yet</div>}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 20, padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 12, letterSpacing: "-0.02em" }}>Completion Rate</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                {[
+                  { label: "Gender", filled: users.filter(u => u.gender && u.gender !== "Prefer not to answer").length },
+                  { label: "Age Range", filled: users.filter(u => u.age_range && u.age_range !== "Prefer not to answer").length },
+                  { label: "Income", filled: users.filter(u => u.income_bracket && u.income_bracket !== "Prefer not to answer").length },
+                ].map(({ label, filled }) => (
+                  <div key={label} style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 28, fontWeight: 800, fontFamily: T.heading, color: T.accent }}>{users.length > 0 ? Math.round((filled / users.length) * 100) : 0}%</div>
+                    <div style={{ fontSize: 12, color: T.textMuted }}>{label} provided</div>
+                    <div style={{ fontSize: 11, color: T.textMuted }}>{filled} of {users.length}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         )}
@@ -794,37 +1163,70 @@ export default function AdminDashboard() {
             <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 20px", letterSpacing: "-0.03em" }}>Settings</h1>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {/* Site Configuration */}
-              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Site Configuration</h3>
-                <div style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.6 }}>
-                  <p>Placeholder for future site settings such as:</p>
-                  <ul style={{ margin: "8px 0", paddingLeft: 20 }}>
-                    <li>Review moderation settings</li>
-                    <li>Notification preferences</li>
-                    <li>Email templates</li>
-                    <li>API rate limits</li>
-                  </ul>
-                </div>
-              </div>
-
               {/* Data Management */}
               <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Data Management</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <Button onClick={recalculateScores} disabled={recalculating} variant="primary">
-                    {recalculating ? "Recalculating..." : "Recalculate All Scores"}
-                  </Button>
-                  <div style={{ fontSize: 11, color: T.textMuted }}>Recomputes all church scores based on published reviews</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div>
+                    <Button onClick={recalculateScores} disabled={recalculating} variant="primary">
+                      {recalculating ? "Recalculating..." : "Recalculate All Church Scores"}
+                    </Button>
+                    <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>Recomputes all church scores from published reviews</div>
+                  </div>
+                  <div>
+                    <Button onClick={() => setConfirmDialog({
+                      title: "Remove All Flagged Reviews",
+                      message: "This will change the status of all flagged reviews to 'removed'. This is reversible — you can restore individual reviews later.",
+                      confirmLabel: "Remove All Flagged",
+                      variant: "amber",
+                      onConfirm: async () => {
+                        const flaggedIds = reviews.filter(r => r.status === "flagged").map(r => r.id);
+                        for (const id of flaggedIds) {
+                          await supabase.from("reviews").update({ status: "removed" }).eq("id", id);
+                        }
+                        setReviews(prev => prev.map(r => r.status === "flagged" ? { ...r, status: "removed" } : r));
+                        showToast(`${flaggedIds.length} flagged reviews removed`);
+                      },
+                    })} variant="amber" disabled={flaggedReviews === 0}>
+                      Remove All Flagged Reviews ({flaggedReviews})
+                    </Button>
+                    <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>Move all flagged reviews to removed status</div>
+                  </div>
+                  <div>
+                    <Button onClick={() => setConfirmDialog({
+                      title: "Publish All Pending Reviews",
+                      message: "This will publish all pending reviews. Make sure you've reviewed them for inappropriate content first.",
+                      confirmLabel: "Publish All Pending",
+                      variant: "green",
+                      onConfirm: async () => {
+                        const pendingIds = reviews.filter(r => r.status === "pending").map(r => r.id);
+                        for (const id of pendingIds) {
+                          await supabase.from("reviews").update({ status: "published" }).eq("id", id);
+                        }
+                        setReviews(prev => prev.map(r => r.status === "pending" ? { ...r, status: "published" } : r));
+                        showToast(`${pendingIds.length} pending reviews published`);
+                      },
+                    })} variant="green" disabled={pendingReviews === 0}>
+                      Publish All Pending Reviews ({pendingReviews})
+                    </Button>
+                    <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>Approve and publish all pending reviews at once</div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Activity Log */}
-            <div style={{ marginTop: 20, padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-              <h3 style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Admin Activity Log</h3>
-              <div style={{ fontSize: 13, color: T.textMuted, textAlign: "center", padding: "40px 0" }}>
-                Placeholder for future admin activity logging
+              {/* Moderation Quick Actions */}
+              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Moderation Info</h3>
+                <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.7 }}>
+                  <p style={{ margin: "0 0 12px" }}>Review statuses explained:</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Badge status="published" /> <span>Visible to all users, counted in scores</span></div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Badge status="pending" /> <span>Awaiting moderation before appearing</span></div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Badge status="flagged" /> <span>Reported by users, needs attention</span></div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Badge status="hidden" /> <span>Temporarily hidden, can be restored</span></div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Badge status="removed" /> <span>Permanently removed from view</span></div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -832,11 +1234,31 @@ export default function AdminDashboard() {
             <div style={{ marginTop: 20, padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
               <h3 style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Export Data</h3>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Button variant="secondary">Export Users (CSV)</Button>
-                <Button variant="secondary">Export Churches (CSV)</Button>
-                <Button variant="secondary">Export Reviews (JSON)</Button>
+                <Button onClick={async () => {
+                  const { data } = await supabase.from("profiles").select("display_name,role,status,gender,age_range,income_bracket,provider,created_at");
+                  if (data) {
+                    const csv = "Name,Role,Status,Gender,Age,Income,Provider,Joined\n" + data.map(u =>
+                      `"${u.display_name}",${u.role},${u.status},${u.gender || ""},${u.age_range || ""},${u.income_bracket || ""},${u.provider || ""},${u.created_at}`
+                    ).join("\n");
+                    const blob = new Blob([csv], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = "users_export.csv"; a.click();
+                    showToast("Users exported");
+                  }
+                }} variant="secondary">Export Users (CSV)</Button>
+                <Button onClick={async () => {
+                  const { data } = await supabase.from("reviews").select("*, profiles(display_name), churches(name, city, state)").order("created_at", { ascending: false });
+                  if (data) {
+                    const csv = "Reviewer,Church,City,State,Status,Score,Text,Date\n" + data.map(r =>
+                      `"${r.profiles?.display_name || ""}","${r.churches?.name || ""}","${r.churches?.city || ""}","${r.churches?.state || ""}",${r.status},${r.score_overall || ""},"${(r.text || "").replace(/"/g, '""').slice(0, 200)}",${r.created_at}`
+                    ).join("\n");
+                    const blob = new Blob([csv], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = "reviews_export.csv"; a.click();
+                    showToast("Reviews exported");
+                  }
+                }} variant="secondary">Export Reviews (CSV)</Button>
               </div>
-              <div style={{ fontSize: 11, color: T.textMuted, marginTop: 12 }}>Export buttons are placeholders for future implementation</div>
             </div>
           </>
         )}

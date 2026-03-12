@@ -380,6 +380,95 @@ function AuthModal({ onClose, onAuth, mode: im }) {
   );
 }
 
+/* --- PROFILE COMPLETE MODAL (Demographics) --- */
+function ProfileCompleteModal({ userId, onClose }) {
+  const [gender, setGender] = useState("");
+  const [ageRange, setAgeRange] = useState("");
+  const [incomeBracket, setIncomeBracket] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const selectStyle = (selected) => ({
+    padding: "8px 14px", borderRadius: T.radiusFull, fontSize: 12.5, fontWeight: 500,
+    fontFamily: T.body, cursor: "pointer", transition: "all 0.15s",
+    background: selected ? T.text : T.surfaceAlt, color: selected ? T.bg : T.textSoft,
+    border: `1px solid ${selected ? T.text : T.border}`,
+  });
+
+  const handleSave = async () => {
+    setSaving(true);
+    const updates = {};
+    if (gender) updates.gender = gender;
+    if (ageRange) updates.age_range = ageRange;
+    if (incomeBracket) updates.income_bracket = incomeBracket;
+    if (Object.keys(updates).length > 0) {
+      await supabase.from("profiles").update(updates).eq("id", userId);
+    }
+    setSaving(false);
+    onClose();
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: T.surface, borderRadius: 16, padding: "36px 32px", boxShadow: "0 24px 48px rgba(0,0,0,0.12)", animation: "modalIn 0.25s ease" }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 6px", letterSpacing: "-0.03em" }}>Complete Your Profile</h2>
+          <p style={{ fontSize: 13, color: T.textMuted, margin: 0 }}>Help us serve you better (all fields are optional)</p>
+        </div>
+
+        {/* Gender */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>Gender</label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["Male", "Female", "Prefer not to answer"].map(opt => (
+              <button key={opt} onClick={() => setGender(opt)} style={selectStyle(gender === opt)}>{opt}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Age Range */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>Age Range</label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["18-24", "25-34", "35-44", "45-54", "55-64", "65+", "Prefer not to answer"].map(opt => (
+              <button key={opt} onClick={() => setAgeRange(opt)} style={selectStyle(ageRange === opt)}>{opt}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Income */}
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>Household Income</label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["Under $25k", "$25k-$50k", "$50k-$75k", "$75k-$100k", "$100k-$150k", "$150k+", "Prefer not to answer"].map(opt => (
+              <button key={opt} onClick={() => setIncomeBracket(opt)} style={selectStyle(incomeBracket === opt)}>{opt}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Privacy Disclaimer */}
+        <div style={{ padding: "12px 14px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}`, marginBottom: 20 }}>
+          <p style={{ fontSize: 11.5, color: T.textMuted, lineHeight: 1.6, margin: 0 }}>
+            We will never sell your personal information. We collect anonymous demographic data to help churches better understand and serve their communities. Your individual responses are kept confidential and are only used in aggregate.
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={handleSave} disabled={saving} style={{
+            flex: 1, padding: "11px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600,
+            background: T.text, color: T.bg, border: "none", cursor: saving ? "wait" : "pointer",
+            fontFamily: T.body, opacity: saving ? 0.6 : 1,
+          }}>{saving ? "Saving..." : "Save & Continue"}</button>
+          <button onClick={onClose} style={{
+            padding: "11px 20px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500,
+            background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`,
+            cursor: "pointer", fontFamily: T.body,
+          }}>Skip</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UserMenu({ user, onSignOut }) {
   const [open, setOpen] = useState(false);
   return (
@@ -496,6 +585,7 @@ export default function ByTheirFruit() {
   const [filterZip, setFilterZip] = useState("");
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showProfileComplete, setShowProfileComplete] = useState(false);
   const [pendingReview, setPendingReview] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -658,6 +748,12 @@ export default function ByTheirFruit() {
         setUser(profile);
         setShowAuthModal(false);
         fetchUserReviews(u.id);
+
+        // Check if user has filled demographics, if not show the profile complete modal
+        const { data: profileData } = await supabase.from("profiles").select("gender,age_range,income_bracket").eq("id", u.id).single();
+        if (profileData && !profileData.gender && !profileData.age_range && !profileData.income_bracket) {
+          setShowProfileComplete(true);
+        }
 
         // Process pending review from localStorage (for OAuth redirects)
         const pending = localStorage.getItem("btf_pending_review");
@@ -852,6 +948,7 @@ export default function ByTheirFruit() {
       <style>{fonts}{responsiveCSS}{`::selection{background:${T.accentSoft};color:${T.accent}}input::placeholder,textarea::placeholder{color:${T.textMuted}}*{box-sizing:border-box}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); setPendingReview(null); }} onAuth={() => {}} mode="signup" />}
+      {showProfileComplete && user && <ProfileCompleteModal userId={user.id} onClose={() => setShowProfileComplete(false)} />}
 
       {/* NAV */}
       <nav style={{ padding: "12px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: "rgba(250,250,250,0.88)", position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(16px)" }}>
