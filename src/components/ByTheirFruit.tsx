@@ -27,12 +27,12 @@ const CATEGORY_GROUPS = [
 ];
 
 const CATEGORIES = [
-  { id: "teaching", label: "Teaching & Scripture", desc: "Is the teaching rooted in scripture? Does the pastor handle God's word faithfully?" },
+  { id: "teaching", label: "Teaching & Scripture", desc: "Is the teaching rooted in scripture? Does the pastor handle God\u2019s word faithfully?" },
   { id: "welcome", label: "Visitor Experience", desc: "Were you greeted warmly? Could you find your way? Did someone reach out after?" },
   { id: "community", label: "Genuine Community", desc: "Do relationships go beyond Sunday? Is there real depth and care?" },
   { id: "worship", label: "Worship", desc: "Is worship authentic and God-focused? Is it about performance or genuine praise?" },
   { id: "prayer", label: "Prayer Life", desc: "Is there space and priority for prayer? Are prayer requests taken seriously and followed up on?" },
-  { id: "kids", label: "Children's Ministry", desc: "Are children safe, loved, and taught well? Are there proper check-in and safety protocols?" },
+  { id: "kids", label: "Children\u2019s Ministry", desc: "Are children safe, loved, and taught well? Are there proper check-in and safety protocols?" },
   { id: "youth", label: "Youth Ministry", desc: "Are teenagers engaged and discipled? Is there real mentorship or just entertainment?" },
   { id: "leadership", label: "Leadership & Integrity", desc: "Is leadership transparent, accountable, and servant-hearted?" },
   { id: "service", label: "Local Outreach", desc: "Is this church active in the community? Do they serve beyond their walls?" },
@@ -207,7 +207,7 @@ function RatingSlider({ label, desc, value, onChange, comment, onCommentChange, 
         <>
           <div style={{ display: "flex", gap: 3, margin: "6px 0 8px" }}>
             {[1, 2, 3, 4, 5].map(n => (
-              <span key={n} onClick={() => onChange(n)} style={{ fontSize: 22, cursor: "pointer", color: n <= starValue ? "#f59e0b" : T.border, transition: "color 0.15s" }}>\u2605</span>
+              <span key={n} onClick={() => onChange(n)} style={{ fontSize: 22, cursor: "pointer", color: n <= starValue ? "#f59e0b" : T.border, transition: "color 0.15s" }}>★</span>
             ))}
           </div>
           <div style={{ position: "relative", height: 28, display: "flex", alignItems: "center" }}>
@@ -396,7 +396,7 @@ function ReviewCard({ rev, delay = 0, userId }) {
     <FadeIn delay={delay}>
       <div style={{ padding: "20px 22px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, marginBottom: 8, position: "relative" }}>
         {rev.pending && (
-          <div style={{ position: "absolute", top: 12, right: 14, padding: "3px 8px", borderRadius: T.radiusFull, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, fontSize: 10, fontWeight: 600, color: T.amber }}>Score updates live</div>
+          <div style={{ position: "absolute", top: 12, right: 14, padding: "3px 8px", borderRadius: T.radiusFull, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, fontSize: 10, fontWeight: 600, color: T.amber }}>Score pending Saturday</div>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -817,7 +817,7 @@ export default function ByTheirFruit() {
           </FadeIn>
           <FadeIn delay={180}>
             <div className="btf-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-              {[{ n: "01", title: "People-sourced truth", desc: "They say they're welcoming — but are they? Reviews from visitors and members reveal what walking through the doors actually feels like." }, { n: "02", title: "Scripture as standard", desc: "Structured feedback on whether teaching is faithful to God's word. Not opinion — accountability to the text." }, { n: "03", title: "Light builds trust", desc: "Transparency about finances, leadership, and community isn't criticism — it's how the body of Christ grows." }].map((c, i) => (
+              {[{ n: "01", title: "People-sourced truth", desc: "They say they\u2019re welcoming \u2014 but are they? Reviews from visitors and members reveal what walking through the doors actually feels like." }, { n: "02", title: "Scripture as standard", desc: "Structured feedback on whether teaching is faithful to God\u2019s word. Not opinion \u2014 accountability to the text." }, { n: "03", title: "Light builds trust", desc: "Transparency about finances, leadership, and community isn\u2019t criticism \u2014 it\u2019s how the body of Christ grows." }].map((c, i) => (
                 <div key={i} style={{ padding: "24px 20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
                   <div style={{ fontSize: 11, fontWeight: 700, fontFamily: T.heading, color: T.textMuted, marginBottom: 14 }}>{c.n}</div>
                   <h3 style={{ fontSize: 15, fontFamily: T.heading, fontWeight: 700, margin: "0 0 6px", letterSpacing: "-0.02em" }}>{c.title}</h3>
@@ -911,12 +911,12 @@ export default function ByTheirFruit() {
         return (
           <div style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px" }}>
             <FadeIn>
-              <button onClick={() => setPage("discover")} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 24, fontFamily: T.body }}>\u2190 Back</button>
+              <button onClick={() => setPage("discover")} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 24, fontFamily: T.body }}>← Back</button>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
                 <div>
                   <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 5px", letterSpacing: "-0.035em" }}>{c.name}</h1>
-                  <div style={{ fontSize: 13, color: T.textSoft }}>{c.denomination}{c.size ? ` · ${c.size}` : ""}{c.serviceStyle ? ` · ${c.serviceStyle}` : ""}</div>
-                  <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{c.address}{c.serviceTimes ? ` · ${c.serviceTimes}` : ""}</div>
+                  <div style={{ fontSize: 13, color: T.textSoft }}>{c.denomination}{c.size ? ` \u00b7 ${c.size}` : ""}{c.serviceStyle ? ` \u00b7 ${c.serviceStyle}` : ""}</div>
+                  <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{c.address}{c.serviceTimes ? ` \u00b7 ${c.serviceTimes}` : ""}</div>
                 </div>
                 {rated ? (
                   <div style={{ padding: "12px 20px", borderRadius: T.radius, textAlign: "center", background: scoreBg(overall), border: `1.5px solid ${scoreBorder2(overall)}` }}>
@@ -948,7 +948,7 @@ export default function ByTheirFruit() {
                       <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{c.totalReviews} of {MIN_REVIEWS_FOR_SCORE}</div>
                     </div>
                   )}
-                  <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: T.radiusSm, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, fontSize: 11, color: T.amber, lineHeight: 1.5, fontWeight: 500 }}>Scores update in real time as reviews are approved.</div>
+                  <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: T.radiusSm, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, fontSize: 11, color: T.amber, lineHeight: 1.5, fontWeight: 500 }}>Scores update every Saturday.</div>
                 </div>
               </FadeIn>
 
@@ -1037,7 +1037,7 @@ export default function ByTheirFruit() {
           {/* ADD CHURCH */}
           {rateStep === 0 && showAddChurch && (
             <FadeIn>
-              <button onClick={() => setShowAddChurch(false)} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 16, fontFamily: T.body }}>\u2190 Back to search</button>
+              <button onClick={() => setShowAddChurch(false)} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 16, fontFamily: T.body }}>← Back to search</button>
               <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Add a church</h2>
               <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 24px" }}>Fill in what you know — you can always update later.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1051,7 +1051,7 @@ export default function ByTheirFruit() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 28 }}>
                 <button onClick={() => setShowAddChurch(false)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
-                <button onClick={addManualChurch} disabled={!addData.name.trim() || !addData.city.trim()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!addData.name.trim() || !addData.city.trim()) ? 0.3 : 1 }}>Add Church & Rate \u2192</button>
+                <button onClick={addManualChurch} disabled={!addData.name.trim() || !addData.city.trim()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!addData.name.trim() || !addData.city.trim()) ? 0.3 : 1 }}>Add Church & Rate →</button>
               </div>
             </FadeIn>
           )}
@@ -1081,8 +1081,8 @@ export default function ByTheirFruit() {
               ))}
 
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                <button onClick={() => setRateStep(0)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>\u2190 Back</button>
-                <button onClick={() => setRateStep(2)} disabled={Object.keys(rateScores).filter(k => !rateSkipped[k]).length === 0} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: Object.keys(rateScores).filter(k => !rateSkipped[k]).length === 0 ? 0.3 : 1 }}>Continue \u2192</button>
+                <button onClick={() => setRateStep(0)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
+                <button onClick={() => setRateStep(2)} disabled={Object.keys(rateScores).filter(k => !rateSkipped[k]).length === 0} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: Object.keys(rateScores).filter(k => !rateSkipped[k]).length === 0 ? 0.3 : 1 }}>Continue →</button>
               </div>
             </FadeIn>
           )}
@@ -1091,13 +1091,13 @@ export default function ByTheirFruit() {
           {rateStep === 2 && rateChurch && (
             <FadeIn>
               <div style={{ padding: "14px 18px", borderRadius: T.radius, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div><div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{rateChurch.name}</div><div style={{ fontSize: 12, color: T.textSoft }}>{Object.keys(rateScores).filter(k => !rateSkipped[k]).length} rated · {Object.keys(rateSkipped).filter(k => rateSkipped[k]).length} skipped · Avg {(() => { const vals = Object.entries(rateScores).filter(([k]) => !rateSkipped[k]).map(([,v]) => v); return vals.length ? (vals.reduce((a,b) => a+b, 0) / vals.length).toFixed(1) : "—"; })()}</div></div>
+                <div><div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{rateChurch.name}</div><div style={{ fontSize: 12, color: T.textSoft }}>{Object.keys(rateScores).filter(k => !rateSkipped[k]).length} rated · {Object.keys(rateSkipped).filter(k => rateSkipped[k]).length} skipped · Avg {(() => { const vals = Object.entries(rateScores).filter(([k]) => !rateSkipped[k]).map(([,v]) => v); return vals.length ? (vals.reduce((a,b) => a+b, 0) / vals.length).toFixed(1) : "\u2014"; })()}</div></div>
                 <button onClick={() => setRateStep(1)} style={{ fontSize: 12, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>Edit Ratings</button>
               </div>
               <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Tell your story</h2>
               <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px" }}>Help other visitors and help this church grow.</p>
               <div style={{ marginBottom: 16 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 7 }}>Your relationship</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{["First-time Visitor", "Repeat Visitor", "Member (< 1 yr)", "Member (1\u20133 yrs)", "Member (3+ yrs)", "Former Member"].map(r => <Chip key={r} active={rateRole === r} onClick={() => setRateRole(r)}>{r}</Chip>)}</div></div>
-              <div style={{ marginBottom: 20 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your review</label><textarea value={rateText} onChange={e => setRateText(e.target.value)} placeholder="Be specific — what stood out, what could improve, what should a visitor know?" rows={5} style={{ width: "100%", padding: "12px 16px", borderRadius: T.radius, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", resize: "vertical", lineHeight: 1.65, fontFamily: T.body }} /></div>
+              <div style={{ marginBottom: 20 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your review</label><textarea value={rateText} onChange={e => setRateText(e.target.value)} placeholder="Be specific \u2014 what stood out, what could improve, what should a visitor know?" rows={5} style={{ width: "100%", padding: "12px 16px", borderRadius: T.radius, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", resize: "vertical", lineHeight: 1.65, fontFamily: T.body }} /></div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 20 }}>
                 {Object.entries(rateScores).filter(([k]) => !rateSkipped[k]).map(([k, v]) => { const cat = CATEGORIES.find(c => c.id === k); const r = Math.round(v); return <span key={k} style={{ fontSize: 11, padding: "3px 10px", borderRadius: T.radiusFull, background: scoreBg(r), border: `1px solid ${scoreBorder2(r)}`, color: scoreColor(r), fontWeight: 700, fontFamily: T.heading }}>{cat?.label.split("&")[0].split("/")[0].trim()} {v.toFixed(1)}</span>; })}
                 {Object.keys(rateSkipped).filter(k => rateSkipped[k]).length > 0 && (
@@ -1107,7 +1107,7 @@ export default function ByTheirFruit() {
                 )}
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <button onClick={() => setRateStep(1)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>\u2190 Back</button>
+                <button onClick={() => setRateStep(1)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {!user && <span style={{ fontSize: 12, color: T.textMuted }}>Sign in required</span>}
                   <button onClick={handleRateSubmit} disabled={!rateRole || !rateText.trim() || submitting} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!rateRole || !rateText.trim() || submitting) ? 0.3 : 1, boxShadow: "0 2px 8px rgba(37,99,235,0.2)" }}>{submitting ? "Submitting..." : !user ? "Sign In & Submit" : isEditing ? "Update Review" : "Submit Review"}</button>
@@ -1120,10 +1120,10 @@ export default function ByTheirFruit() {
           {rateStep === 3 && (
             <FadeIn>
               <div style={{ textAlign: "center", padding: "60px 0" }}>
-                <div style={{ width: 64, height: 64, borderRadius: 32, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 20px" }}>\u2714</div>
+                <div style={{ width: 64, height: 64, borderRadius: 32, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 20px" }}>✔</div>
                 <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 8px", letterSpacing: "-0.03em" }}>{isEditing ? "Review updated" : "Review submitted"}</h2>
                 <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 4px" }}>Your review of <strong>{rateChurch?.name}</strong> has been {isEditing ? "updated" : "posted"}.</p>
-                <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 32px" }}>Scores update in real time once your review is approved.</p>
+                <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 32px" }}>Scores will be recalculated this Saturday.</p>
                 <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                   <button onClick={() => { const c = churches.find(ch => ch.id === rateChurch?.id); if (c) viewChurch(c); }} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>View Church Profile</button>
                   <button onClick={() => startRateFlow()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Rate Another</button>
@@ -1142,11 +1142,11 @@ export default function ByTheirFruit() {
             <div style={{ fontSize: 15, color: T.textSoft, lineHeight: 1.75 }}>
               <p>Every church in America has a website that says the same things. <em>Welcoming community. Bible-based teaching. A place to belong.</em> But how do you know if it's true?</p>
               <p><strong style={{ color: T.text }}>By Their Fruit</strong> exists because we believe the body of Christ — the actual people in the pews — are the most honest witnesses to what a church really is.</p>
-              <p>Our platform gathers structured, thoughtful reviews from congregants and visitors across ten categories rooted in what scripture says a healthy church should look like. Reviews are moderated for quality, and scores update in real time as reviews are approved — giving a trustworthy, always-current picture.</p>
+              <p>Our platform gathers structured, thoughtful reviews from congregants and visitors across ten categories rooted in what scripture says a healthy church should look like. Reviews post immediately. scores update in real time as reviews are approved — giving a trustworthy, always-current picture.</p>
               <p>This isn't about tearing churches down. It's about building them up through honest feedback.</p>
               <div style={{ padding: "28px", borderRadius: T.radius, background: T.text, color: "#fff", margin: "28px 0", textAlign: "center" }}>
-                <p style={{ fontSize: 17, fontStyle: "italic", lineHeight: 1.6, margin: "0 0 8px", color: "rgba(255,255,255,0.85)" }}>\u201cBeware of false prophets, who come to you in sheep's clothing but inwardly are ravenous wolves. You will recognize them by their fruits.\u201d</p>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>Matthew 7:15\u201316 ESV</div>
+                <p style={{ fontSize: 17, fontStyle: "italic", lineHeight: 1.6, margin: "0 0 8px", color: "rgba(255,255,255,0.85)" }}>"Beware of false prophets, who come to you in sheep's clothing but inwardly are ravenous wolves. You will recognize them by their fruits."</p>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>Matthew 7:15–16 ESV</div>
               </div>
               <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "36px 0 14px", letterSpacing: "-0.03em" }}>The 10 Measures</h3>
               {CATEGORY_GROUPS.map(group => (
