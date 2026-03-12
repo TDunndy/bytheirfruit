@@ -20,6 +20,27 @@ const T = {
 
 const MIN_REVIEWS_FOR_SCORE = 3;
 
+const US_STATES = [
+  "All", "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC"
+];
+
+const STATE_NAMES = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri",
+  MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio",
+  OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming", DC: "Washington DC"
+};
+
 const CATEGORY_GROUPS = [
   { label: "Sunday Experience", ids: ["teaching", "worship", "prayer", "welcome"] },
   { label: "Community & Care", ids: ["community", "kids", "youth"] },
@@ -66,6 +87,9 @@ function dbChurchToLocal(c) {
     city: c.city,
     state: c.state,
     address: c.address || "",
+    zip: c.zip || "",
+    phone: c.phone || "",
+    website: c.website || "",
     size: c.size || "",
     serviceStyle: c.service_style || "",
     serviceTimes: c.service_times || "",
@@ -466,6 +490,9 @@ export default function ByTheirFruit() {
   const [churches, setChurches] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterDenom, setFilterDenom] = useState("All");
+  const [filterState, setFilterState] = useState("All");
+  const [filterCity, setFilterCity] = useState("");
+  const [filterZip, setFilterZip] = useState("");
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingReview, setPendingReview] = useState(null);
@@ -502,8 +529,8 @@ export default function ByTheirFruit() {
     setLoading(false);
   }, []);
 
-  const searchChurchesDB = useCallback(async (query, denomination) => {
-    if (!query && (!denomination || denomination === "All")) {
+  const searchChurchesDB = useCallback(async (query, denomination, state, city, zip) => {
+    if (!query && (!denomination || denomination === "All") && (!state || state === "All") && !city && !zip) {
       setChurches([]);
       return;
     }
@@ -514,6 +541,15 @@ export default function ByTheirFruit() {
     }
     if (denomination && denomination !== "All") {
       q = q.eq("denomination", denomination);
+    }
+    if (state && state !== "All") {
+      q = q.eq("state", state);
+    }
+    if (city) {
+      q = q.ilike("city", `%${city}%`);
+    }
+    if (zip) {
+      q = q.ilike("zip", `${zip}%`);
     }
     q = q.order("total_reviews", { ascending: false }).limit(50);
     const { data, error } = await q;
@@ -527,10 +563,10 @@ export default function ByTheirFruit() {
   useEffect(() => {
     if (page !== "discover") return;
     const timer = setTimeout(() => {
-      searchChurchesDB(discoverSearchQuery, filterDenom);
+      searchChurchesDB(discoverSearchQuery, filterDenom, filterState, filterCity, filterZip);
     }, 300);
     return () => clearTimeout(timer);
-  }, [discoverSearchQuery, filterDenom, page, searchChurchesDB]);
+  }, [discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, page, searchChurchesDB]);
 
   // Debounced search for Rate flow
   const [rateSearchResults, setRateSearchResults] = useState([]);
@@ -884,20 +920,32 @@ export default function ByTheirFruit() {
             <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 20px" }}>Rated by the people who attend — not the church itself.</p>
           </FadeIn>
           <FadeIn delay={80}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              <input value={discoverSearchQuery} onChange={e => setDiscoverSearchQuery(e.target.value)} placeholder="Search name, city, denomination..." style={{ flex: 1, minWidth: 200, padding: "9px 16px", borderRadius: T.radiusFull, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{denoms.map(d => <Chip key={d} active={filterDenom === d} onClick={() => setFilterDenom(d)}>{d}</Chip>)}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+              <input value={discoverSearchQuery} onChange={e => setDiscoverSearchQuery(e.target.value)} placeholder="Search church name..." style={{ width: "100%", padding: "11px 16px", borderRadius: T.radiusFull, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <select value={filterState} onChange={e => { setFilterState(e.target.value); setFilterCity(""); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 120 }}>
+                  {US_STATES.map(s => <option key={s} value={s}>{s === "All" ? "All States" : `${s} — ${STATE_NAMES[s] || s}`}</option>)}
+                </select>
+                <input value={filterCity} onChange={e => setFilterCity(e.target.value)} placeholder="City" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 130 }} />
+                <input value={filterZip} onChange={e => setFilterZip(e.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="Zip code" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 90 }} />
+                <select value={filterDenom} onChange={e => setFilterDenom(e.target.value)} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 160 }}>
+                  {denoms.map(d => <option key={d} value={d}>{d === "All" ? "All Denominations" : d}</option>)}
+                </select>
+                {(filterState !== "All" || filterCity || filterZip || filterDenom !== "All" || discoverSearchQuery) && (
+                  <button onClick={() => { setFilterState("All"); setFilterCity(""); setFilterZip(""); setFilterDenom("All"); setDiscoverSearchQuery(""); }} style={{ padding: "8px 14px", borderRadius: T.radiusSm, fontSize: 12, fontWeight: 600, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.textSoft, cursor: "pointer", fontFamily: T.body }}>Clear filters</button>
+                )}
+              </div>
             </div>
           </FadeIn>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {filteredChurches.length === 0 && !searchLoading && !discoverSearchQuery && filterDenom === "All" && (
+            {filteredChurches.length === 0 && !searchLoading && !discoverSearchQuery && filterDenom === "All" && filterState === "All" && !filterCity && !filterZip && (
               <div style={{ padding: "48px 20px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={T.border} strokeWidth="1.5" style={{ margin: "0 auto 14px", display: "block" }}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                 <div style={{ fontSize: 17, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 4 }}>Search {totalChurchCount.toLocaleString()} churches</div>
                 <div style={{ fontSize: 13, color: T.textMuted }}>Type a church name, city, or denomination above to get started.</div>
               </div>
             )}
-            {filteredChurches.length === 0 && !searchLoading && (discoverSearchQuery || filterDenom !== "All") && (
+            {filteredChurches.length === 0 && !searchLoading && (discoverSearchQuery || filterDenom !== "All" || filterState !== "All" || filterCity || filterZip) && (
               <div style={{ padding: "40px 20px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
                 <div style={{ fontSize: 15, fontWeight: 600, color: T.textSoft, marginBottom: 4 }}>No churches found</div>
                 <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Try a different search or add your church.</div>
@@ -922,6 +970,7 @@ export default function ByTheirFruit() {
                       <div style={{ flex: 1 }}>
                         <h3 style={{ fontSize: 18, fontFamily: T.heading, fontWeight: 700, margin: "0 0 3px", letterSpacing: "-0.02em" }}>{church.name}</h3>
                         <div style={{ fontSize: 13, color: T.textMuted }}>{church.denomination} · {church.city}, {church.state}{church.size ? ` · ${church.size}` : ""}</div>
+                        {church.address && !church.address.toLowerCase().startsWith("po box") && <div style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>{church.address}</div>}
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
                           {church.tags.slice(0, 4).map((tag, j) => <span key={j} style={{ fontSize: 11, padding: "2px 9px", borderRadius: T.radiusFull, background: T.surfaceAlt, color: T.textSoft, fontWeight: 500, border: `1px solid ${T.borderLight}` }}>{tag}</span>)}
                         </div>
@@ -965,8 +1014,14 @@ export default function ByTheirFruit() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
                 <div>
                   <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 5px", letterSpacing: "-0.035em" }}>{c.name}</h1>
-                  <div style={{ fontSize: 13, color: T.textSoft }}>{c.denomination}{c.size ? ` \u00b7 ${c.size}` : ""}{c.serviceStyle ? ` \u00b7 ${c.serviceStyle}` : ""}</div>
-                  <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{c.address}{c.serviceTimes ? ` \u00b7 ${c.serviceTimes}` : ""}</div>
+                  <div style={{ fontSize: 13, color: T.textSoft }}>{c.denomination} · {c.city}, {c.state}{c.size ? ` · ${c.size}` : ""}{c.serviceStyle ? ` · ${c.serviceStyle}` : ""}</div>
+                  <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{c.address}{c.serviceTimes ? ` · ${c.serviceTimes}` : ""}</div>
+                  {(c.phone || c.website) && (
+                    <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 12 }}>
+                      {c.phone && <span style={{ color: T.textSoft }}>☎ {c.phone}</span>}
+                      {c.website && <a href={c.website.startsWith("http") ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" style={{ color: T.accent, textDecoration: "none", fontWeight: 500 }}>🌐 Website</a>}
+                    </div>
+                  )}
                 </div>
                 {rated ? (
                   <div style={{ padding: "12px 20px", borderRadius: T.radius, textAlign: "center", background: scoreBg(overall), border: `1.5px solid ${scoreBorder2(overall)}` }}>
