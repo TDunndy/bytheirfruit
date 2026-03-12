@@ -488,17 +488,65 @@ export default function ByTheirFruit() {
   const [userReviews, setUserReviews] = useState({});
   const [isEditing, setIsEditing] = useState(false);
 
-  /* --- LOAD CHURCHES FROM DB --- */
+  /* --- SEARCH CHURCHES FROM DB (server-side) --- */
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [totalChurchCount, setTotalChurchCount] = useState(0);
+  const [discoverSearchQuery, setDiscoverSearchQuery] = useState("");
+
   const fetchChurches = useCallback(async () => {
-    const { data, error } = await supabase
+    // On initial load, just get total count — don't load all churches
+    const { count } = await supabase
       .from("churches")
-      .select("*")
-      .order("total_reviews", { ascending: false });
+      .select("*", { count: "exact", head: true });
+    setTotalChurchCount(count || 0);
+    setLoading(false);
+  }, []);
+
+  const searchChurchesDB = useCallback(async (query, denomination) => {
+    if (!query && (!denomination || denomination === "All")) {
+      setChurches([]);
+      return;
+    }
+    setSearchLoading(true);
+    let q = supabase.from("churches").select("*");
+    if (query) {
+      q = q.or(`name.ilike.%${query}%,city.ilike.%${query}%,denomination.ilike.%${query}%`);
+    }
+    if (denomination && denomination !== "All") {
+      q = q.eq("denomination", denomination);
+    }
+    q = q.order("total_reviews", { ascending: false }).limit(50);
+    const { data, error } = await q;
     if (!error && data) {
       setChurches(data.map(dbChurchToLocal));
     }
-    setLoading(false);
+    setSearchLoading(false);
   }, []);
+
+  // Debounced search for Discover page
+  useEffect(() => {
+    if (page !== "discover") return;
+    const timer = setTimeout(() => {
+      searchChurchesDB(discoverSearchQuery, filterDenom);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [discoverSearchQuery, filterDenom, page, searchChurchesDB]);
+
+  // Debounced search for Rate flow
+  const [rateSearchResults, setRateSearchResults] = useState([]);
+  useEffect(() => {
+    if (!rateSearch || rateSearch.length < 2) { setRateSearchResults([]); return; }
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from("churches")
+        .select("*")
+        .or(`name.ilike.%${rateSearch}%,city.ilike.%${rateSearch}%`)
+        .order("total_reviews", { ascending: false })
+        .limit(20);
+      if (data) setRateSearchResults(data.map(dbChurchToLocal));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [rateSearch]);
 
   /* --- LOAD REVIEWS FOR A CHURCH --- */
   const fetchReviewsForChurch = useCallback(async (churchId) => {
@@ -758,20 +806,9 @@ export default function ByTheirFruit() {
     selectChurchToRate(newChurch);
   };
 
-  const filteredChurches = churches.filter(c => {
-    const q = searchQuery.toLowerCase();
-    return (!q || c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.denomination.toLowerCase().includes(q)) && (filterDenom === "All" || c.denomination === filterDenom);
-  });
-  const denoms = ["All", ...new Set(churches.map(c => c.denomination))];
+  const filteredChurches = churches;
+  const denoms = ["All", "Non-Denominational", "Baptist", "Catholic", "Methodist", "Lutheran", "Presbyterian", "Episcopal", "Pentecostal", "Assemblies of God", "Church of God", "Church of Christ", "Eastern Orthodox", "Calvary Chapel", "Apostolic", "Church of God in Christ", "AME", "Seventh-day Adventist", "United Methodist", "Vineyard", "Church of the Nazarene", "United Church of Christ"];
   const currentChurch = selectedChurch ? (churches.find(c => c.id === selectedChurch.id) || selectedChurch) : null;
-
-  // Search churches from DB when typing in rate flow
-  const rateSearchResults = rateSearch.length > 0
-    ? churches.filter(c => {
-        const q = rateSearch.toLowerCase();
-        return c.name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q) || c.denomination.toLowerCase().includes(q);
-      })
-    : [];
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.body, color: T.text }}>
@@ -848,16 +885,29 @@ export default function ByTheirFruit() {
           </FadeIn>
           <FadeIn delay={80}>
             <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search name, city, denomination..." style={{ flex: 1, minWidth: 200, padding: "9px 16px", borderRadius: T.radiusFull, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
+              <input value={discoverSearchQuery} onChange={e => setDiscoverSearchQuery(e.target.value)} placeholder="Search name, city, denomination..." style={{ flex: 1, minWidth: 200, padding: "9px 16px", borderRadius: T.radiusFull, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{denoms.map(d => <Chip key={d} active={filterDenom === d} onClick={() => setFilterDenom(d)}>{d}</Chip>)}</div>
             </div>
           </FadeIn>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {filteredChurches.length === 0 && !loading && (
+            {filteredChurches.length === 0 && !searchLoading && !discoverSearchQuery && filterDenom === "All" && (
+              <div style={{ padding: "48px 20px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={T.border} strokeWidth="1.5" style={{ margin: "0 auto 14px", display: "block" }}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                <div style={{ fontSize: 17, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 4 }}>Search {totalChurchCount.toLocaleString()} churches</div>
+                <div style={{ fontSize: 13, color: T.textMuted }}>Type a church name, city, or denomination above to get started.</div>
+              </div>
+            )}
+            {filteredChurches.length === 0 && !searchLoading && (discoverSearchQuery || filterDenom !== "All") && (
               <div style={{ padding: "40px 20px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
                 <div style={{ fontSize: 15, fontWeight: 600, color: T.textSoft, marginBottom: 4 }}>No churches found</div>
-                <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Be the first to add a church to By Their Fruit.</div>
+                <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Try a different search or add your church.</div>
                 <button onClick={() => startRateFlow()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Add a Church</button>
+              </div>
+            )}
+            {searchLoading && (
+              <div style={{ padding: "40px", textAlign: "center" }}>
+                <div style={{ width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite", margin: "0 auto 12px" }} />
+                <div style={{ fontSize: 13, color: T.textMuted }}>Searching...</div>
               </div>
             )}
             {filteredChurches.map((church, i) => {

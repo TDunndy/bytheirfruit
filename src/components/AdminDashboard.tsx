@@ -193,20 +193,33 @@ export default function AdminDashboard() {
   }, []);
 
   /* --- FETCH DATA --- */
+  const [totalChurchCount, setTotalChurchCount] = useState(0);
   const fetchData = useCallback(async () => {
     setLoadingData(true);
-    const [usersRes, churchesRes, reviewsRes, flagsRes] = await Promise.all([
+    const [usersRes, churchCountRes, reviewsRes, flagsRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-      supabase.from("churches").select("*").order("total_reviews", { ascending: false }),
+      supabase.from("churches").select("*", { count: "exact", head: true }),
       supabase.from("reviews").select("*, profiles(display_name, id), churches(name, id)").order("created_at", { ascending: false }),
       supabase.from("review_flags").select("*").order("created_at", { ascending: false }),
     ]);
 
     if (usersRes.data) setUsers(usersRes.data);
-    if (churchesRes.data) setChurches(churchesRes.data);
+    setTotalChurchCount(churchCountRes.count || 0);
+    // Load churches on-demand via search in Churches tab instead of all at once
+    setChurches([]);
     if (reviewsRes.data) setReviews(reviewsRes.data);
     if (flagsRes.data) setReviewFlags(flagsRes.data);
     setLoadingData(false);
+  }, []);
+
+  const searchAdminChurches = useCallback(async (query) => {
+    let q = supabase.from("churches").select("*");
+    if (query) {
+      q = q.or(`name.ilike.%${query}%,city.ilike.%${query}%,denomination.ilike.%${query}%`);
+    }
+    q = q.order("total_reviews", { ascending: false }).limit(100);
+    const { data } = await q;
+    if (data) setChurches(data);
   }, []);
 
   useEffect(() => {
@@ -306,21 +319,31 @@ export default function AdminDashboard() {
     });
   }, [users, userSearchQuery]);
 
-  const filteredChurches = useMemo(() => {
-    return churches.filter(c => {
-      if (churchDenomFilter !== "all" && c.denomination !== churchDenomFilter) return false;
-      if (churchSearchQuery) {
-        const q = churchSearchQuery.toLowerCase();
-        return c.name?.toLowerCase().includes(q) || c.city?.toLowerCase().includes(q);
-      }
-      return true;
-    });
-  }, [churches, churchDenomFilter, churchSearchQuery]);
+  const filteredChurches = churches;
 
-  const denominations = useMemo(() => {
-    const denoms = new Set(churches.map(c => c.denomination).filter(Boolean));
-    return Array.from(denoms).sort();
-  }, [churches]);
+  // Debounced server-side church search for admin
+  useEffect(() => {
+    if (tab !== "churches") return;
+    const timer = setTimeout(() => {
+      if (churchSearchQuery || churchDenomFilter !== "all") {
+        let q = supabase.from("churches").select("*");
+        if (churchSearchQuery) {
+          q = q.or(`name.ilike.%${churchSearchQuery}%,city.ilike.%${churchSearchQuery}%`);
+        }
+        if (churchDenomFilter !== "all") {
+          q = q.eq("denomination", churchDenomFilter);
+        }
+        q.order("total_reviews", { ascending: false }).limit(100).then(({ data }) => {
+          if (data) setChurches(data);
+        });
+      } else {
+        setChurches([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [churchSearchQuery, churchDenomFilter, tab]);
+
+  const denominations = ["Non-Denominational", "Baptist", "Catholic", "Methodist", "Lutheran", "Presbyterian", "Episcopal", "Pentecostal", "Assemblies of God", "Church of God", "Church of Christ", "Eastern Orthodox", "Calvary Chapel", "Apostolic", "Church of God in Christ", "AME", "Seventh-day Adventist", "United Methodist", "Vineyard", "Church of the Nazarene", "United Church of Christ", "Southern Baptist"];
 
   const tabs = [
     { id: "overview", label: "Overview" },
@@ -406,7 +429,7 @@ export default function AdminDashboard() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 24 }}>
               <Stat label="Active Users" value={activeUsers} sub={`${users.length} total`} color={T.accent} />
-              <Stat label="Churches" value={churches.length} sub={`${claimedChurches} claimed`} />
+              <Stat label="Churches" value={totalChurchCount.toLocaleString()} sub={`${claimedChurches} claimed`} />
               <Stat label="Reviews" value={reviews.length} sub={`${publishedReviews} published`} color={T.green} />
               <Stat label="Flagged" value={flaggedReviews} sub={`${pendingReviews} pending`} color={T.amber} />
               <Stat label="Avg Score" value={avgScore} sub="Overall rating" color={T.amber} />
@@ -663,7 +686,7 @@ export default function AdminDashboard() {
         {!loadingData && tab === "churches" && (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Churches ({filteredChurches.length})</h1>
+              <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Churches ({totalChurchCount.toLocaleString()} total)</h1>
             </div>
 
             {/* Filters */}
