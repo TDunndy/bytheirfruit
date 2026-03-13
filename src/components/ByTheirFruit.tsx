@@ -741,6 +741,10 @@ export default function ByTheirFruit() {
         setPage("saved");
       } else if (hash === "#/dashboard") {
         setPage("dashboard");
+      } else if (hash === "#/terms") {
+        setPage("terms");
+      } else if (hash === "#/privacy") {
+        setPage("privacy");
       }
     };
     handleHash();
@@ -1449,7 +1453,7 @@ export default function ByTheirFruit() {
   };
 
   const filteredChurches = churches;
-  const denoms = ["All", "Non-Denominational", "Baptist", "Catholic", "Methodist", "Lutheran", "Presbyterian", "Episcopal", "Pentecostal", "Assemblies of God", "Church of God", "Church of Christ", "Eastern Orthodox", "Calvary Chapel", "Apostolic", "Church of God in Christ", "AME", "Seventh-day Adventist", "United Methodist", "Vineyard", "Church of the Nazarene", "United Church of Christ"];
+  const denoms = ["All", "AME", "Apostolic", "Assemblies of God", "Baptist", "Calvary Chapel", "Catholic", "Church of Christ", "Church of God", "Church of God in Christ", "Church of the Nazarene", "Eastern Orthodox", "Episcopal", "Lutheran", "Methodist", "Non-Denominational", "Pentecostal", "Presbyterian", "United Church of Christ", "United Methodist", "Vineyard"];
   const currentChurch = selectedChurch ? (churches.find(c => c.id === selectedChurch.id) || selectedChurch) : null;
 
   /* SSR-safe: render a minimal shell until client mounts to avoid hydration mismatch */
@@ -2364,6 +2368,120 @@ export default function ByTheirFruit() {
         </div>
       )}
 
+      {/* TERMS OF SERVICE */}
+      {!loading && page === "terms" && (
+        <div style={{ maxWidth: 700, margin: "0 auto", padding: "56px 24px" }}>
+          <FadeIn>
+            <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.15, margin: "0 0 8px", letterSpacing: "-0.03em" }}>Terms of Service</h1>
+            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 32 }}>Effective Date: March 13, 2026 &middot; Last Updated: March 13, 2026</div>
+            <div style={{ fontSize: 14.5, color: T.textSoft, lineHeight: 1.8 }}>
+              <p>Welcome to By Their Fruit ("we," "us," or "our"), operated at bytheirfruit.church. These Terms of Service ("Terms") govern your access to and use of our website, services, and any related applications (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms. If you do not agree, do not use the Service.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>1. Eligibility</h2>
+              <p>You must be at least 18 years of age to create an account or submit content. By using the Service, you represent that you meet this requirement and that all information you provide is accurate and complete.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>2. Account Registration</h2>
+              <p>To submit reviews or claim a church listing, you must create an account using Google Sign-In or another supported authentication method. You are responsible for maintaining the security of your account credentials and for all activity under your account. You agree to notify us immediately of any unauthorized access.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>3. User-Submitted Content</h2>
+              <p>By submitting a review, rating, comment, or any other content ("User Content"), you grant By Their Fruit a non-exclusive, worldwide, royalty-free, perpetual, irrevocable license to use, display, reproduce, modify, and distribute your User Content in connection with operating and promoting the Service.</p>
+              <p>You represent and warrant that: (a) you are the original author of the User Content; (b) the User Content is based on your genuine firsthand experience; (c) the User Content does not contain false, defamatory, or misleading statements; (d) the User Content does not violate any applicable law, regulation, or third-party right; and (e) the User Content does not contain personal attacks, threats, hate speech, or harassment.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>4. Review Guidelines and Moderation</h2>
+              <p>All reviews are subject to automated and manual moderation. We reserve the right to remove, edit, or flag any content that violates these Terms, our community guidelines, or applicable law. Reviews must reflect genuine personal experience with the church being reviewed. You may submit one review per church. You may submit up to three reviews per day across the platform.</p>
+              <p>Prohibited content includes but is not limited to: spam or duplicate reviews, reviews submitted for a church you have not attended, content that is primarily doctrinal argument rather than experiential feedback, coordinated review campaigns, and content that contains personally identifiable information about third parties without their consent.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>5. Church Claiming and Paid Subscriptions</h2>
+              <p>Church leaders may submit a claim request to manage their church's listing. Claiming a church listing requires identity verification and a paid subscription processed through Stripe. Subscription fees are billed on a recurring basis. By subscribing, you authorize us to charge your chosen payment method at the applicable rate.</p>
+              <p>Claimed church listings grant the ability to respond to reviews, update church information, and access analytics. Claiming a church does not grant the ability to remove, suppress, or alter user-submitted reviews or ratings.</p>
+              <p>Refunds may be issued at our sole discretion. You may cancel your subscription at any time through your Stripe account. Upon cancellation, your claimed listing features will remain active until the end of your current billing period.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>6. Prohibited Conduct</h2>
+              <p>You agree not to: (a) use the Service for any unlawful purpose; (b) attempt to circumvent rate limits, moderation, or security measures; (c) impersonate another person or entity; (d) create multiple accounts to circumvent restrictions; (e) use automated tools, bots, or scripts to interact with the Service without our express written consent; (f) interfere with the operation or security of the Service; or (g) harvest, scrape, or collect data from the Service in bulk.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>7. Intellectual Property</h2>
+              <p>The Service, including its design, branding, code, and original content, is owned by By Their Fruit and protected by copyright, trademark, and other intellectual property laws. You may not copy, reproduce, distribute, or create derivative works from the Service without our express written permission.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>8. Disclaimer of Warranties</h2>
+              <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, SECURE, OR ERROR-FREE. USER CONTENT REFLECTS THE OPINIONS OF INDIVIDUAL USERS AND NOT THE VIEWS OF BY THEIR FRUIT.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>9. Limitation of Liability</h2>
+              <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, BY THEIR FRUIT AND ITS OFFICERS, DIRECTORS, EMPLOYEES, AND AGENTS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, DATA, OR GOODWILL, ARISING OUT OF OR RELATED TO YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY SHALL NOT EXCEED THE AMOUNT YOU HAVE PAID US IN THE TWELVE MONTHS PRECEDING THE CLAIM, OR ONE HUNDRED DOLLARS ($100), WHICHEVER IS GREATER.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>10. Indemnification</h2>
+              <p>You agree to indemnify, defend, and hold harmless By Their Fruit and its officers, directors, employees, and agents from and against any claims, damages, losses, liabilities, costs, and expenses (including reasonable attorneys' fees) arising from your use of the Service, your User Content, or your violation of these Terms.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>11. Termination</h2>
+              <p>We may suspend or terminate your account and access to the Service at any time, with or without cause and with or without notice. Upon termination, your right to use the Service will immediately cease. Provisions of these Terms that by their nature should survive termination shall survive, including ownership, warranty disclaimers, indemnification, and limitations of liability.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>12. Governing Law and Disputes</h2>
+              <p>These Terms shall be governed by and construed in accordance with the laws of the State of Florida, without regard to its conflict of laws principles. Any dispute arising under these Terms shall be resolved exclusively in the state or federal courts located in Florida. You waive any objection to venue and personal jurisdiction in such courts.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>13. Changes to These Terms</h2>
+              <p>We may update these Terms from time to time. If we make material changes, we will notify you by posting the updated Terms on the Service with a revised "Last Updated" date. Your continued use of the Service after such changes constitutes your acceptance of the revised Terms.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>14. Contact</h2>
+              <p>If you have questions about these Terms, please contact us at <a href="mailto:info@bytheirfruit.church" style={{ color: T.accent }}>info@bytheirfruit.church</a>.</p>
+            </div>
+          </FadeIn>
+        </div>
+      )}
+
+      {/* PRIVACY POLICY */}
+      {!loading && page === "privacy" && (
+        <div style={{ maxWidth: 700, margin: "0 auto", padding: "56px 24px" }}>
+          <FadeIn>
+            <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.15, margin: "0 0 8px", letterSpacing: "-0.03em" }}>Privacy Policy</h1>
+            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 32 }}>Effective Date: March 13, 2026 &middot; Last Updated: March 13, 2026</div>
+            <div style={{ fontSize: 14.5, color: T.textSoft, lineHeight: 1.8 }}>
+              <p>By Their Fruit ("we," "us," or "our") operates the website bytheirfruit.church (the "Service"). This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use the Service.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>1. Information We Collect</h2>
+              <p><strong style={{ color: T.text }}>Information You Provide Directly:</strong> When you create an account, we collect your name, email address, and profile photo as provided by your authentication provider (e.g., Google). When you submit a review, we collect the content of your review, your ratings, and your stated relationship to the church. When you submit a church claim request, we collect your full name, role at the church, work email, phone number, and any message you provide.</p>
+              <p><strong style={{ color: T.text }}>Payment Information:</strong> If you subscribe to a paid plan, payment is processed by Stripe, Inc. We do not store your credit card number, bank account details, or other sensitive payment information on our servers. We receive and store your Stripe customer ID, subscription ID, payment status, and transaction amounts for record-keeping purposes.</p>
+              <p><strong style={{ color: T.text }}>Automatically Collected Information:</strong> When you use the Service, we may automatically collect your IP address, browser type and version, operating system, referring URLs, pages visited, and the dates and times of your visits. This information is collected through standard server logs and analytics tools.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>2. How We Use Your Information</h2>
+              <p>We use the information we collect to: provide, operate, and maintain the Service; process and manage your account, reviews, and church claims; process payments and manage subscriptions; enforce our Terms of Service and community guidelines; detect and prevent fraud, abuse, and security incidents; communicate with you about your account, reviews, and the Service; comply with legal obligations; and improve and develop new features for the Service.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>3. How We Share Your Information</h2>
+              <p><strong style={{ color: T.text }}>Publicly Visible Information:</strong> When you submit a review, your display name and review content are publicly visible on the Service. Your email address is not publicly displayed.</p>
+              <p><strong style={{ color: T.text }}>Service Providers:</strong> We share information with third-party service providers who assist us in operating the Service, including: Supabase (database hosting and authentication), Stripe (payment processing), Cloudflare (hosting, DNS, and content delivery), and Google (authentication via Google Sign-In). These providers are contractually obligated to use your information only for the purpose of providing services to us.</p>
+              <p><strong style={{ color: T.text }}>Legal Requirements:</strong> We may disclose your information if required by law, regulation, legal process, or governmental request, or if we believe disclosure is necessary to protect our rights, your safety, or the safety of others.</p>
+              <p><strong style={{ color: T.text }}>Business Transfers:</strong> In the event of a merger, acquisition, or sale of all or a portion of our assets, your information may be transferred as part of that transaction.</p>
+              <p>We do not sell your personal information to third parties. We do not share your personal information with third parties for their direct marketing purposes.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>4. Data Retention</h2>
+              <p>We retain your personal information for as long as your account is active or as needed to provide you with the Service. We may also retain certain information as required by law or for legitimate business purposes, such as resolving disputes and enforcing our agreements. If you request account deletion, we will delete your personal information within 30 days, except where retention is required by law. Published reviews may be anonymized rather than deleted to maintain the integrity of church ratings.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>5. Data Security</h2>
+              <p>We implement reasonable technical and organizational measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction. These measures include encryption of data in transit (TLS/SSL), row-level security policies on our database, and secure authentication protocols. However, no method of transmission over the internet or electronic storage is completely secure, and we cannot guarantee absolute security.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>6. Your Rights and Choices</h2>
+              <p>Depending on your jurisdiction, you may have the right to: access, correct, or delete your personal information; object to or restrict certain processing of your information; request a portable copy of your information; and withdraw consent where processing is based on consent. To exercise any of these rights, contact us at <a href="mailto:info@bytheirfruit.church" style={{ color: T.accent }}>info@bytheirfruit.church</a>. We will respond to your request within 30 days.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>7. Cookies and Tracking Technologies</h2>
+              <p>The Service uses cookies and similar technologies for authentication and session management. We use essential cookies required for the Service to function (such as login session tokens). We do not use advertising cookies or third-party tracking cookies for behavioral advertising. You can control cookies through your browser settings, but disabling essential cookies may prevent you from using certain features of the Service.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>8. Children's Privacy</h2>
+              <p>The Service is not directed to children under the age of 18. We do not knowingly collect personal information from children under 18. If we learn that we have collected personal information from a child under 18, we will take steps to delete such information promptly. If you believe a child under 18 has provided us with personal information, please contact us at <a href="mailto:info@bytheirfruit.church" style={{ color: T.accent }}>info@bytheirfruit.church</a>.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>9. California Residents (CCPA)</h2>
+              <p>If you are a California resident, you have additional rights under the California Consumer Privacy Act (CCPA), including the right to know what personal information we collect, the right to request deletion, and the right to opt out of the sale of personal information. As stated above, we do not sell personal information. To exercise your CCPA rights, contact us at <a href="mailto:info@bytheirfruit.church" style={{ color: T.accent }}>info@bytheirfruit.church</a>.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>10. International Users</h2>
+              <p>The Service is operated from the United States. If you are accessing the Service from outside the United States, please be aware that your information may be transferred to, stored, and processed in the United States, where data protection laws may differ from those in your jurisdiction. By using the Service, you consent to such transfer.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>11. Changes to This Policy</h2>
+              <p>We may update this Privacy Policy from time to time. If we make material changes, we will notify you by posting the updated policy on the Service with a revised "Last Updated" date. Your continued use of the Service after any changes constitutes your acceptance of the revised policy.</p>
+
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>12. Contact Us</h2>
+              <p>If you have questions or concerns about this Privacy Policy or our data practices, please contact us at: <a href="mailto:info@bytheirfruit.church" style={{ color: T.accent }}>info@bytheirfruit.church</a></p>
+            </div>
+          </FadeIn>
+        </div>
+      )}
+
       <footer style={{ borderTop: `1px solid ${T.border}`, marginTop: 60 }}>
         <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 24px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 32, marginBottom: 28 }}>
@@ -2391,7 +2509,11 @@ export default function ByTheirFruit() {
           {/* Bottom bar */}
           <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
             <div style={{ fontSize: 11, color: T.textMuted }}>&copy; {new Date().getFullYear()} By Their Fruit. All rights reserved.</div>
-            <div style={{ fontSize: 11, color: T.textMuted }}>Matthew 7:16</div>
+            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+              <button onClick={() => navigate("terms")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11, color: T.textMuted, fontFamily: T.body }} onMouseEnter={e => e.currentTarget.style.color = T.accent} onMouseLeave={e => e.currentTarget.style.color = T.textMuted}>Terms of Service</button>
+              <button onClick={() => navigate("privacy")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11, color: T.textMuted, fontFamily: T.body }} onMouseEnter={e => e.currentTarget.style.color = T.accent} onMouseLeave={e => e.currentTarget.style.color = T.textMuted}>Privacy Policy</button>
+              <div style={{ fontSize: 11, color: T.textMuted }}>Matthew 7:16</div>
+            </div>
           </div>
         </div>
       </footer>
