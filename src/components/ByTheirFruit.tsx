@@ -954,6 +954,19 @@ export default function ByTheirFruit() {
   const denoms = ["All", "Non-Denominational", "Baptist", "Catholic", "Methodist", "Lutheran", "Presbyterian", "Episcopal", "Pentecostal", "Assemblies of God", "Church of God", "Church of Christ", "Eastern Orthodox", "Calvary Chapel", "Apostolic", "Church of God in Christ", "AME", "Seventh-day Adventist", "United Methodist", "Vineyard", "Church of the Nazarene", "United Church of Christ"];
   const currentChurch = selectedChurch ? (churches.find(c => c.id === selectedChurch.id) || selectedChurch) : null;
 
+  /* SSR-safe: render a minimal shell until client mounts to avoid hydration mismatch */
+  if (!mounted) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#fafafa", fontFamily: "'Plus Jakarta Sans', sans-serif", color: "#18181b" }}>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        <div style={{ textAlign: "center", padding: "120px 24px" }}>
+          <div style={{ display: "inline-block", width: 24, height: 24, border: "3px solid #e4e4e7", borderTopColor: "#2563eb", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+          <div style={{ fontSize: 14, color: "#a1a1aa", marginTop: 12 }}>Loading churches...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.body, color: T.text }}>
       <style>{fonts}{responsiveCSS}{`::selection{background:${T.accentSoft};color:${T.accent}}input::placeholder,textarea::placeholder{color:${T.textMuted}}*{box-sizing:border-box}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -975,7 +988,7 @@ export default function ByTheirFruit() {
       </nav>
 
       {/* LOADING */}
-      {(!mounted || loading) && (
+      {loading && (
         <div style={{ textAlign: "center", padding: "120px 24px" }}>
           <div style={{ display: "inline-block", width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
           <div style={{ fontSize: 14, color: T.textMuted, marginTop: 12 }}>Loading churches...</div>
@@ -983,7 +996,7 @@ export default function ByTheirFruit() {
       )}
 
       {/* HOME */}
-      {mounted && !loading && page === "home" && (
+      {!loading && page === "home" && (
         <div style={{ maxWidth: 760, margin: "0 auto", padding: "96px 24px 60px" }}>
           <FadeIn>
             <div style={{ textAlign: "center", marginBottom: 64 }}>
@@ -1022,7 +1035,7 @@ export default function ByTheirFruit() {
       )}
 
       {/* DISCOVER */}
-      {mounted && !loading && page === "discover" && (
+      {!loading && page === "discover" && (
         <div style={{ maxWidth: 840, margin: "0 auto", padding: "36px 24px" }}>
           <FadeIn>
             <h2 style={{ fontSize: 26, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Discover churches</h2>
@@ -1114,7 +1127,7 @@ export default function ByTheirFruit() {
       )}
 
       {/* PROFILE */}
-      {mounted && !loading && page === "profile" && currentChurch && (() => {
+      {!loading && page === "profile" && currentChurch && (() => {
         const c = currentChurch; const overall = avg(c.scores); const rated = hasScores(c);
         const mapUrl = c.address && c.city ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c.name}, ${c.address}, ${c.city}, ${c.state}`)}` : null;
         return (
@@ -1258,7 +1271,7 @@ export default function ByTheirFruit() {
       })()}
 
       {/* RATE */}
-      {mounted && !loading && page === "rate" && (
+      {!loading && page === "rate" && (
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "36px 24px" }}>
           <FadeIn>
             <div style={{ display: "flex", gap: 3, marginBottom: 32 }}>
@@ -1405,7 +1418,7 @@ export default function ByTheirFruit() {
       )}
 
       {/* ABOUT */}
-      {mounted && !loading && page === "about" && (
+      {!loading && page === "about" && (
         <div style={{ maxWidth: 600, margin: "0 auto", padding: "56px 24px" }}>
           <FadeIn>
             <h1 style={{ fontSize: 34, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.12, margin: "0 0 28px", letterSpacing: "-0.04em" }}>The church doesn't get to grade its own homework.</h1>
