@@ -54,6 +54,7 @@ CREATE TABLE churches (
   service_times TEXT,
   website TEXT,
   phone TEXT,
+  email TEXT,
   source TEXT DEFAULT 'manual' CHECK (source IN ('seed', 'google', 'manual')),
   added_by UUID REFERENCES profiles(id),
   claimed_by UUID REFERENCES profiles(id),
@@ -71,6 +72,20 @@ CREATE TABLE churches (
   score_overall DECIMAL,
   total_reviews INT DEFAULT 0,
   scores_updated_at TIMESTAMPTZ,
+  -- Owner dashboard fields
+  service_days JSONB,
+  avg_attendance INT,
+  staff_count INT,
+  volunteer_count INT,
+  campus_count INT,
+  programs TEXT[],
+  facebook_url TEXT,
+  instagram_url TEXT,
+  youtube_url TEXT,
+  livestream_url TEXT,
+  pastor_name TEXT,
+  year_founded INT,
+  description TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -165,6 +180,20 @@ CREATE POLICY "Admins can view all claims" ON claim_requests FOR SELECT USING (
 CREATE POLICY "Admins can update claims" ON claim_requests FOR UPDATE USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'moderator'))
 );
+
+-- User favorites (saved churches)
+CREATE TABLE favorites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  church_id UUID REFERENCES churches(id) ON DELETE CASCADE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, church_id)
+);
+
+ALTER TABLE favorites ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view own favorites" ON favorites FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "Users can add favorites" ON favorites FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can remove favorites" ON favorites FOR DELETE USING (auth.uid() = user_id);
 
 -- Church responses
 CREATE TABLE church_responses (

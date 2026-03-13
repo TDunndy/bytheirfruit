@@ -739,8 +739,10 @@ export default function ByTheirFruit() {
         setPage("rate");
       } else if (hash === "#/admin") {
         setPage("admin");
-      } else if (hash === "#/mychurches") {
-        setPage("mychurches");
+      } else if (hash === "#/saved") {
+        setPage("saved");
+      } else if (hash === "#/dashboard") {
+        setPage("dashboard");
       }
     };
     handleHash();
@@ -770,7 +772,15 @@ export default function ByTheirFruit() {
 
   // Church claiming
   const [showClaimModal, setShowClaimModal] = useState(false);
-  const [claimData, setClaimData] = useState({ fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "" });
+  const [claimData, setClaimData] = useState({
+    fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "",
+    serviceDays: [{ day: "Sunday", times: "9:00 AM, 11:00 AM" }],
+    avgAttendance: "", staffCount: "", volunteerCount: "", campusCount: "1",
+    programs: [],
+    website: "", churchEmail: "", churchPhone: "",
+    facebook: "", instagram: "", youtube: "", livestream: "",
+    pastorName: "", yearFounded: "", description: ""
+  });
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimStatus, setClaimStatus] = useState(null); // null | 'pending' | 'approved' | 'rejected'
   // Church owner response
@@ -784,6 +794,11 @@ export default function ByTheirFruit() {
   const [myChurchesTab, setMyChurchesTab] = useState("reviewed"); // "reviewed" | "owned"
   const [ownerDemographics, setOwnerDemographics] = useState(null);
   const [ownerReviews, setOwnerReviews] = useState([]);
+
+  // Favorites state
+  const [userFavorites, setUserFavorites] = useState(new Set());
+  const [savedChurches, setSavedChurches] = useState(null);
+  const [hasClaimed, setHasClaimed] = useState(false);
 
   // Admin state
   const [adminClaims, setAdminClaims] = useState([]);
@@ -1010,6 +1025,35 @@ export default function ByTheirFruit() {
     return responses || [];
   }, []);
 
+  // Fetch user favorites
+  const fetchUserFavorites = useCallback(async (userId) => {
+    const { data } = await supabase.from("favorites").select("church_id").eq("user_id", userId);
+    if (data) setUserFavorites(new Set(data.map(f => f.church_id)));
+  }, []);
+
+  const toggleFavorite = async (churchId) => {
+    if (!user) { setShowAuthModal(true); return; }
+    if (userFavorites.has(churchId)) {
+      await supabase.from("favorites").delete().eq("user_id", user.id).eq("church_id", churchId);
+      setUserFavorites(prev => { const s = new Set(prev); s.delete(churchId); return s; });
+    } else {
+      await supabase.from("favorites").insert({ user_id: user.id, church_id: churchId });
+      setUserFavorites(prev => new Set(prev).add(churchId));
+    }
+  };
+
+  // Fetch saved churches
+  const fetchSavedChurches = useCallback(async (userId) => {
+    const { data: favs } = await supabase.from("favorites").select("church_id").eq("user_id", userId);
+    if (favs && favs.length > 0) {
+      const ids = favs.map(f => f.church_id);
+      const { data: churches } = await supabase.from("churches").select("*").in("id", ids);
+      setSavedChurches((churches || []).map(ch => dbChurchToLocal(ch)));
+    } else {
+      setSavedChurches([]);
+    }
+  }, []);
+
   /* --- AUTH STATE --- */
   useEffect(() => {
     // Check current session
@@ -1027,6 +1071,7 @@ export default function ByTheirFruit() {
         };
         setUser(profile);
         fetchUserReviews(u.id);
+        fetchUserFavorites(u.id);
       }
     });
 
@@ -1046,6 +1091,11 @@ export default function ByTheirFruit() {
         setUser(profile);
         setShowAuthModal(false);
         fetchUserReviews(u.id);
+        fetchUserFavorites(u.id);
+
+        // Check if user has claimed a church
+        const { data: claimedCheck } = await supabase.from("churches").select("id").eq("claimed_by", u.id).limit(1);
+        if (claimedCheck && claimedCheck.length > 0) setHasClaimed(true);
 
         // Check if user has filled demographics, if not show the profile complete modal
         const { data: profileData } = await supabase.from("profiles").select("gender,age_range,income_bracket").eq("id", u.id).single();
@@ -1068,11 +1118,13 @@ export default function ByTheirFruit() {
       if (event === "SIGNED_OUT") {
         setUser(null);
         setUserReviews({});
+        setUserFavorites(new Set());
+        setHasClaimed(false);
       }
     });
 
     return () => subscription?.unsubscribe();
-  }, [fetchUserReviews]);
+  }, [fetchUserReviews, fetchUserFavorites]);
 
   /* --- INITIAL DATA LOAD --- */
   useEffect(() => {
@@ -1215,15 +1267,46 @@ export default function ByTheirFruit() {
       phone: claimData.phone || null,
       message: claimData.message || null,
     });
-    setClaimSubmitting(false);
+
     if (error) {
+      setClaimSubmitting(false);
       if (error.code === "23505") alert("You've already submitted a claim for this church.");
       else alert("Failed to submit claim: " + error.message);
       return;
     }
+
+    // Update church record with new fields
+    await supabase.from("churches").update({
+      service_days: claimData.serviceDays,
+      avg_attendance: claimData.avgAttendance ? parseInt(claimData.avgAttendance) : null,
+      staff_count: claimData.staffCount ? parseInt(claimData.staffCount) : null,
+      volunteer_count: claimData.volunteerCount ? parseInt(claimData.volunteerCount) : null,
+      campus_count: claimData.campusCount ? parseInt(claimData.campusCount) : null,
+      programs: claimData.programs.length > 0 ? claimData.programs : null,
+      website: claimData.website || null,
+      email: claimData.churchEmail || null,
+      phone: claimData.churchPhone || null,
+      facebook_url: claimData.facebook || null,
+      instagram_url: claimData.instagram || null,
+      youtube_url: claimData.youtube || null,
+      livestream_url: claimData.livestream || null,
+      pastor_name: claimData.pastorName || null,
+      year_founded: claimData.yearFounded ? parseInt(claimData.yearFounded) : null,
+      description: claimData.description || null,
+    }).eq("id", churchId);
+
+    setClaimSubmitting(false);
     setClaimStatus("pending");
     setShowClaimModal(false);
-    setClaimData({ fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "" });
+    setClaimData({
+      fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "",
+      serviceDays: [{ day: "Sunday", times: "9:00 AM, 11:00 AM" }],
+      avgAttendance: "", staffCount: "", volunteerCount: "", campusCount: "1",
+      programs: [],
+      website: "", churchEmail: "", churchPhone: "",
+      facebook: "", instagram: "", youtube: "", livestream: "",
+      pastorName: "", yearFounded: "", description: ""
+    });
 
     // Redirect to Stripe for $39/month subscription payment
     const stripePaymentUrl = `https://buy.stripe.com/test_3cI3cvb1P6bC4GefFbgw000?prefilled_email=${encodeURIComponent(claimData.workEmail)}&client_reference_id=${encodeURIComponent(user.id)}`;
@@ -1447,7 +1530,10 @@ export default function ByTheirFruit() {
             <button key={id} onClick={() => navigate(id)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.text : "transparent", color: page === id ? T.bg : T.textSoft, border: `1px solid ${page === id ? T.text : "transparent"}`, transition: "all 0.15s" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
           ))}
           {user && (
-            <button onClick={() => { navigate("mychurches"); fetchMyChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "mychurches" ? T.accent : T.accentSoft, color: page === "mychurches" ? "#fff" : T.accent, border: `1px solid ${page === "mychurches" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>My Churches</button>
+            <button onClick={() => { navigate("saved"); fetchSavedChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "saved" ? T.text : "transparent", color: page === "saved" ? T.bg : T.textSoft, border: `1px solid ${page === "saved" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Saved</button>
+          )}
+          {hasClaimed && (
+            <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accent : T.accentSoft, color: page === "dashboard" ? "#fff" : T.accent, border: `1px solid ${page === "dashboard" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Dashboard</button>
           )}
           {isAdmin && (
             <button onClick={() => { navigate("admin"); fetchAdminData(); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "admin" ? T.red : T.redSoft, color: page === "admin" ? "#fff" : T.red, border: `1px solid ${page === "admin" ? T.red : T.redBorder}`, transition: "all 0.15s" }}>Admin</button>
@@ -1476,7 +1562,10 @@ export default function ByTheirFruit() {
             <button key={id} onClick={() => navigate(id)} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === id ? T.border : "transparent"}`, textAlign: "left" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
           ))}
           {user && (
-            <button onClick={() => { navigate("mychurches"); fetchMyChurches(user.id); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "mychurches" ? T.accentSoft : "transparent", color: T.accent, border: `1px solid ${page === "mychurches" ? T.accentBorder : "transparent"}`, textAlign: "left" }}>My Churches</button>
+            <button onClick={() => { navigate("saved"); fetchSavedChurches(user.id); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "saved" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "saved" ? T.border : "transparent"}`, textAlign: "left" }}>Saved</button>
+          )}
+          {hasClaimed && (
+            <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accentSoft : "transparent", color: T.accent, border: `1px solid ${page === "dashboard" ? T.accentBorder : "transparent"}`, textAlign: "left" }}>Dashboard</button>
           )}
           {isAdmin && (
             <button onClick={() => { navigate("admin"); fetchAdminData(); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.redSoft, color: T.red, border: `1px solid ${T.redBorder}`, textAlign: "left" }}>Admin Dashboard</button>
@@ -1582,9 +1671,12 @@ export default function ByTheirFruit() {
               const rated = hasScores(church);
               return (
                 <FadeIn key={church.id} delay={120 + i * 70}>
-                  <div onClick={() => viewChurch(church)} style={{ padding: "22px", borderRadius: T.radius, cursor: "pointer", background: T.surface, border: `1.5px solid ${T.border}`, transition: "all 0.2s" }}
+                  <div onClick={() => viewChurch(church)} style={{ padding: "22px", borderRadius: T.radius, cursor: "pointer", background: T.surface, border: `1.5px solid ${T.border}`, transition: "all 0.2s", position: "relative" }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = T.accentBorder; e.currentTarget.style.boxShadow = "0 2px 16px rgba(37,99,235,0.05)"; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}>
+                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(church.id); }} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: 4, lineHeight: 1 }} title={userFavorites.has(church.id) ? "Unsave" : "Save"}>
+                      {userFavorites.has(church.id) ? "❤️" : "🤍"}
+                    </button>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                       <div style={{ flex: 1 }}>
                         <h3 style={{ fontSize: 18, fontFamily: T.heading, fontWeight: 700, margin: "0 0 3px", letterSpacing: "-0.02em" }}>{church.name}</h3>
@@ -1752,37 +1844,105 @@ export default function ByTheirFruit() {
                     </div>
                     <div style={{ fontSize: 20, fontWeight: 800, fontFamily: T.heading, color: T.accent }}>$39<span style={{ fontSize: 12, fontWeight: 500, color: T.textMuted }}>/mo</span></div>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    {/* Your Information */}
                     <div>
-                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your full name *</label>
-                      <input value={claimData.fullName} onChange={e => setClaimData(p => ({ ...p, fullName: e.target.value }))} placeholder="e.g. Pastor John Smith" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                      <h3 style={{ fontSize: 13, fontFamily: T.heading, fontWeight: 700, margin: "0 0 12px", color: T.text }}>Your Information</h3>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        <div>
+                          <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your full name *</label>
+                          <input value={claimData.fullName} onChange={e => setClaimData(p => ({ ...p, fullName: e.target.value }))} placeholder="e.g. Pastor John Smith" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your role at this church *</label>
+                          <select value={claimData.roleAtChurch} onChange={e => setClaimData(p => ({ ...p, roleAtChurch: e.target.value }))} style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }}>
+                            <option value="">Select your role...</option>
+                            <option value="Senior Pastor">Senior Pastor</option>
+                            <option value="Associate Pastor">Associate Pastor</option>
+                            <option value="Youth Pastor">Youth Pastor</option>
+                            <option value="Worship Leader">Worship Leader</option>
+                            <option value="Church Administrator">Church Administrator</option>
+                            <option value="Elder/Deacon">Elder / Deacon</option>
+                            <option value="Board Member">Board Member</option>
+                            <option value="Office Staff">Office Staff</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Church work email *</label>
+                          <input type="email" value={claimData.workEmail} onChange={e => setClaimData(p => ({ ...p, workEmail: e.target.value }))} placeholder="e.g. pastor@gracechurch.org" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Phone number</label>
+                          <input type="tel" value={claimData.phone} onChange={e => setClaimData(p => ({ ...p, phone: e.target.value }))} placeholder="(optional)" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Anything else you'd like us to know?</label>
+                          <textarea value={claimData.message} onChange={e => setClaimData(p => ({ ...p, message: e.target.value }))} rows={2} placeholder="(optional)" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical" }} />
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Service Times */}
                     <div>
-                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your role at this church *</label>
-                      <select value={claimData.roleAtChurch} onChange={e => setClaimData(p => ({ ...p, roleAtChurch: e.target.value }))} style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }}>
-                        <option value="">Select your role...</option>
-                        <option value="Senior Pastor">Senior Pastor</option>
-                        <option value="Associate Pastor">Associate Pastor</option>
-                        <option value="Youth Pastor">Youth Pastor</option>
-                        <option value="Worship Leader">Worship Leader</option>
-                        <option value="Church Administrator">Church Administrator</option>
-                        <option value="Elder/Deacon">Elder / Deacon</option>
-                        <option value="Board Member">Board Member</option>
-                        <option value="Office Staff">Office Staff</option>
-                        <option value="Other">Other</option>
-                      </select>
+                      <h3 style={{ fontSize: 13, fontFamily: T.heading, fontWeight: 700, margin: "0 0 12px", color: T.text }}>Service Times</h3>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {claimData.serviceDays.map((day, i) => (
+                          <div key={i} style={{ display: "flex", gap: 8 }}>
+                            <input value={day.day} onChange={e => setClaimData(p => ({ ...p, serviceDays: p.serviceDays.map((d, j) => j === i ? { ...d, day: e.target.value } : d) }))} placeholder="Day" style={{ flex: 1, padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                            <input value={day.times} onChange={e => setClaimData(p => ({ ...p, serviceDays: p.serviceDays.map((d, j) => j === i ? { ...d, times: e.target.value } : d) }))} placeholder="Time(s)" style={{ flex: 2, padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                          </div>
+                        ))}
+                        <button onClick={() => setClaimData(p => ({ ...p, serviceDays: [...p.serviceDays, { day: "", times: "" }] }))} style={{ padding: "6px 12px", borderRadius: T.radiusSm, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>+ Add Service Time</button>
+                      </div>
                     </div>
+
+                    {/* Church Size */}
                     <div>
-                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Church work email *</label>
-                      <input type="email" value={claimData.workEmail} onChange={e => setClaimData(p => ({ ...p, workEmail: e.target.value }))} placeholder="e.g. pastor@gracechurch.org" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                      <h3 style={{ fontSize: 13, fontFamily: T.heading, fontWeight: 700, margin: "0 0 12px", color: T.text }}>Church Size</h3>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        <input type="number" value={claimData.avgAttendance} onChange={e => setClaimData(p => ({ ...p, avgAttendance: e.target.value }))} placeholder="Average Sunday attendance" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <input type="number" value={claimData.staffCount} onChange={e => setClaimData(p => ({ ...p, staffCount: e.target.value }))} placeholder="Staff count" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <input type="number" value={claimData.volunteerCount} onChange={e => setClaimData(p => ({ ...p, volunteerCount: e.target.value }))} placeholder="Volunteer count" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <input type="number" value={claimData.campusCount} onChange={e => setClaimData(p => ({ ...p, campusCount: e.target.value }))} placeholder="Number of campuses" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                      </div>
                     </div>
+
+                    {/* Programs & Ministries */}
                     <div>
-                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Phone number</label>
-                      <input type="tel" value={claimData.phone} onChange={e => setClaimData(p => ({ ...p, phone: e.target.value }))} placeholder="(optional)" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                      <h3 style={{ fontSize: 13, fontFamily: T.heading, fontWeight: 700, margin: "0 0 12px", color: T.text }}>Programs & Ministries</h3>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        {["Youth Group", "Small Groups", "Children's Ministry", "Missions", "Food Pantry", "Counseling", "Music/Worship Team", "Women's Ministry", "Men's Ministry", "Recovery/Support Groups", "Senior Ministry", "ESL Classes"].map(prog => (
+                          <label key={prog} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12 }}>
+                            <input type="checkbox" checked={claimData.programs.includes(prog)} onChange={e => setClaimData(p => e.target.checked ? { ...p, programs: [...p.programs, prog] } : { ...p, programs: p.programs.filter(pr => pr !== prog) })} style={{ width: 16, height: 16, cursor: "pointer" }} />
+                            {prog}
+                          </label>
+                        ))}
+                      </div>
                     </div>
+
+                    {/* Contact & Social Media */}
                     <div>
-                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Anything else you'd like us to know?</label>
-                      <textarea value={claimData.message} onChange={e => setClaimData(p => ({ ...p, message: e.target.value }))} rows={3} placeholder="(optional)" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical" }} />
+                      <h3 style={{ fontSize: 13, fontFamily: T.heading, fontWeight: 700, margin: "0 0 12px", color: T.text }}>Contact & Social Media</h3>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        <input value={claimData.website} onChange={e => setClaimData(p => ({ ...p, website: e.target.value }))} placeholder="Website URL" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <input type="email" value={claimData.churchEmail} onChange={e => setClaimData(p => ({ ...p, churchEmail: e.target.value }))} placeholder="Church email" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <input type="tel" value={claimData.churchPhone} onChange={e => setClaimData(p => ({ ...p, churchPhone: e.target.value }))} placeholder="Church phone" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <input value={claimData.facebook} onChange={e => setClaimData(p => ({ ...p, facebook: e.target.value }))} placeholder="Facebook URL" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <input value={claimData.instagram} onChange={e => setClaimData(p => ({ ...p, instagram: e.target.value }))} placeholder="Instagram handle" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <input value={claimData.youtube} onChange={e => setClaimData(p => ({ ...p, youtube: e.target.value }))} placeholder="YouTube channel URL" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <input value={claimData.livestream} onChange={e => setClaimData(p => ({ ...p, livestream: e.target.value }))} placeholder="Livestream URL" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                      </div>
+                    </div>
+
+                    {/* About */}
+                    <div>
+                      <h3 style={{ fontSize: 13, fontFamily: T.heading, fontWeight: 700, margin: "0 0 12px", color: T.text }}>About</h3>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        <input value={claimData.pastorName} onChange={e => setClaimData(p => ({ ...p, pastorName: e.target.value }))} placeholder="Senior pastor name" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <input type="number" value={claimData.yearFounded} onChange={e => setClaimData(p => ({ ...p, yearFounded: e.target.value }))} placeholder="Year founded" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                        <textarea value={claimData.description} onChange={e => setClaimData(p => ({ ...p, description: e.target.value }))} rows={3} placeholder="Church description (250 words max)" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical" }} />
+                      </div>
                     </div>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
@@ -2263,6 +2423,222 @@ export default function ByTheirFruit() {
                 ))}
               </div>
             )}
+          </FadeIn>
+        </div>
+      )}
+
+      {/* SAVED CHURCHES */}
+      {!loading && page === "saved" && user && (
+        <div style={{ maxWidth: 760, margin: "0 auto", padding: "36px 24px" }}>
+          <FadeIn>
+            <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Saved Churches</h1>
+            <p style={{ fontSize: 14, color: T.textMuted, margin: "0 0 28px" }}>Churches you've bookmarked for later</p>
+
+            {/* Loading saved churches from favorites */}
+            {savedChurches === null && <div style={{ textAlign: "center", padding: "60px 24px" }}><div style={{ display: "inline-block", width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite" }} /></div>}
+
+            {savedChurches && savedChurches.length === 0 && (
+              <div style={{ padding: "48px 24px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>&#x2661;</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 4 }}>No saved churches yet</div>
+                <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 20 }}>Tap the heart on any church to save it here.</div>
+                <button onClick={() => navigate("discover")} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Browse Churches</button>
+              </div>
+            )}
+
+            {savedChurches && savedChurches.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {savedChurches.map(ch => (
+                  <div key={ch.id} onClick={() => viewChurch(ch)} style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, cursor: "pointer", transition: "border-color 0.15s", position: "relative" }} onMouseEnter={e => e.currentTarget.style.borderColor = T.accent} onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
+                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(ch.id); }} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: 4, lineHeight: 1 }}>❤️</button>
+                    <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 2 }}>{ch.name}</div>
+                    <div style={{ fontSize: 13, color: T.textMuted }}>{ch.denomination} &middot; {ch.city}, {ch.state}</div>
+                    {ch.scoreOverall && <div style={{ marginTop: 8, display: "inline-block", padding: "4px 10px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 700, fontFamily: T.heading, color: scoreColor(ch.scoreOverall), background: scoreBg(ch.scoreOverall), border: `1px solid ${scoreBorder2(ch.scoreOverall)}` }}>{ch.scoreOverall.toFixed(1)} &middot; {ch.totalReviews} review{ch.totalReviews !== 1 ? "s" : ""}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </FadeIn>
+        </div>
+      )}
+
+      {/* DASHBOARD */}
+      {!loading && page === "dashboard" && user && hasClaimed && (
+        <div style={{ maxWidth: 900, margin: "0 auto", padding: "36px 24px" }}>
+          <FadeIn>
+            <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Dashboard</h1>
+            <p style={{ fontSize: 14, color: T.textMuted, margin: "0 0 28px" }}>Your church insights and reviews</p>
+
+            {myChurchesLoading && (
+              <div style={{ textAlign: "center", padding: "60px 24px" }}>
+                <div style={{ display: "inline-block", width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+              </div>
+            )}
+
+            {!myChurchesLoading && myChurchesData.claimed.length > 0 && (() => {
+              const oc = myChurchesData.claimed[0]; // primary claimed church
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  {/* Church Header Card */}
+                  <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                          <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>{oc.name}</h2>
+                          <span style={{ padding: "3px 10px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 700, background: T.greenSoft, color: T.green, border: `1px solid ${T.greenBorder}` }}>Verified Owner</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: T.textSoft }}>{oc.denomination} &middot; {oc.city}, {oc.state}</div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 36, fontFamily: T.heading, fontWeight: 800, color: scoreColor(oc.scoreOverall || 0) }}>{oc.scoreOverall ? oc.scoreOverall.toFixed(1) : "—"}</div>
+                        <div style={{ fontSize: 11, color: T.textMuted }}>{oc.totalReviews} review{oc.totalReviews !== 1 ? "s" : ""}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                      <button onClick={() => viewChurch(oc)} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>View Public Profile</button>
+                    </div>
+                  </div>
+
+                  {/* Score Breakdown */}
+                  {ownerDemographics && ownerDemographics.totalReviews > 0 && (
+                    <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                      <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Score Breakdown</h3>
+                      <div className="btf-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px" }}>
+                        {CATEGORIES.map(cat => {
+                          const avg = ownerDemographics.scoreAvgs[cat.key];
+                          if (avg == null) return null;
+                          return (
+                            <div key={cat.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+                              <span style={{ fontSize: 13, color: T.textSoft }}>{cat.label}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 60, height: 6, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                  <div style={{ width: `${(avg / 5) * 100}%`, height: "100%", borderRadius: 3, background: scoreColor(avg) }} />
+                                </div>
+                                <span style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, color: scoreColor(avg), minWidth: 24, textAlign: "right" }}>{avg.toFixed(1)}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reviewer Demographics */}
+                  {ownerDemographics && ownerDemographics.totalReviews > 0 && (
+                    <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                      <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Reviewer Demographics</h3>
+                      <div className="btf-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                        {/* Reviewer Roles */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Reviewer Type</div>
+                          {Object.entries(ownerDemographics.roleCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
+                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
+                                </div>
+                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Age Ranges */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Age Range</div>
+                          {Object.entries(ownerDemographics.ageCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
+                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
+                                </div>
+                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Gender */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Gender</div>
+                          {Object.entries(ownerDemographics.genderCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
+                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
+                                </div>
+                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Income */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Income Bracket</div>
+                          {Object.entries(ownerDemographics.incomeCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
+                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
+                                </div>
+                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent Reviews with Response Ability */}
+                  <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                    <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Reviews ({ownerReviews.length})</h3>
+                    {ownerReviews.length === 0 && (
+                      <div style={{ padding: "32px 20px", textAlign: "center", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px dashed ${T.border}` }}>
+                        <div style={{ fontSize: 14, color: T.textMuted }}>No reviews yet. Share your church profile to get started.</div>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {ownerReviews.map(rev => {
+                        const avgScore = SCORE_FIELDS.map(f => rev[`score_${f}`]).filter(v => v != null);
+                        const revAvg = avgScore.length > 0 ? avgScore.reduce((a, b) => a + b, 0) / avgScore.length : null;
+                        return (
+                          <div key={rev.id} style={{ padding: "16px", borderRadius: T.radiusSm, border: `1px solid ${T.borderLight}`, background: T.bg }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                              <div>
+                                <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{rev.profiles?.display_name || "Anonymous"}</span>
+                                <span style={{ fontSize: 12, color: T.textMuted, marginLeft: 8 }}>{rev.reviewer_role}</span>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                {revAvg && <span style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, color: scoreColor(revAvg) }}>{revAvg.toFixed(1)}</span>}
+                                <span style={{ fontSize: 11, color: T.textMuted }}>{new Date(rev.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                              </div>
+                            </div>
+                            {rev.text && <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 10px", lineHeight: 1.6 }}>{rev.text}</p>}
+                            {/* Response actions */}
+                            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                              {respondingTo === rev.id ? (
+                                <div style={{ width: "100%" }}>
+                                  <textarea value={responseText} onChange={e => setResponseText(e.target.value)} rows={3} placeholder="Write your response as the church..." style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.accentBorder}`, background: T.bg, color: T.text, fontFamily: T.body, resize: "vertical", outline: "none" }} />
+                                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                    <button onClick={() => submitChurchResponse(rev.id, oc.id)} disabled={responseSubmitting || !responseText.trim()} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", opacity: responseSubmitting || !responseText.trim() ? 0.5 : 1 }}>{responseSubmitting ? "Posting..." : "Post Response"}</button>
+                                    <button onClick={() => { setRespondingTo(null); setResponseText(""); }} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}` }}>Cancel</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button onClick={() => { setRespondingTo(rev.id); setResponseText(""); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}` }}>Respond</button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </FadeIn>
         </div>
       )}
