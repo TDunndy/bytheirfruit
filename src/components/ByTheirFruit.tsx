@@ -228,7 +228,7 @@ function Chip({ children, active, onClick }) {
   return (
     <button onClick={onClick} style={{
       padding: "5px 13px", borderRadius: T.radiusFull, fontSize: 12, fontFamily: T.body, fontWeight: 500,
-      background: active ? T.text : T.surface, color: active ? "#fff" : T.textSoft,
+      background: active ? T.text : T.surface, color: active ? T.bg : T.textSoft,
       border: `1.5px solid ${active ? T.text : T.border}`, cursor: "pointer", transition: "all 0.15s",
     }}>{children}</button>
   );
@@ -420,7 +420,7 @@ function AuthModal({ onClose, onAuth, mode: im }) {
           {mode === "signup" && <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />}
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email" style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
           <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" onKeyDown={e => e.key === "Enter" && emailAuth()} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
-          <button onClick={emailAuth} disabled={loading || !email || !password || (mode === "signup" && !name)} style={{ padding: "11px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (loading || !email || !password) ? 0.35 : 1 }}>{loading ? "..." : (mode === "signin" ? "Sign In" : "Create Account")}</button>
+          <button onClick={emailAuth} disabled={loading || !email || !password || (mode === "signup" && !name)} style={{ padding: "11px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: (loading || !email || !password) ? 0.35 : 1 }}>{loading ? "..." : (mode === "signin" ? "Sign In" : "Create Account")}</button>
         </div>
         <div style={{ textAlign: "center", marginTop: 18, fontSize: 13, color: T.textMuted }}>{mode === "signin" ? "No account? " : "Have an account? "}<span onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); }} style={{ color: T.accent, fontWeight: 600, cursor: "pointer" }}>{mode === "signin" ? "Sign Up" : "Sign In"}</span></div>
       </div>
@@ -1264,7 +1264,7 @@ export default function ByTheirFruit() {
         <div className="btf-nav-links" style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <button onClick={() => startRateFlow()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "rate" ? T.accent : T.accentSoft, color: page === "rate" ? "#fff" : T.accent, border: `1px solid ${page === "rate" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Rate a Church</button>
           {["discover", "about"].map(id => (
-            <button key={id} onClick={() => setPage(id)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.text : "transparent", color: page === id ? "#fff" : T.textSoft, border: `1px solid ${page === id ? T.text : "transparent"}`, transition: "all 0.15s" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
+            <button key={id} onClick={() => setPage(id)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.text : "transparent", color: page === id ? T.bg : T.textSoft, border: `1px solid ${page === id ? T.text : "transparent"}`, transition: "all 0.15s" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
           ))}
           {isAdmin && (
             <button onClick={() => { setPage("admin"); fetchAdminData(); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "admin" ? T.red : T.redSoft, color: page === "admin" ? "#fff" : T.red, border: `1px solid ${page === "admin" ? T.red : T.redBorder}`, transition: "all 0.15s" }}>Admin</button>
@@ -1292,7 +1292,7 @@ export default function ByTheirFruit() {
               <p style={{ fontSize: 17, color: T.textSoft, lineHeight: 1.65, maxWidth: 480, margin: "0 auto 36px" }}>Churches tell you who they are. Their people show you. Real reviews from real congregants — honest, structured, and built to help churches grow.</p>
               <div className="btf-hero-buttons" style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                 <button onClick={() => startRateFlow()} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, boxShadow: "0 2px 12px rgba(37,99,235,0.2)" }}>Rate a Church</button>
-                <button onClick={() => setPage("discover")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Find a Church</button>
+                <button onClick={() => setPage("discover")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Find a Church</button>
                 <button onClick={() => setPage("about")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: "transparent", color: T.text, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>How It Works</button>
               </div>
             </div>
@@ -1523,7 +1523,7 @@ export default function ByTheirFruit() {
                   {claimStatus === "pending" ? (
                     <span style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.amberSoft, color: T.amber, border: `1.5px solid ${T.amberBorder}` }}>Claim Pending Review</span>
                   ) : (
-                    <button onClick={() => { if (!user) { setShowAuthModal(true); } else { setShowClaimModal(true); } }} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, whiteSpace: "nowrap" }}>Claim This Church</button>
+                    <button onClick={() => { if (!user) { setShowAuthModal(true); } else { setShowClaimModal(true); } }} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, whiteSpace: "nowrap" }}>Claim This Church</button>
                   )}
                 </div>
               )}
@@ -1613,7 +1613,7 @@ export default function ByTheirFruit() {
                           <button onClick={() => startRateFlow(c)} disabled={!canEdit} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: canEdit ? T.accent : T.surfaceAlt, color: canEdit ? "#fff" : T.textMuted, border: "none", cursor: canEdit ? "pointer" : "not-allowed", fontFamily: T.body }}>Edit Your Review</button>
                         </div>
                       ) : (
-                        <button onClick={() => startRateFlow(c)} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Write a Review</button>
+                        <button onClick={() => startRateFlow(c)} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Write a Review</button>
                       );
                     })()}
                   </div>
@@ -1712,7 +1712,7 @@ export default function ByTheirFruit() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 28 }}>
                 <button onClick={() => setShowAddChurch(false)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
-                <button onClick={addManualChurch} disabled={!addData.name.trim() || !addData.city.trim()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!addData.name.trim() || !addData.city.trim()) ? 0.3 : 1 }}>Add Church & Rate →</button>
+                <button onClick={addManualChurch} disabled={!addData.name.trim() || !addData.city.trim()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!addData.name.trim() || !addData.city.trim()) ? 0.3 : 1 }}>Add Church & Rate →</button>
               </div>
             </FadeIn>
           )}
@@ -1743,7 +1743,7 @@ export default function ByTheirFruit() {
 
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
                 <button onClick={() => setRateStep(0)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
-                <button onClick={() => setRateStep(2)} disabled={Object.keys(rateScores).filter(k => !rateSkipped[k]).length === 0} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: Object.keys(rateScores).filter(k => !rateSkipped[k]).length === 0 ? 0.3 : 1 }}>Continue →</button>
+                <button onClick={() => setRateStep(2)} disabled={Object.keys(rateScores).filter(k => !rateSkipped[k]).length === 0} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: Object.keys(rateScores).filter(k => !rateSkipped[k]).length === 0 ? 0.3 : 1 }}>Continue →</button>
               </div>
             </FadeIn>
           )}
@@ -1786,7 +1786,7 @@ export default function ByTheirFruit() {
                 <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 4px" }}>Your review of <strong>{rateChurch?.name}</strong> has been {isEditing ? "updated" : "posted"}.</p>
                 <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 32px" }}>Scores will be recalculated this Saturday.</p>
                 <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                  <button onClick={() => { const c = churches.find(ch => ch.id === rateChurch?.id); if (c) viewChurch(c); }} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>View Church Profile</button>
+                  <button onClick={() => { const c = churches.find(ch => ch.id === rateChurch?.id); if (c) viewChurch(c); }} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>View Church Profile</button>
                   <button onClick={() => startRateFlow()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Rate Another</button>
                 </div>
               </div>
@@ -1805,7 +1805,7 @@ export default function ByTheirFruit() {
               <p><strong style={{ color: T.text }}>By Their Fruit</strong> exists because we believe the body of Christ — the actual people in the pews — are the most honest witnesses to what a church really is.</p>
               <p>Our platform gathers structured, thoughtful reviews from congregants and visitors across ten categories rooted in what scripture says a healthy church should look like. Reviews post immediately. scores update in real time as reviews are approved — giving a trustworthy, always-current picture.</p>
               <p>This isn't about tearing churches down. It's about building them up through honest feedback.</p>
-              <div style={{ padding: "28px", borderRadius: T.radius, background: T.text, color: "#fff", margin: "28px 0", textAlign: "center" }}>
+              <div style={{ padding: "28px", borderRadius: T.radius, background: T.text, color: T.bg, margin: "28px 0", textAlign: "center" }}>
                 <p style={{ fontSize: 17, fontStyle: "italic", lineHeight: 1.6, margin: "0 0 8px", color: "rgba(255,255,255,0.85)" }}>"Beware of false prophets, who come to you in sheep's clothing but inwardly are ravenous wolves. You will recognize them by their fruits."</p>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>Matthew 7:15–16 ESV</div>
               </div>
