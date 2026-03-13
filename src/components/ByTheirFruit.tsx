@@ -6,17 +6,49 @@ import { supabase } from "@/lib/supabase";
 
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');`;
 
-const T = {
-  bg: "#fafafa", surface: "#ffffff", surfaceAlt: "#f4f4f5",
-  border: "#e4e4e7", borderLight: "#f0f0f2",
-  text: "#18181b", textSoft: "#52525b", textMuted: "#a1a1aa",
+const SHARED = {
+  heading: "'Sora', sans-serif", body: "'Plus Jakarta Sans', sans-serif",
+  radius: 12, radiusSm: 8, radiusFull: 9999,
   accent: "#2563eb", accentSoft: "#eff4ff", accentBorder: "#bfdbfe",
   green: "#16a34a", greenSoft: "#f0fdf4", greenBorder: "#bbf7d0",
   amber: "#d97706", amberSoft: "#fffbeb", amberBorder: "#fde68a",
   red: "#dc2626", redSoft: "#fef2f2", redBorder: "#fecaca",
-  heading: "'Sora', sans-serif", body: "'Plus Jakarta Sans', sans-serif",
-  radius: 12, radiusSm: 8, radiusFull: 9999,
 };
+
+const LIGHT = {
+  ...SHARED,
+  bg: "#fafafa", surface: "#ffffff", surfaceAlt: "#f4f4f5",
+  border: "#e4e4e7", borderLight: "#f0f0f2",
+  text: "#18181b", textSoft: "#52525b", textMuted: "#a1a1aa",
+  navBg: "rgba(250,250,250,0.88)",
+};
+
+const DARK = {
+  ...SHARED,
+  bg: "#0a0a0b", surface: "#18181b", surfaceAlt: "#1e1e22",
+  border: "#2e2e33", borderLight: "#252529",
+  text: "#f4f4f5", textSoft: "#a1a1aa", textMuted: "#636369",
+  accentSoft: "#172554", accentBorder: "#1e3a5f",
+  greenSoft: "#052e16", greenBorder: "#14532d",
+  amberSoft: "#451a03", amberBorder: "#78350f",
+  redSoft: "#450a0a", redBorder: "#7f1d1d",
+  navBg: "rgba(10,10,11,0.88)",
+};
+
+// Default for server render / outside component
+let T = LIGHT;
+
+function useSystemTheme() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    setDark(mq.matches);
+    const handler = (e) => setDark(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return dark ? DARK : LIGHT;
+}
 
 const MIN_REVIEWS_FOR_SCORE = 3;
 
@@ -132,9 +164,17 @@ function dbReviewToLocal(r) {
 /* --- HELPERS --- */
 const avg = (s) => { const v = Object.values(s); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
 const hasScores = (c) => c.totalReviews >= MIN_REVIEWS_FOR_SCORE && Object.keys(c.scores).length > 0;
-const scoreColor = (s) => s >= 4.5 ? T.green : s >= 3.5 ? T.amber : T.red;
-const scoreBg = (s) => s >= 4.5 ? T.greenSoft : s >= 3.5 ? T.amberSoft : T.redSoft;
-const scoreBorder2 = (s) => s >= 4.5 ? T.greenBorder : s >= 3.5 ? T.amberBorder : T.redBorder;
+/* Smooth HSL-interpolated score colors: 1.0→red, 2.5→amber, 4.0+→green */
+function scoreHue(s) {
+  // Clamp 1–5, then map to hue: 0 (red) → 38 (amber) → 142 (green)
+  const t = Math.max(0, Math.min(1, (s - 1) / 4));
+  // Use an easing curve so green starts earlier and red only appears for truly low scores
+  const eased = t * t * (3 - 2 * t); // smoothstep
+  return eased * 142; // 0=red, ~38=amber, 142=green
+}
+const scoreColor = (s) => `hsl(${scoreHue(s)}, 72%, 38%)`;
+const scoreBg = (s) => `hsl(${scoreHue(s)}, 50%, ${T === DARK ? '12%' : '96%'})`;
+const scoreBorder2 = (s) => `hsl(${scoreHue(s)}, 45%, ${T === DARK ? '22%' : '82%'})`;
 
 /* --- RESPONSIVE --- */
 const responsiveCSS = `
@@ -197,7 +237,7 @@ function Chip({ children, active, onClick }) {
 /* --- RATING SLIDER WITH OPTIONAL COMMENT + NOT SURE --- */
 function RatingSlider({ label, desc, value, onChange, comment, onCommentChange, skipped, onSkipToggle }) {
   const starValue = Math.round(value);
-  const sliderColor = value >= 4.5 ? T.green : value >= 3.5 ? T.amber : value >= 1 ? T.red : T.border;
+  const sliderColor = value >= 1 ? scoreColor(value) : T.border;
   const fillPct = value > 0 ? ((value - 1) / 4) * 100 : 0;
   const [showComment, setShowComment] = useState(!!comment);
 
@@ -618,6 +658,9 @@ function ReviewCard({ rev, delay = 0, userId }) {
 
 /* ===== MAIN ===== */
 export default function ByTheirFruit() {
+  // Wire up system dark/light mode — mutate module-level T so all sub-components see it
+  T = useSystemTheme();
+
   const [page, setPage] = useState("home");
   const [selectedChurch, setSelectedChurch] = useState(null);
   const [churches, setChurches] = useState([]);
@@ -1198,11 +1241,11 @@ export default function ByTheirFruit() {
   /* SSR-safe: render a minimal shell until client mounts to avoid hydration mismatch */
   if (!mounted) {
     return (
-      <div style={{ minHeight: "100vh", background: "#fafafa", fontFamily: "'Plus Jakarta Sans', sans-serif", color: "#18181b" }}>
+      <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "'Plus Jakarta Sans', sans-serif", color: T.text }}>
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         <div style={{ textAlign: "center", padding: "120px 24px" }}>
-          <div style={{ display: "inline-block", width: 24, height: 24, border: "3px solid #e4e4e7", borderTopColor: "#2563eb", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
-          <div style={{ fontSize: 14, color: "#a1a1aa", marginTop: 12 }}>Loading churches...</div>
+          <div style={{ display: "inline-block", width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+          <div style={{ fontSize: 14, color: T.textMuted, marginTop: 12 }}>Loading churches...</div>
         </div>
       </div>
     );
@@ -1216,7 +1259,7 @@ export default function ByTheirFruit() {
       {showProfileComplete && user && <ProfileCompleteModal userId={user.id} onClose={() => setShowProfileComplete(false)} />}
 
       {/* NAV */}
-      <nav style={{ padding: "12px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: "rgba(250,250,250,0.88)", position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(16px)" }}>
+      <nav style={{ padding: "12px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.navBg, position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(16px)" }}>
         <div onClick={() => { setPage("home"); setSelectedChurch(null); }}><Logo size={16} /></div>
         <div className="btf-nav-links" style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <button onClick={() => startRateFlow()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "rate" ? T.accent : T.accentSoft, color: page === "rate" ? "#fff" : T.accent, border: `1px solid ${page === "rate" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Rate a Church</button>
