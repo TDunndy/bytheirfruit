@@ -2364,9 +2364,36 @@ export default function ByTheirFruit() {
         </div>
       )}
 
-      <footer style={{ padding: "24px", textAlign: "center", borderTop: `1px solid ${T.border}`, marginTop: 60 }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}><Logo size={13} color={T.textMuted} /></div>
-        <div style={{ fontSize: 11, color: T.textMuted }}>Real reviews from real congregants · Matthew 7:16</div>
+      <footer style={{ borderTop: `1px solid ${T.border}`, marginTop: 60 }}>
+        <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 24px 24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 32, marginBottom: 28 }}>
+            {/* Brand column */}
+            <div style={{ minWidth: 180 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><Logo size={14} color={T.text} /><span style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, color: T.text }}>By Their Fruit</span></div>
+              <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.5, maxWidth: 260 }}>Real reviews from real congregants — honest, structured, and built to help churches grow.</div>
+            </div>
+            {/* Navigation column */}
+            <div style={{ minWidth: 120 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Explore</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {[{ label: "Discover", page: "discover" }, { label: "Rate a Church", page: "rate" }, { label: "About", page: "about" }].map(link => (
+                  <button key={link.page} onClick={() => { if (link.page === "rate") startRateFlow(); else navigate(link.page); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: T.textSoft, fontFamily: T.body, textAlign: "left" }} onMouseEnter={e => e.currentTarget.style.color = T.accent} onMouseLeave={e => e.currentTarget.style.color = T.textSoft}>{link.label}</button>
+                ))}
+              </div>
+            </div>
+            {/* Contact column */}
+            <div style={{ minWidth: 160 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Contact Us</div>
+              <a href="mailto:info@bytheirfruit.church" style={{ fontSize: 13, color: T.accent, textDecoration: "none", fontFamily: T.body }} onMouseEnter={e => e.currentTarget.style.textDecoration = "underline"} onMouseLeave={e => e.currentTarget.style.textDecoration = "none"}>info@bytheirfruit.church</a>
+              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 6, lineHeight: 1.5 }}>Questions, feedback, or partnership inquiries — we'd love to hear from you.</div>
+            </div>
+          </div>
+          {/* Bottom bar */}
+          <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ fontSize: 11, color: T.textMuted }}>&copy; {new Date().getFullYear()} By Their Fruit. All rights reserved.</div>
+            <div style={{ fontSize: 11, color: T.textMuted }}>Matthew 7:16</div>
+          </div>
+        </div>
       </footer>
     </div>
   );
