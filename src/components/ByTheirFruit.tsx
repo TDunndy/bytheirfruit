@@ -616,20 +616,11 @@ export default function ByTheirFruit() {
 
   const fetchChurches = useCallback(async () => {
     try {
-      // Use direct fetch to avoid Supabase auth lock issues blocking the count query
-      const res = await fetch(
-        "https://ffqmbhftivmiubvtzhhr.supabase.co/rest/v1/churches?select=id&limit=1",
-        {
-          method: "HEAD",
-          headers: {
-            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZmcW1iaGZ0aXZtaXVidnR6aGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyNzYyMTcsImV4cCI6MjA4ODg1MjIxN30.aYpnohEz3_kZzteD5y7mNwR8gzvkZm0iDGXGP_rHmNk",
-            "Prefer": "count=exact",
-          },
-        }
-      );
-      const range = res.headers.get("content-range");
-      const total = range ? parseInt(range.split("/")[1], 10) : 0;
-      setTotalChurchCount(total || 0);
+      const { count, error } = await supabase
+        .from("churches")
+        .select("*", { count: "exact", head: true });
+      if (error) console.error("fetchChurches error:", error);
+      setTotalChurchCount(count || 0);
     } catch (err) {
       console.error("fetchChurches exception:", err);
       setTotalChurchCount(0);
@@ -644,28 +635,34 @@ export default function ByTheirFruit() {
       return;
     }
     setSearchLoading(true);
-    let q = supabase.from("churches").select("*");
-    if (query) {
-      q = q.or(`name.ilike.%${query}%,city.ilike.%${query}%,denomination.ilike.%${query}%`);
+    try {
+      let q = supabase.from("churches").select("*");
+      if (query) {
+        q = q.or(`name.ilike.%${query}%,city.ilike.%${query}%,denomination.ilike.%${query}%`);
+      }
+      if (denomination && denomination !== "All") {
+        q = q.eq("denomination", denomination);
+      }
+      if (state && state !== "All") {
+        q = q.eq("state", state);
+      }
+      if (city) {
+        q = q.ilike("city", `%${city}%`);
+      }
+      if (zip) {
+        q = q.ilike("zip", `${zip}%`);
+      }
+      q = q.order("total_reviews", { ascending: false }).limit(50);
+      const { data, error } = await q;
+      if (error) console.error("Search error:", error);
+      if (!error && data) {
+        setChurches(data.map(dbChurchToLocal));
+      }
+    } catch (err) {
+      console.error("Search exception:", err);
+    } finally {
+      setSearchLoading(false);
     }
-    if (denomination && denomination !== "All") {
-      q = q.eq("denomination", denomination);
-    }
-    if (state && state !== "All") {
-      q = q.eq("state", state);
-    }
-    if (city) {
-      q = q.ilike("city", `%${city}%`);
-    }
-    if (zip) {
-      q = q.ilike("zip", `${zip}%`);
-    }
-    q = q.order("total_reviews", { ascending: false }).limit(50);
-    const { data, error } = await q;
-    if (!error && data) {
-      setChurches(data.map(dbChurchToLocal));
-    }
-    setSearchLoading(false);
   }, []);
 
   // Debounced search for Discover page
