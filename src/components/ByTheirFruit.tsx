@@ -1072,6 +1072,9 @@ export default function ByTheirFruit() {
         setUser(profile);
         fetchUserReviews(u.id);
         fetchUserFavorites(u.id);
+        // Check if user has claimed a church
+        const { data: claimedCheck } = await supabase.from("churches").select("id").eq("claimed_by", u.id).limit(1);
+        if (claimedCheck && claimedCheck.length > 0) setHasClaimed(true);
       }
     });
 
