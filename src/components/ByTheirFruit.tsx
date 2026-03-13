@@ -739,6 +739,8 @@ export default function ByTheirFruit() {
         setPage("rate");
       } else if (hash === "#/admin") {
         setPage("admin");
+      } else if (hash === "#/mychurches") {
+        setPage("mychurches");
       }
     };
     handleHash();
@@ -775,6 +777,13 @@ export default function ByTheirFruit() {
   const [responseText, setResponseText] = useState("");
   const [respondingTo, setRespondingTo] = useState(null);
   const [responseSubmitting, setResponseSubmitting] = useState(false);
+
+  // My Churches state
+  const [myChurchesData, setMyChurchesData] = useState({ reviewed: [], claimed: [] });
+  const [myChurchesLoading, setMyChurchesLoading] = useState(false);
+  const [myChurchesTab, setMyChurchesTab] = useState("reviewed"); // "reviewed" | "owned"
+  const [ownerDemographics, setOwnerDemographics] = useState(null);
+  const [ownerReviews, setOwnerReviews] = useState([]);
 
   // Admin state
   const [adminClaims, setAdminClaims] = useState([]);
@@ -901,6 +910,104 @@ export default function ByTheirFruit() {
       });
       setUserReviews(map);
     }
+  }, []);
+
+  // Fetch My Churches data
+  const fetchMyChurches = useCallback(async (userId) => {
+    setMyChurchesLoading(true);
+    try {
+      // Get churches the user has reviewed
+      const { data: reviewData } = await supabase
+        .from("reviews")
+        .select("church_id, reviewer_role, score_teaching, score_welcome, score_community, score_worship, score_prayer, score_kids, score_youth, score_leadership, score_service, score_finances, text, created_at, edited_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      let reviewedChurches = [];
+      if (reviewData && reviewData.length > 0) {
+        const churchIds = [...new Set(reviewData.map(r => r.church_id))];
+        const { data: churchData } = await supabase
+          .from("churches")
+          .select("*")
+          .in("id", churchIds);
+        if (churchData) {
+          reviewedChurches = churchData.map(ch => {
+            const rev = reviewData.find(r => r.church_id === ch.id);
+            const scores = {};
+            SCORE_FIELDS.forEach(f => { if (rev[`score_${f}`] != null) scores[f] = rev[`score_${f}`]; });
+            const avgScore = Object.values(scores).length > 0
+              ? Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length
+              : null;
+            return { ...dbChurchToLocal(ch), myReview: { scores, avgScore, text: rev.text, role: rev.reviewer_role, date: rev.created_at, editedAt: rev.edited_at } };
+          });
+        }
+      }
+
+      // Get churches the user has claimed
+      const { data: claimedData } = await supabase
+        .from("churches")
+        .select("*")
+        .eq("claimed_by", userId);
+      const claimedChurches = (claimedData || []).map(ch => dbChurchToLocal(ch));
+
+      setMyChurchesData({ reviewed: reviewedChurches, claimed: claimedChurches });
+      // Auto-select "owned" tab if user has claimed churches
+      if (claimedChurches.length > 0) {
+        setMyChurchesTab("owned");
+        fetchOwnerDashboard(claimedChurches[0].id);
+      }
+    } catch (e) {
+      console.error("Failed to fetch my churches:", e);
+    } finally {
+      setMyChurchesLoading(false);
+    }
+  }, []);
+
+  // Fetch owner dashboard data for a claimed church
+  const fetchOwnerDashboard = useCallback(async (churchId) => {
+    // Fetch all reviews for this church with reviewer profiles for demographics
+    const { data: reviews } = await supabase
+      .from("reviews")
+      .select("*, profiles!reviews_user_id_fkey(display_name, gender, age_range, income_bracket)")
+      .eq("church_id", churchId)
+      .eq("status", "published")
+      .order("created_at", { ascending: false });
+
+    setOwnerReviews(reviews || []);
+
+    // Compute demographics from reviewer profiles
+    if (reviews && reviews.length > 0) {
+      const genderCounts = {};
+      const ageCounts = {};
+      const incomeCounts = {};
+      const roleCounts = {};
+      reviews.forEach(r => {
+        const g = r.profiles?.gender || "Not specified";
+        const a = r.profiles?.age_range || "Not specified";
+        const inc = r.profiles?.income_bracket || "Not specified";
+        const role = r.reviewer_role || "Not specified";
+        genderCounts[g] = (genderCounts[g] || 0) + 1;
+        ageCounts[a] = (ageCounts[a] || 0) + 1;
+        incomeCounts[inc] = (incomeCounts[inc] || 0) + 1;
+        roleCounts[role] = (roleCounts[role] || 0) + 1;
+      });
+      // Score averages per category
+      const scoreAvgs = {};
+      SCORE_FIELDS.forEach(f => {
+        const vals = reviews.map(r => r[`score_${f}`]).filter(v => v != null);
+        if (vals.length > 0) scoreAvgs[f] = vals.reduce((a, b) => a + b, 0) / vals.length;
+      });
+      setOwnerDemographics({ genderCounts, ageCounts, incomeCounts, roleCounts, scoreAvgs, totalReviews: reviews.length });
+    } else {
+      setOwnerDemographics({ genderCounts: {}, ageCounts: {}, incomeCounts: {}, roleCounts: {}, scoreAvgs: {}, totalReviews: 0 });
+    }
+
+    // Fetch church responses
+    const { data: responses } = await supabase
+      .from("church_responses")
+      .select("*")
+      .eq("church_id", churchId);
+    return responses || [];
   }, []);
 
   /* --- AUTH STATE --- */
@@ -1339,6 +1446,9 @@ export default function ByTheirFruit() {
           {["discover", "about"].map(id => (
             <button key={id} onClick={() => navigate(id)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.text : "transparent", color: page === id ? T.bg : T.textSoft, border: `1px solid ${page === id ? T.text : "transparent"}`, transition: "all 0.15s" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
           ))}
+          {user && (
+            <button onClick={() => { navigate("mychurches"); fetchMyChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "mychurches" ? T.accent : T.accentSoft, color: page === "mychurches" ? "#fff" : T.accent, border: `1px solid ${page === "mychurches" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>My Churches</button>
+          )}
           {isAdmin && (
             <button onClick={() => { navigate("admin"); fetchAdminData(); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "admin" ? T.red : T.redSoft, color: page === "admin" ? "#fff" : T.red, border: `1px solid ${page === "admin" ? T.red : T.redBorder}`, transition: "all 0.15s" }}>Admin</button>
           )}
@@ -1365,6 +1475,9 @@ export default function ByTheirFruit() {
           {["discover", "about"].map(id => (
             <button key={id} onClick={() => navigate(id)} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === id ? T.border : "transparent"}`, textAlign: "left" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
           ))}
+          {user && (
+            <button onClick={() => { navigate("mychurches"); fetchMyChurches(user.id); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "mychurches" ? T.accentSoft : "transparent", color: T.accent, border: `1px solid ${page === "mychurches" ? T.accentBorder : "transparent"}`, textAlign: "left" }}>My Churches</button>
+          )}
           {isAdmin && (
             <button onClick={() => { navigate("admin"); fetchAdminData(); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.redSoft, color: T.red, border: `1px solid ${T.redBorder}`, textAlign: "left" }}>Admin Dashboard</button>
           )}
@@ -1924,6 +2037,232 @@ export default function ByTheirFruit() {
               <p>Every review passes through AI moderation. We filter personal attacks, coordinated campaigns, and doctrinal arguments disguised as reviews. Users can flag reviews they believe are inappropriate.</p>
               <p>Churches can respond to reviews publicly. They cannot delete, edit, or pay to suppress them.</p>
             </div>
+          </FadeIn>
+        </div>
+      )}
+
+      {/* MY CHURCHES */}
+      {!loading && page === "mychurches" && user && (
+        <div style={{ maxWidth: 900, margin: "0 auto", padding: "36px 24px" }}>
+          <FadeIn>
+            <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>My Churches</h1>
+            <p style={{ fontSize: 14, color: T.textMuted, margin: "0 0 28px" }}>Your reviews and managed churches</p>
+
+            {/* Tabs: Owned / Reviewed */}
+            {myChurchesData.claimed.length > 0 && (
+              <div style={{ display: "flex", gap: 4, marginBottom: 28 }}>
+                {[{ id: "owned", label: "My Church", count: myChurchesData.claimed.length }, { id: "reviewed", label: "My Reviews", count: myChurchesData.reviewed.length }].map(tab => (
+                  <button key={tab.id} onClick={() => setMyChurchesTab(tab.id)} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: myChurchesTab === tab.id ? T.text : T.surfaceAlt, color: myChurchesTab === tab.id ? T.bg : T.textSoft, border: "none", transition: "all 0.15s" }}>
+                    {tab.label} <span style={{ marginLeft: 4, fontSize: 11, opacity: 0.7 }}>{tab.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {myChurchesLoading && (
+              <div style={{ textAlign: "center", padding: "60px 24px" }}>
+                <div style={{ display: "inline-block", width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+              </div>
+            )}
+
+            {/* OWNED TAB — Church Owner Dashboard */}
+            {!myChurchesLoading && myChurchesTab === "owned" && myChurchesData.claimed.length > 0 && (() => {
+              const oc = myChurchesData.claimed[0]; // primary claimed church
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  {/* Church Header Card */}
+                  <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                          <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>{oc.name}</h2>
+                          <span style={{ padding: "3px 10px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 700, background: T.greenSoft, color: T.green, border: `1px solid ${T.greenBorder}` }}>Verified Owner</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: T.textSoft }}>{oc.denomination} &middot; {oc.city}, {oc.state}</div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 36, fontFamily: T.heading, fontWeight: 800, color: scoreColor(oc.scoreOverall || 0) }}>{oc.scoreOverall ? oc.scoreOverall.toFixed(1) : "—"}</div>
+                        <div style={{ fontSize: 11, color: T.textMuted }}>{oc.totalReviews} review{oc.totalReviews !== 1 ? "s" : ""}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                      <button onClick={() => viewChurch(oc)} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>View Public Profile</button>
+                    </div>
+                  </div>
+
+                  {/* Score Breakdown */}
+                  {ownerDemographics && ownerDemographics.totalReviews > 0 && (
+                    <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                      <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Score Breakdown</h3>
+                      <div className="btf-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px" }}>
+                        {CATEGORIES.map(cat => {
+                          const avg = ownerDemographics.scoreAvgs[cat.key];
+                          if (avg == null) return null;
+                          return (
+                            <div key={cat.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+                              <span style={{ fontSize: 13, color: T.textSoft }}>{cat.label}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 60, height: 6, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                  <div style={{ width: `${(avg / 5) * 100}%`, height: "100%", borderRadius: 3, background: scoreColor(avg) }} />
+                                </div>
+                                <span style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, color: scoreColor(avg), minWidth: 24, textAlign: "right" }}>{avg.toFixed(1)}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reviewer Demographics */}
+                  {ownerDemographics && ownerDemographics.totalReviews > 0 && (
+                    <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                      <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Reviewer Demographics</h3>
+                      <div className="btf-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                        {/* Reviewer Roles */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Reviewer Type</div>
+                          {Object.entries(ownerDemographics.roleCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
+                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
+                                </div>
+                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Age Ranges */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Age Range</div>
+                          {Object.entries(ownerDemographics.ageCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
+                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
+                                </div>
+                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Gender */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Gender</div>
+                          {Object.entries(ownerDemographics.genderCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
+                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
+                                </div>
+                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Income */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Income Bracket</div>
+                          {Object.entries(ownerDemographics.incomeCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
+                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
+                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
+                                </div>
+                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent Reviews with Response Ability */}
+                  <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                    <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Reviews ({ownerReviews.length})</h3>
+                    {ownerReviews.length === 0 && (
+                      <div style={{ padding: "32px 20px", textAlign: "center", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px dashed ${T.border}` }}>
+                        <div style={{ fontSize: 14, color: T.textMuted }}>No reviews yet. Share your church profile to get started.</div>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {ownerReviews.map(rev => {
+                        const avgScore = SCORE_FIELDS.map(f => rev[`score_${f}`]).filter(v => v != null);
+                        const revAvg = avgScore.length > 0 ? avgScore.reduce((a, b) => a + b, 0) / avgScore.length : null;
+                        return (
+                          <div key={rev.id} style={{ padding: "16px", borderRadius: T.radiusSm, border: `1px solid ${T.borderLight}`, background: T.bg }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                              <div>
+                                <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{rev.profiles?.display_name || "Anonymous"}</span>
+                                <span style={{ fontSize: 12, color: T.textMuted, marginLeft: 8 }}>{rev.reviewer_role}</span>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                {revAvg && <span style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, color: scoreColor(revAvg) }}>{revAvg.toFixed(1)}</span>}
+                                <span style={{ fontSize: 11, color: T.textMuted }}>{new Date(rev.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                              </div>
+                            </div>
+                            {rev.text && <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 10px", lineHeight: 1.6 }}>{rev.text}</p>}
+                            {/* Response actions */}
+                            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                              {respondingTo === rev.id ? (
+                                <div style={{ width: "100%" }}>
+                                  <textarea value={responseText} onChange={e => setResponseText(e.target.value)} rows={3} placeholder="Write your response as the church..." style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.accentBorder}`, background: T.bg, color: T.text, fontFamily: T.body, resize: "vertical", outline: "none" }} />
+                                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                    <button onClick={() => submitChurchResponse(rev.id, oc.id)} disabled={responseSubmitting || !responseText.trim()} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", opacity: responseSubmitting || !responseText.trim() ? 0.5 : 1 }}>{responseSubmitting ? "Posting..." : "Post Response"}</button>
+                                    <button onClick={() => { setRespondingTo(null); setResponseText(""); }} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}` }}>Cancel</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button onClick={() => { setRespondingTo(rev.id); setResponseText(""); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}` }}>Respond</button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* No claimed churches — show only reviewed tab */}
+            {!myChurchesLoading && myChurchesData.claimed.length === 0 && myChurchesTab !== "reviewed" && setMyChurchesTab("reviewed") && null}
+
+            {/* REVIEWED TAB */}
+            {!myChurchesLoading && myChurchesTab === "reviewed" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {myChurchesData.reviewed.length === 0 && (
+                  <div style={{ padding: "48px 24px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>&#9734;</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 4 }}>No reviews yet</div>
+                    <div style={{ fontSize: 14, color: T.textMuted, marginBottom: 20 }}>Once you rate a church, it will appear here.</div>
+                    <button onClick={() => startRateFlow()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Rate Your First Church</button>
+                  </div>
+                )}
+                {myChurchesData.reviewed.map(ch => (
+                  <div key={ch.id} onClick={() => viewChurch(ch)} style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, cursor: "pointer", transition: "border-color 0.15s" }} onMouseEnter={e => e.currentTarget.style.borderColor = T.accent} onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 2 }}>{ch.name}</div>
+                        <div style={{ fontSize: 13, color: T.textMuted }}>{ch.denomination} &middot; {ch.city}, {ch.state}</div>
+                        <div style={{ fontSize: 12, color: T.textMuted, marginTop: 6 }}>Reviewed as {ch.myReview.role} &middot; {new Date(ch.myReview.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ width: 52, height: 52, borderRadius: T.radius, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, fontFamily: T.heading, color: scoreColor(ch.myReview.avgScore || 0), background: scoreBg(ch.myReview.avgScore || 0), border: `1.5px solid ${scoreBorder2(ch.myReview.avgScore || 0)}` }}>{ch.myReview.avgScore ? ch.myReview.avgScore.toFixed(1) : "—"}</div>
+                        <div style={{ fontSize: 10, color: T.textMuted, marginTop: 3 }}>Your score</div>
+                      </div>
+                    </div>
+                    {ch.myReview.text && <p style={{ fontSize: 13, color: T.textSoft, margin: "10px 0 0", lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{ch.myReview.text}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
           </FadeIn>
         </div>
       )}
