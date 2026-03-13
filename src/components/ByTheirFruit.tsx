@@ -38,16 +38,29 @@ const DARK = {
 // Default for server render / outside component
 let T = LIGHT;
 
-function useSystemTheme() {
-  const [dark, setDark] = useState(false);
+function useTheme() {
+  // mode: "system" | "light" | "dark"
+  const [mode, setMode] = useState("system");
+  const [systemDark, setSystemDark] = useState(false);
+
   useEffect(() => {
+    // Load saved preference
+    try { const saved = localStorage.getItem("btf-theme"); if (saved) setMode(saved); } catch {}
+    // Detect system preference
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    setDark(mq.matches);
-    const handler = (e) => setDark(e.matches);
+    setSystemDark(mq.matches);
+    const handler = (e) => setSystemDark(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
-  return dark ? DARK : LIGHT;
+
+  const setTheme = useCallback((newMode) => {
+    setMode(newMode);
+    try { localStorage.setItem("btf-theme", newMode); } catch {}
+  }, []);
+
+  const isDark = mode === "dark" || (mode === "system" && systemDark);
+  return { theme: isDark ? DARK : LIGHT, isDark, mode, setTheme };
 }
 
 const MIN_REVIEWS_FOR_SCORE = 3;
@@ -184,7 +197,8 @@ const responsiveCSS = `
   .btf-profile-grid{grid-template-columns:1fr!important}
   .btf-hero-title{font-size:36px!important}
   .btf-hero-buttons{flex-direction:column!important;align-items:stretch!important}
-  .btf-nav-links{gap:2px!important}
+  .btf-desktop-nav{display:none!important}
+  .btf-mobile-nav{display:flex!important}
   .btf-cat-grid{grid-template-columns:1fr!important}
   .btf-score-mini{display:none!important}
 }`;
@@ -334,6 +348,7 @@ function AuthModal({ onClose, onAuth, mode: im }) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [confirmMsg, setConfirmMsg] = useState("");
 
   const socialLogin = async (provider) => {
     setLoading(true);
@@ -375,7 +390,8 @@ function AuthModal({ onClose, onAuth, mode: im }) {
         }
         // Check if email confirmation is required
         if (data?.user && !data.session) {
-          setError("Check your email to confirm your account, then sign in.");
+          setConfirmMsg("We sent a confirmation link to your email. Please check your inbox (and spam folder) and click the link, then come back and sign in.");
+          setError("");
           setMode("signin");
           setLoading(false);
           return;
@@ -402,6 +418,9 @@ function AuthModal({ onClose, onAuth, mode: im }) {
           <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{mode === "signin" ? "Welcome back" : "Create your account"}</h2>
           <p style={{ fontSize: 13, color: T.textMuted, margin: 0 }}>{mode === "signin" ? "Sign in to post your review" : "Sign up to share your experience"}</p>
         </div>
+        {confirmMsg && (
+          <div style={{ padding: "10px 14px", borderRadius: T.radiusSm, background: T.greenSoft, border: `1px solid ${T.greenBorder}`, color: T.green, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>{confirmMsg}</div>
+        )}
         {error && (
           <div style={{ padding: "10px 14px", borderRadius: T.radiusSm, background: T.redSoft, border: `1px solid ${T.redBorder}`, color: T.red, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>{error}</div>
         )}
@@ -658,8 +677,9 @@ function ReviewCard({ rev, delay = 0, userId }) {
 
 /* ===== MAIN ===== */
 export default function ByTheirFruit() {
-  // Wire up system dark/light mode — mutate module-level T so all sub-components see it
-  T = useSystemTheme();
+  // Wire up dark/light mode with manual toggle + system detection
+  const { theme, isDark, mode: themeMode, setTheme } = useTheme();
+  T = theme;
 
   const [page, setPage] = useState("home");
   const [selectedChurch, setSelectedChurch] = useState(null);
@@ -678,6 +698,54 @@ export default function ByTheirFruit() {
 
   useEffect(() => { setMounted(true); }, []);
 
+  // Hash-based routing for shareable URLs and back button
+  const navigate = useCallback((newPage, church = null) => {
+    setPage(newPage);
+    setSelectedChurch(church);
+    setMobileMenuOpen(false);
+    if (church) {
+      const slug = church.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
+      window.history.pushState(null, "", `#/church/${church.id}/${slug}`);
+    } else if (newPage !== "home") {
+      window.history.pushState(null, "", `#/${newPage}`);
+    } else {
+      window.history.pushState(null, "", window.location.pathname);
+    }
+  }, []);
+
+  // Parse hash on mount and handle back/forward
+  useEffect(() => {
+    const handleHash = async () => {
+      const hash = window.location.hash;
+      // Skip if hash contains Supabase auth tokens (email confirmation redirect)
+      if (hash.includes("access_token=") || hash.includes("type=signup") || hash.includes("type=recovery")) return;
+      if (hash.startsWith("#/church/")) {
+        const churchId = hash.split("/")[2];
+        if (churchId) {
+          const { data } = await supabase.from("churches").select("*").eq("id", churchId).single();
+          if (data) {
+            const church = dbChurchToLocal(data);
+            setPage("profile");
+            setSelectedChurch(church);
+            fetchReviewsForChurch(churchId);
+            if (user) checkClaimStatus(churchId, user.id);
+          }
+        }
+      } else if (hash === "#/discover") {
+        setPage("discover");
+      } else if (hash === "#/about") {
+        setPage("about");
+      } else if (hash === "#/rate") {
+        setPage("rate");
+      } else if (hash === "#/admin") {
+        setPage("admin");
+      }
+    };
+    handleHash();
+    window.addEventListener("popstate", handleHash);
+    return () => window.removeEventListener("popstate", handleHash);
+  }, []);
+
   // Rate flow
   const [rateStep, setRateStep] = useState(0);
   const [rateChurch, setRateChurch] = useState(null);
@@ -694,6 +762,9 @@ export default function ByTheirFruit() {
   // Track user reviews: { churchId: { review, postedAt } }
   const [userReviews, setUserReviews] = useState({});
   const [isEditing, setIsEditing] = useState(false);
+
+  // Mobile menu
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Church claiming
   const [showClaimModal, setShowClaimModal] = useState(false);
@@ -1135,7 +1206,7 @@ export default function ByTheirFruit() {
       return;
     }
 
-    setPage("rate"); setRateStep(preselect ? 1 : 0); setRateChurch(preselect || null);
+    navigate("rate"); setRateStep(preselect ? 1 : 0); setRateChurch(preselect || null);
     setRateSearch(""); setRateSkipped({});
     setShowAddChurch(false);
     setAddData({ name: "", address: "", city: "", state: "FL", denomination: "", size: "", serviceTimes: "" });
@@ -1174,8 +1245,8 @@ export default function ByTheirFruit() {
   };
 
   const viewChurch = (c) => {
-    setSelectedChurch(churches.find(ch => ch.id === c.id) || c);
-    setPage("profile");
+    const church = churches.find(ch => ch.id === c.id) || c;
+    navigate("profile", church);
     fetchReviewsForChurch(c.id);
     if (user) checkClaimStatus(c.id, user.id);
   };
@@ -1253,26 +1324,52 @@ export default function ByTheirFruit() {
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.body, color: T.text }}>
-      <style>{fonts}{responsiveCSS}{`::selection{background:${T.accentSoft};color:${T.accent}}input::placeholder,textarea::placeholder{color:${T.textMuted}}*{box-sizing:border-box}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{fonts}{responsiveCSS}{`html,body{margin:0;padding:0;background:${T.bg}}::selection{background:${T.accentSoft};color:${T.accent}}input::placeholder,textarea::placeholder{color:${T.textMuted}}*{box-sizing:border-box}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); setPendingReview(null); }} onAuth={() => {}} mode="signup" />}
       {showProfileComplete && user && <ProfileCompleteModal userId={user.id} onClose={() => setShowProfileComplete(false)} />}
 
       {/* NAV */}
-      <nav style={{ padding: "12px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.navBg, position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(16px)" }}>
-        <div onClick={() => { setPage("home"); setSelectedChurch(null); }}><Logo size={16} /></div>
-        <div className="btf-nav-links" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+      <nav style={{ padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.navBg, position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(16px)" }}>
+        <div onClick={() => navigate("home")}><Logo size={15} /></div>
+
+        {/* Desktop nav */}
+        <div className="btf-desktop-nav" style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <button onClick={() => startRateFlow()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "rate" ? T.accent : T.accentSoft, color: page === "rate" ? "#fff" : T.accent, border: `1px solid ${page === "rate" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Rate a Church</button>
           {["discover", "about"].map(id => (
-            <button key={id} onClick={() => setPage(id)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.text : "transparent", color: page === id ? T.bg : T.textSoft, border: `1px solid ${page === id ? T.text : "transparent"}`, transition: "all 0.15s" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
+            <button key={id} onClick={() => navigate(id)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.text : "transparent", color: page === id ? T.bg : T.textSoft, border: `1px solid ${page === id ? T.text : "transparent"}`, transition: "all 0.15s" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
           ))}
           {isAdmin && (
-            <button onClick={() => { setPage("admin"); fetchAdminData(); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "admin" ? T.red : T.redSoft, color: page === "admin" ? "#fff" : T.red, border: `1px solid ${page === "admin" ? T.red : T.redBorder}`, transition: "all 0.15s" }}>Admin</button>
+            <button onClick={() => { navigate("admin"); fetchAdminData(); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "admin" ? T.red : T.redSoft, color: page === "admin" ? "#fff" : T.red, border: `1px solid ${page === "admin" ? T.red : T.redBorder}`, transition: "all 0.15s" }}>Admin</button>
           )}
-          <div style={{ width: 1, height: 20, background: T.border, margin: "0 4px" }} />
+          {/* Theme toggle */}
+          <button onClick={() => setTheme(isDark ? "light" : "dark")} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={{ padding: "5px 8px", borderRadius: T.radiusFull, fontSize: 15, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1, transition: "all 0.15s" }}>{isDark ? "☀️" : "🌙"}</button>
+          <div style={{ width: 1, height: 20, background: T.border, margin: "0 2px" }} />
           {user ? <UserMenu user={user} onSignOut={handleSignOut} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
         </div>
+
+        {/* Mobile nav: hamburger + user */}
+        <div className="btf-mobile-nav" style={{ display: "none", alignItems: "center", gap: 8 }}>
+          <button onClick={() => setTheme(isDark ? "light" : "dark")} style={{ padding: "4px 7px", borderRadius: T.radiusFull, fontSize: 14, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1 }}>{isDark ? "☀️" : "🌙"}</button>
+          {user ? <UserMenu user={user} onSignOut={handleSignOut} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "5px 12px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} style={{ padding: "4px 6px", background: "transparent", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2" strokeLinecap="round">{mobileMenuOpen ? <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></> : <><line x1="3" y1="7" x2="21" y2="7" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="17" x2="21" y2="17" /></>}</svg>
+          </button>
+        </div>
       </nav>
+
+      {/* Mobile menu dropdown */}
+      {mobileMenuOpen && (
+        <div className="btf-mobile-menu" style={{ position: "sticky", top: 49, zIndex: 99, background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <button onClick={() => { startRateFlow(); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", textAlign: "left" }}>Rate a Church</button>
+          {["discover", "about"].map(id => (
+            <button key={id} onClick={() => navigate(id)} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === id ? T.border : "transparent"}`, textAlign: "left" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
+          ))}
+          {isAdmin && (
+            <button onClick={() => { navigate("admin"); fetchAdminData(); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.redSoft, color: T.red, border: `1px solid ${T.redBorder}`, textAlign: "left" }}>Admin Dashboard</button>
+          )}
+        </div>
+      )}
 
       {/* LOADING */}
       {loading && (
@@ -1292,8 +1389,8 @@ export default function ByTheirFruit() {
               <p style={{ fontSize: 17, color: T.textSoft, lineHeight: 1.65, maxWidth: 480, margin: "0 auto 36px" }}>Churches tell you who they are. Their people show you. Real reviews from real congregants — honest, structured, and built to help churches grow.</p>
               <div className="btf-hero-buttons" style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                 <button onClick={() => startRateFlow()} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, boxShadow: "0 2px 12px rgba(37,99,235,0.2)" }}>Rate a Church</button>
-                <button onClick={() => setPage("discover")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Find a Church</button>
-                <button onClick={() => setPage("about")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: "transparent", color: T.text, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>How It Works</button>
+                <button onClick={() => navigate("discover")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Find a Church</button>
+                <button onClick={() => navigate("about")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: "transparent", color: T.text, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>How It Works</button>
               </div>
             </div>
           </FadeIn>
@@ -1420,7 +1517,7 @@ export default function ByTheirFruit() {
         return (
           <div style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px" }}>
             <FadeIn>
-              <button onClick={() => setPage("discover")} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 24, fontFamily: T.body }}>← Back</button>
+              <button onClick={() => window.history.back()} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 24, fontFamily: T.body }}>← Back</button>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

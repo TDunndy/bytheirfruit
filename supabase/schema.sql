@@ -251,3 +251,84 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_review_flagged
   AFTER INSERT ON review_flags
   FOR EACH ROW EXECUTE FUNCTION increment_flag_count();
+
+-- Auto-recalculate church scores when reviews change
+CREATE OR REPLACE FUNCTION recalculate_single_church_scores()
+RETURNS TRIGGER AS $$
+DECLARE
+  target_church_id UUID;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    target_church_id := OLD.church_id;
+  ELSE
+    target_church_id := NEW.church_id;
+  END IF;
+
+  UPDATE churches c SET
+    score_teaching = sub.avg_teaching,
+    score_welcome = sub.avg_welcome,
+    score_community = sub.avg_community,
+    score_worship = sub.avg_worship,
+    score_prayer = sub.avg_prayer,
+    score_kids = sub.avg_kids,
+    score_youth = sub.avg_youth,
+    score_leadership = sub.avg_leadership,
+    score_service = sub.avg_service,
+    score_finances = sub.avg_finances,
+    score_overall = (
+      COALESCE(sub.avg_teaching, 0) + COALESCE(sub.avg_welcome, 0) + COALESCE(sub.avg_community, 0) +
+      COALESCE(sub.avg_worship, 0) + COALESCE(sub.avg_prayer, 0) + COALESCE(sub.avg_kids, 0) +
+      COALESCE(sub.avg_youth, 0) + COALESCE(sub.avg_leadership, 0) + COALESCE(sub.avg_service, 0) +
+      COALESCE(sub.avg_finances, 0)
+    ) / NULLIF(
+      (CASE WHEN sub.avg_teaching IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN sub.avg_welcome IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN sub.avg_community IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN sub.avg_worship IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN sub.avg_prayer IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN sub.avg_kids IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN sub.avg_youth IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN sub.avg_leadership IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN sub.avg_service IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN sub.avg_finances IS NOT NULL THEN 1 ELSE 0 END)
+    , 0),
+    total_reviews = sub.cnt,
+    scores_updated_at = NOW()
+  FROM (
+    SELECT
+      church_id,
+      COUNT(*) as cnt,
+      AVG(score_teaching) as avg_teaching,
+      AVG(score_welcome) as avg_welcome,
+      AVG(score_community) as avg_community,
+      AVG(score_worship) as avg_worship,
+      AVG(score_prayer) as avg_prayer,
+      AVG(score_kids) as avg_kids,
+      AVG(score_youth) as avg_youth,
+      AVG(score_leadership) as avg_leadership,
+      AVG(score_service) as avg_service,
+      AVG(score_finances) as avg_finances
+    FROM reviews
+    WHERE status = 'published' AND church_id = target_church_id
+    GROUP BY church_id
+  ) sub
+  WHERE c.id = sub.church_id;
+
+  IF NOT FOUND THEN
+    UPDATE churches SET
+      score_teaching = NULL, score_welcome = NULL, score_community = NULL,
+      score_worship = NULL, score_prayer = NULL, score_kids = NULL,
+      score_youth = NULL, score_leadership = NULL, score_service = NULL,
+      score_finances = NULL, score_overall = NULL,
+      total_reviews = 0, scores_updated_at = NOW()
+    WHERE id = target_church_id;
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_review_score_update ON reviews;
+CREATE TRIGGER on_review_score_update
+  AFTER INSERT OR UPDATE OR DELETE ON reviews
+  FOR EACH ROW EXECUTE FUNCTION recalculate_single_church_scores();

@@ -20,7 +20,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning style={{ margin: 0, padding: 0 }}>
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var d=window.matchMedia('(prefers-color-scheme:dark)').matches;document.documentElement.style.backgroundColor=d?'#0a0a0b':'#fafafa';document.body.style.backgroundColor=d?'#0a0a0b':'#fafafa'}catch(e){}})()` }} />
+        {children}
+      </body>
     </html>
   )
 }
