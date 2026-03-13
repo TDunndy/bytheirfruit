@@ -5,7 +5,6 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storageKey: 'btf-auth',
     flowType: 'implicit',
     // Disable navigator.locks to prevent "Lock broken by steal" errors
     // that corrupt the Supabase client and hang all REST queries
