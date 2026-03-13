@@ -1038,7 +1038,7 @@ export default function ByTheirFruit() {
     // Fetch all claim requests with church info
     const { data: claims } = await supabase
       .from("claim_requests")
-      .select("*, churches(name, city, state), profiles(display_name, avatar_url)")
+      .select("*, churches(name, city, state), profiles!claim_requests_user_id_fkey(display_name, avatar_url)")
       .order("created_at", { ascending: false });
     setAdminClaims(claims || []);
 
