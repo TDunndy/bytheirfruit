@@ -616,16 +616,23 @@ export default function ByTheirFruit() {
 
   const fetchChurches = useCallback(async () => {
     try {
-      // On initial load, just get total count — don't load all churches
-      const { count, error } = await supabase
-        .from("churches")
-        .select("*", { count: "exact", head: true });
-      if (error) {
-        console.error("fetchChurches error:", error);
-      }
-      setTotalChurchCount(count || 0);
+      // Use direct fetch to avoid Supabase auth lock issues blocking the count query
+      const res = await fetch(
+        "https://ffqmbhftivmiubvtzhhr.supabase.co/rest/v1/churches?select=id&limit=1",
+        {
+          method: "HEAD",
+          headers: {
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZmcW1iaGZ0aXZtaXVidnR6aGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyNzYyMTcsImV4cCI6MjA4ODg1MjIxN30.aYpnohEz3_kZzteD5y7mNwR8gzvkZm0iDGXGP_rHmNk",
+            "Prefer": "count=exact",
+          },
+        }
+      );
+      const range = res.headers.get("content-range");
+      const total = range ? parseInt(range.split("/")[1], 10) : 0;
+      setTotalChurchCount(total || 0);
     } catch (err) {
       console.error("fetchChurches exception:", err);
+      setTotalChurchCount(0);
     } finally {
       setLoading(false);
     }
