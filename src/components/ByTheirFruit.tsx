@@ -1309,12 +1309,12 @@ export default function ByTheirFruit() {
             </div>
           </FadeIn>
           <FadeIn delay={300}>
-            <div style={{ marginTop: 48, padding: "36px 32px", borderRadius: 14, background: T.text, color: T.bg }}>
+            <div style={{ marginTop: 48, padding: "36px 32px", borderRadius: 14, background: T === DARK ? T.surfaceAlt : T.text, color: T === DARK ? T.text : T.bg }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.35, marginBottom: 6 }}>Framework</div>
               <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>The 10 Measures</h2>
-              <p style={{ fontSize: 13, opacity: 0.45, margin: "0 0 24px" }}>Ten categories rooted in what scripture says a church should be.</p>
+              <p style={{ fontSize: 13, opacity: 0.55, margin: "0 0 24px" }}>Ten categories rooted in what scripture says a church should be.</p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 6 }}>
-                {CATEGORIES.map((cat, i) => <div key={i} style={{ padding: "9px 13px", borderRadius: T.radiusSm, background: `${T.bg}11`, border: `1px solid ${T.bg}22` }}><span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.8 }}>{cat.label}</span></div>)}
+                {CATEGORIES.map((cat, i) => <div key={i} style={{ padding: "9px 13px", borderRadius: T.radiusSm, background: T === DARK ? T.surface : "rgba(255,255,255,0.06)", border: `1px solid ${T === DARK ? T.border : "rgba(255,255,255,0.08)"}` }}><span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.8 }}>{cat.label}</span></div>)}
               </div>
             </div>
           </FadeIn>
@@ -1805,7 +1805,7 @@ export default function ByTheirFruit() {
               <p><strong style={{ color: T.text }}>By Their Fruit</strong> exists because we believe the body of Christ — the actual people in the pews — are the most honest witnesses to what a church really is.</p>
               <p>Our platform gathers structured, thoughtful reviews from congregants and visitors across ten categories rooted in what scripture says a healthy church should look like. Reviews post immediately. scores update in real time as reviews are approved — giving a trustworthy, always-current picture.</p>
               <p>This isn't about tearing churches down. It's about building them up through honest feedback.</p>
-              <div style={{ padding: "28px", borderRadius: T.radius, background: T.text, color: T.bg, margin: "28px 0", textAlign: "center" }}>
+              <div style={{ padding: "28px", borderRadius: T.radius, background: T === DARK ? T.surfaceAlt : T.text, color: T === DARK ? T.text : T.bg, margin: "28px 0", textAlign: "center" }}>
                 <p style={{ fontSize: 17, fontStyle: "italic", lineHeight: 1.6, margin: "0 0 8px", opacity: 0.85 }}>"Beware of false prophets, who come to you in sheep's clothing but inwardly are ravenous wolves. You will recognize them by their fruits."</p>
                 <div style={{ fontSize: 12, opacity: 0.4, fontWeight: 600 }}>Matthew 7:15–16 ESV</div>
               </div>
