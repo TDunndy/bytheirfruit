@@ -994,6 +994,10 @@ export default function ByTheirFruit() {
     setClaimStatus("pending");
     setShowClaimModal(false);
     setClaimData({ fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "" });
+
+    // Redirect to Stripe for $39/month subscription payment
+    const stripePaymentUrl = `https://buy.stripe.com/test_3cI3cvb1P6bC4GefFbgw000?prefilled_email=${encodeURIComponent(claimData.workEmail)}&client_reference_id=${encodeURIComponent(user.id)}`;
+    window.open(stripePaymentUrl, "_blank");
   };
 
   /* --- CHURCH OWNER RESPONSE TO REVIEW --- */
@@ -1431,7 +1435,14 @@ export default function ByTheirFruit() {
               <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowClaimModal(false)}>
                 <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
                   <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Claim {currentChurch.name}</h2>
-                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 24px" }}>Tell us about your role at this church. We'll review your request and get back to you.</p>
+                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 16px" }}>Tell us about your role at this church. After submitting, you'll be directed to set up your subscription.</p>
+                  <div style={{ padding: "12px 16px", borderRadius: T.radiusSm, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Church Subscription</div>
+                      <div style={{ fontSize: 11, color: T.textSoft, marginTop: 1 }}>Verified badge, respond to reviews, insights dashboard</div>
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: T.heading, color: T.accent }}>$39<span style={{ fontSize: 12, fontWeight: 500, color: T.textMuted }}>/mo</span></div>
+                  </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your full name *</label>
@@ -1467,7 +1478,7 @@ export default function ByTheirFruit() {
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
                     <button onClick={() => setShowClaimModal(false)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
-                    <button onClick={() => submitClaimRequest(currentChurch.id)} disabled={claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) ? 0.5 : 1 }}>{claimSubmitting ? "Submitting..." : "Submit Claim Request"}</button>
+                    <button onClick={() => submitClaimRequest(currentChurch.id)} disabled={claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) ? 0.5 : 1 }}>{claimSubmitting ? "Submitting..." : "Continue to Payment →"}</button>
                   </div>
                 </div>
               </div>
