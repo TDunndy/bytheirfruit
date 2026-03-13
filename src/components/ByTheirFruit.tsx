@@ -588,6 +588,9 @@ export default function ByTheirFruit() {
   const [showProfileComplete, setShowProfileComplete] = useState(false);
   const [pendingReview, setPendingReview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   // Rate flow
   const [rateStep, setRateStep] = useState(0);
@@ -612,12 +615,20 @@ export default function ByTheirFruit() {
   const [discoverSearchQuery, setDiscoverSearchQuery] = useState("");
 
   const fetchChurches = useCallback(async () => {
-    // On initial load, just get total count — don't load all churches
-    const { count } = await supabase
-      .from("churches")
-      .select("*", { count: "exact", head: true });
-    setTotalChurchCount(count || 0);
-    setLoading(false);
+    try {
+      // On initial load, just get total count — don't load all churches
+      const { count, error } = await supabase
+        .from("churches")
+        .select("*", { count: "exact", head: true });
+      if (error) {
+        console.error("fetchChurches error:", error);
+      }
+      setTotalChurchCount(count || 0);
+    } catch (err) {
+      console.error("fetchChurches exception:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const searchChurchesDB = useCallback(async (query, denomination, state, city, zip) => {
@@ -778,8 +789,8 @@ export default function ByTheirFruit() {
 
   /* --- INITIAL DATA LOAD --- */
   useEffect(() => {
-    fetchChurches();
-  }, [fetchChurches]);
+    if (mounted) fetchChurches();
+  }, [mounted, fetchChurches]);
 
   /* --- SUBMIT REVIEW TO DB --- */
   const submitReviewToDB = async (reviewData, userId) => {
@@ -964,7 +975,7 @@ export default function ByTheirFruit() {
       </nav>
 
       {/* LOADING */}
-      {loading && (
+      {(!mounted || loading) && (
         <div style={{ textAlign: "center", padding: "120px 24px" }}>
           <div style={{ display: "inline-block", width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
           <div style={{ fontSize: 14, color: T.textMuted, marginTop: 12 }}>Loading churches...</div>
@@ -972,7 +983,7 @@ export default function ByTheirFruit() {
       )}
 
       {/* HOME */}
-      {!loading && page === "home" && (
+      {mounted && !loading && page === "home" && (
         <div style={{ maxWidth: 760, margin: "0 auto", padding: "96px 24px 60px" }}>
           <FadeIn>
             <div style={{ textAlign: "center", marginBottom: 64 }}>
@@ -1011,7 +1022,7 @@ export default function ByTheirFruit() {
       )}
 
       {/* DISCOVER */}
-      {!loading && page === "discover" && (
+      {mounted && !loading && page === "discover" && (
         <div style={{ maxWidth: 840, margin: "0 auto", padding: "36px 24px" }}>
           <FadeIn>
             <h2 style={{ fontSize: 26, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Discover churches</h2>
@@ -1103,7 +1114,7 @@ export default function ByTheirFruit() {
       )}
 
       {/* PROFILE */}
-      {!loading && page === "profile" && currentChurch && (() => {
+      {mounted && !loading && page === "profile" && currentChurch && (() => {
         const c = currentChurch; const overall = avg(c.scores); const rated = hasScores(c);
         const mapUrl = c.address && c.city ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${c.name}, ${c.address}, ${c.city}, ${c.state}`)}` : null;
         return (
@@ -1247,7 +1258,7 @@ export default function ByTheirFruit() {
       })()}
 
       {/* RATE */}
-      {!loading && page === "rate" && (
+      {mounted && !loading && page === "rate" && (
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "36px 24px" }}>
           <FadeIn>
             <div style={{ display: "flex", gap: 3, marginBottom: 32 }}>
@@ -1394,7 +1405,7 @@ export default function ByTheirFruit() {
       )}
 
       {/* ABOUT */}
-      {!loading && page === "about" && (
+      {mounted && !loading && page === "about" && (
         <div style={{ maxWidth: 600, margin: "0 auto", padding: "56px 24px" }}>
           <FadeIn>
             <h1 style={{ fontSize: 34, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.12, margin: "0 0 28px", letterSpacing: "-0.04em" }}>The church doesn't get to grade its own homework.</h1>
