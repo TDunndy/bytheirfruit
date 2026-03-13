@@ -2369,7 +2369,7 @@ export default function ByTheirFruit() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 32, marginBottom: 28 }}>
             {/* Brand column */}
             <div style={{ minWidth: 180 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><Logo size={14} color={T.text} /><span style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, color: T.text }}>By Their Fruit</span></div>
+              <div style={{ marginBottom: 8 }}><Logo size={14} color={T.text} /></div>
               <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.5, maxWidth: 260 }}>Real reviews from real congregants — honest, structured, and built to help churches grow.</div>
             </div>
             {/* Navigation column */}
