@@ -162,6 +162,9 @@ CREATE POLICY "Users can submit claims" ON claim_requests FOR INSERT WITH CHECK 
 CREATE POLICY "Admins can view all claims" ON claim_requests FOR SELECT USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'moderator'))
 );
+CREATE POLICY "Admins can update claims" ON claim_requests FOR UPDATE USING (
+  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'moderator'))
+);
 
 -- Church responses
 CREATE TABLE church_responses (

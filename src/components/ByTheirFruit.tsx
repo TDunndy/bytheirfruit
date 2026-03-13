@@ -662,6 +662,11 @@ export default function ByTheirFruit() {
   const [respondingTo, setRespondingTo] = useState(null);
   const [responseSubmitting, setResponseSubmitting] = useState(false);
 
+  // Admin state
+  const [adminClaims, setAdminClaims] = useState([]);
+  const [adminSubscribers, setAdminSubscribers] = useState([]);
+  const [adminTab, setAdminTab] = useState("claims");
+
   /* --- SEARCH CHURCHES FROM DB (server-side) --- */
   const [searchLoading, setSearchLoading] = useState(false);
   const [totalChurchCount, setTotalChurchCount] = useState(0);
@@ -787,15 +792,17 @@ export default function ByTheirFruit() {
   /* --- AUTH STATE --- */
   useEffect(() => {
     // Check current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const u = session.user;
+        const { data: profileRow } = await supabase.from("profiles").select("role").eq("id", u.id).single();
         const profile = {
           id: u.id,
           name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "User",
           email: u.email,
           avatar: (u.user_metadata?.full_name || u.user_metadata?.name || u.email || "U").charAt(0).toUpperCase(),
           provider: u.app_metadata?.provider || "email",
+          role: profileRow?.role || "user",
         };
         setUser(profile);
         fetchUserReviews(u.id);
@@ -806,12 +813,14 @@ export default function ByTheirFruit() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session?.user) {
         const u = session.user;
+        const { data: profileRow } = await supabase.from("profiles").select("role").eq("id", u.id).single();
         const profile = {
           id: u.id,
           name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split("@")[0] || "User",
           email: u.email,
           avatar: (u.user_metadata?.full_name || u.user_metadata?.name || u.email || "U").charAt(0).toUpperCase(),
           provider: u.app_metadata?.provider || "email",
+          role: profileRow?.role || "user",
         };
         setUser(profile);
         setShowAuthModal(false);
@@ -1021,6 +1030,50 @@ export default function ByTheirFruit() {
     await fetchReviewsForChurch(churchId);
   };
 
+  /* --- ADMIN FUNCTIONS --- */
+  const isAdmin = user?.role === "admin" || user?.role === "moderator";
+
+  const fetchAdminData = async () => {
+    if (!isAdmin) return;
+    // Fetch all claim requests with church info
+    const { data: claims } = await supabase
+      .from("claim_requests")
+      .select("*, churches(name, city, state), profiles(display_name, avatar_url)")
+      .order("created_at", { ascending: false });
+    setAdminClaims(claims || []);
+
+    // Fetch all claimed churches (active subscribers)
+    const { data: subs } = await supabase
+      .from("churches")
+      .select("id, name, city, state, claimed_by, claimed_at, total_reviews, profiles!churches_claimed_by_fkey(display_name)")
+      .not("claimed_by", "is", null)
+      .order("claimed_at", { ascending: false });
+    setAdminSubscribers(subs || []);
+  };
+
+  const handleClaimAction = async (claimId, action, churchId, userId) => {
+    if (action === "approved") {
+      // Update claim request status
+      await supabase.from("claim_requests").update({
+        status: "approved",
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+      }).eq("id", claimId);
+      // Set church as claimed
+      await supabase.from("churches").update({
+        claimed_by: userId,
+        claimed_at: new Date().toISOString(),
+      }).eq("id", churchId);
+    } else {
+      await supabase.from("claim_requests").update({
+        status: "rejected",
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+      }).eq("id", claimId);
+    }
+    fetchAdminData();
+  };
+
   /* --- HANDLE SIGN OUT --- */
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -1170,6 +1223,9 @@ export default function ByTheirFruit() {
           {["discover", "about"].map(id => (
             <button key={id} onClick={() => setPage(id)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.text : "transparent", color: page === id ? "#fff" : T.textSoft, border: `1px solid ${page === id ? T.text : "transparent"}`, transition: "all 0.15s" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
           ))}
+          {isAdmin && (
+            <button onClick={() => { setPage("admin"); fetchAdminData(); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "admin" ? T.red : T.redSoft, color: page === "admin" ? "#fff" : T.red, border: `1px solid ${page === "admin" ? T.red : T.redBorder}`, transition: "all 0.15s" }}>Admin</button>
+          )}
           <div style={{ width: 1, height: 20, background: T.border, margin: "0 4px" }} />
           {user ? <UserMenu user={user} onSignOut={handleSignOut} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
         </div>
@@ -1728,6 +1784,116 @@ export default function ByTheirFruit() {
               <p>Every review passes through AI moderation. We filter personal attacks, coordinated campaigns, and doctrinal arguments disguised as reviews. Users can flag reviews they believe are inappropriate.</p>
               <p>Churches can respond to reviews publicly. They cannot delete, edit, or pay to suppress them.</p>
             </div>
+          </FadeIn>
+        </div>
+      )}
+
+      {/* ADMIN DASHBOARD */}
+      {!loading && page === "admin" && isAdmin && (
+        <div style={{ maxWidth: 900, margin: "0 auto", padding: "36px 24px" }}>
+          <FadeIn>
+            <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Admin Dashboard</h1>
+            <p style={{ fontSize: 14, color: T.textMuted, margin: "0 0 28px" }}>Manage claims, subscribers, and revenue</p>
+
+            {/* METRICS ROW */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28 }}>
+              {[
+                { label: "Pending Claims", value: adminClaims.filter(c => c.status === "pending").length, color: T.amber },
+                { label: "Active Subscribers", value: adminSubscribers.length, color: T.green },
+                { label: "Monthly Revenue", value: `$${adminSubscribers.length * 39}`, color: T.accent },
+                { label: "Annual Revenue", value: `$${(adminSubscribers.length * 39 * 12).toLocaleString()}`, color: T.text },
+              ].map((m, i) => (
+                <div key={i} style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, textAlign: "center" }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, fontFamily: T.heading, color: m.color, letterSpacing: "-0.03em" }}>{m.value}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.08em" }}>{m.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* TAB SWITCHER */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
+              {[
+                { id: "claims", label: "Claim Requests", count: adminClaims.length },
+                { id: "subscribers", label: "Active Subscribers", count: adminSubscribers.length },
+              ].map(tab => (
+                <button key={tab.id} onClick={() => setAdminTab(tab.id)} style={{
+                  padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer",
+                  background: adminTab === tab.id ? T.text : "transparent",
+                  color: adminTab === tab.id ? "#fff" : T.textSoft,
+                  border: `1px solid ${adminTab === tab.id ? T.text : T.border}`,
+                  transition: "all 0.15s",
+                }}>
+                  {tab.label} <span style={{ opacity: 0.6, marginLeft: 4 }}>({tab.count})</span>
+                </button>
+              ))}
+            </div>
+
+            {/* CLAIMS TAB */}
+            {adminTab === "claims" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {adminClaims.length === 0 && (
+                  <div style={{ padding: "40px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
+                    <div style={{ fontSize: 14, color: T.textMuted }}>No claim requests yet</div>
+                  </div>
+                )}
+                {adminClaims.map(claim => (
+                  <div key={claim.id} style={{ padding: "18px 20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${claim.status === "pending" ? T.amberBorder : T.border}`, position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, color: T.text }}>{claim.churches?.name}</div>
+                        <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{claim.churches?.city}, {claim.churches?.state}</div>
+                      </div>
+                      <span style={{
+                        padding: "3px 10px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+                        background: claim.status === "pending" ? T.amberSoft : claim.status === "approved" ? T.greenSoft : T.redSoft,
+                        color: claim.status === "pending" ? T.amber : claim.status === "approved" ? T.green : T.red,
+                        border: `1px solid ${claim.status === "pending" ? T.amberBorder : claim.status === "approved" ? T.greenBorder : T.redBorder}`,
+                      }}>{claim.status}</span>
+                    </div>
+                    <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, color: T.textSoft }}>
+                      <div><span style={{ fontWeight: 600, color: T.text }}>Name:</span> {claim.full_name}</div>
+                      <div><span style={{ fontWeight: 600, color: T.text }}>Role:</span> {claim.role_at_church}</div>
+                      <div><span style={{ fontWeight: 600, color: T.text }}>Email:</span> {claim.work_email}</div>
+                      <div><span style={{ fontWeight: 600, color: T.text }}>Phone:</span> {claim.phone || "—"}</div>
+                    </div>
+                    {claim.message && <div style={{ marginTop: 8, fontSize: 13, color: T.textSoft, fontStyle: "italic" }}>"{claim.message}"</div>}
+                    <div style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>Submitted {new Date(claim.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                    {claim.status === "pending" && (
+                      <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
+                        <button onClick={() => handleClaimAction(claim.id, "approved", claim.church_id, claim.user_id)} style={{ padding: "8px 20px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 700, background: T.green, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Approve Claim</button>
+                        <button onClick={() => handleClaimAction(claim.id, "rejected", claim.church_id, claim.user_id)} style={{ padding: "8px 20px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 700, background: T.surface, color: T.red, border: `1px solid ${T.redBorder}`, cursor: "pointer", fontFamily: T.body }}>Reject</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* SUBSCRIBERS TAB */}
+            {adminTab === "subscribers" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {adminSubscribers.length === 0 && (
+                  <div style={{ padding: "40px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
+                    <div style={{ fontSize: 14, color: T.textMuted }}>No active subscribers yet</div>
+                  </div>
+                )}
+                {adminSubscribers.map(sub => (
+                  <div key={sub.id} style={{ padding: "16px 20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.greenBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, color: T.text }}>{sub.name}</div>
+                        <span style={{ padding: "2px 8px", borderRadius: T.radiusFull, fontSize: 10, fontWeight: 700, background: T.greenSoft, color: T.green, border: `1px solid ${T.greenBorder}` }}>VERIFIED</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{sub.city}, {sub.state} · {sub.total_reviews || 0} reviews · Claimed by {sub.profiles?.display_name || "Unknown"}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, fontFamily: T.heading, color: T.green }}>$39<span style={{ fontSize: 11, fontWeight: 500, color: T.textMuted }}>/mo</span></div>
+                      <div style={{ fontSize: 11, color: T.textMuted }}>Since {new Date(sub.claimed_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </FadeIn>
         </div>
       )}
