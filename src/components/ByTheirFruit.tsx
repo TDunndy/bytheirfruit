@@ -800,6 +800,34 @@ export default function ByTheirFruit() {
   const submitReviewToDB = async (reviewData, userId) => {
     const { churchId, scores, comments, text, role, isEdit } = reviewData;
 
+    // --- CHECK: Is user suspended from reviewing? ---
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("review_suspended")
+      .eq("id", userId)
+      .single();
+
+    if (profile?.review_suspended) {
+      alert("Your reviewing ability has been temporarily paused while we verify your recent reviews. This helps us keep By Their Fruit trustworthy for everyone. We'll have this resolved soon!");
+      return false;
+    }
+
+    // --- CHECK: 3 reviews per day limit (skip for edits) ---
+    if (!isEdit) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { count: todayCount } = await supabase
+        .from("reviews")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gte("created_at", todayStart.toISOString());
+
+      if (todayCount >= 3) {
+        alert("You've reached the daily limit of 3 reviews. This helps keep By Their Fruit fair and trustworthy. You can submit more reviews tomorrow!");
+        return false;
+      }
+    }
+
     const row = {
       church_id: churchId,
       user_id: userId,
@@ -825,6 +853,44 @@ export default function ByTheirFruit() {
       console.error("Review submit error:", result.error);
       alert("Failed to submit review: " + result.error.message);
       return false;
+    }
+
+    // --- GEO-FLAG CHECK: After successful new review, check for suspicious multi-state activity ---
+    if (!isEdit) {
+      try {
+        // Get all states this user has reviewed churches in
+        const { data: userReviewData } = await supabase
+          .from("reviews")
+          .select("church_id")
+          .eq("user_id", userId);
+
+        if (userReviewData && userReviewData.length >= 2) {
+          const churchIds = userReviewData.map(r => r.church_id);
+          const { data: churchData } = await supabase
+            .from("churches")
+            .select("state")
+            .in("id", churchIds);
+
+          if (churchData) {
+            const uniqueStates = [...new Set(churchData.map(c => c.state).filter(Boolean))];
+            // If reviewing churches in 3+ different states, flag the user
+            if (uniqueStates.length >= 3) {
+              await supabase
+                .from("profiles")
+                .update({
+                  review_suspended: true,
+                  suspension_reason: `Auto-flagged: reviewed churches across ${uniqueStates.length} states (${uniqueStates.join(", ")})`
+                })
+                .eq("id", userId);
+
+              alert("Thanks for your review! We noticed you've reviewed churches across several states. To keep By Their Fruit trustworthy, we'll verify your reviews before you can submit more. This usually takes 24-48 hours.");
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Geo-flag check error:", err);
+        // Don't block the review if the flag check fails
+      }
     }
 
     // Update total_reviews count locally

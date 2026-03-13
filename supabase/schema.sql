@@ -11,7 +11,9 @@ CREATE TABLE profiles (
   role TEXT DEFAULT 'user' CHECK (role IN ('user', 'moderator', 'admin', 'church_admin')),
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'banned')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  last_active_at TIMESTAMPTZ DEFAULT NOW()
+  last_active_at TIMESTAMPTZ DEFAULT NOW(),
+  review_suspended BOOLEAN DEFAULT FALSE,
+  suspension_reason TEXT
 );
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
