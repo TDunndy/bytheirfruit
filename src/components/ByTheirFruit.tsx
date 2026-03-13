@@ -98,6 +98,8 @@ function dbChurchToLocal(c) {
     scores,
     tags: tags.slice(0, 5),
     recentReviews: [], // loaded separately
+    claimedBy: c.claimed_by || null,
+    claimedAt: c.claimed_at || null,
   };
 }
 
@@ -118,6 +120,12 @@ function dbReviewToLocal(r) {
     comments,
     _reviewerId: r.user_id,
     _createdAt: r.created_at,
+    responses: (r.church_responses || []).map(resp => ({
+      id: resp.id,
+      text: resp.text,
+      author: resp.profiles?.display_name || "Church Admin",
+      date: new Date(resp.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+    })),
   };
 }
 
@@ -558,15 +566,50 @@ function ReviewCard({ rev, delay = 0, userId }) {
           </div>
         )}
 
-        <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
-          {flagged ? (
-            <span style={{ fontSize: 11, color: T.textMuted, fontStyle: "italic" }}>Flagged for review</span>
-          ) : (
-            <button onClick={handleFlag} style={{ fontSize: 11, color: T.textMuted, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, padding: 0, transition: "color 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.color = T.red} onMouseLeave={e => e.currentTarget.style.color = T.textMuted}>
-              Flag as inappropriate
+        {/* Church Responses */}
+        {rev.responses && rev.responses.length > 0 && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.borderLight}` }}>
+            {rev.responses.map(resp => (
+              <div key={resp.id} style={{ padding: "10px 14px", borderRadius: T.radiusSm, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>Church Response</span>
+                  <span style={{ fontSize: 11, color: T.textMuted, marginLeft: "auto" }}>{resp.date}</span>
+                </div>
+                <p style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6, margin: 0 }}>{resp.text}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Response form (passed via onRespond prop) */}
+        {rev._showResponseForm && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.borderLight}` }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.accent, marginBottom: 6 }}>Respond as church leadership:</div>
+            <textarea value={rev._responseText || ""} onChange={e => rev._onResponseChange(e.target.value)} rows={3} placeholder="Write a thoughtful response to this review..." style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.accentBorder}`, background: T.accentSoft, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical" }} />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+              <button onClick={() => rev._onCancelResponse()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
+              <button onClick={() => rev._onSubmitResponse()} disabled={rev._responseSubmitting} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: rev._responseSubmitting ? 0.5 : 1 }}>{rev._responseSubmitting ? "Posting..." : "Post Response"}</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {rev._isChurchOwner && !rev._showResponseForm && rev.responses?.length === 0 && (
+            <button onClick={() => rev._onStartResponse()} style={{ fontSize: 11, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, padding: 0 }}>
+              Reply as church
             </button>
           )}
+          <div style={{ marginLeft: "auto" }}>
+            {flagged ? (
+              <span style={{ fontSize: 11, color: T.textMuted, fontStyle: "italic" }}>Flagged for review</span>
+            ) : (
+              <button onClick={handleFlag} style={{ fontSize: 11, color: T.textMuted, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, padding: 0, transition: "color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.color = T.red} onMouseLeave={e => e.currentTarget.style.color = T.textMuted}>
+                Flag as inappropriate
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </FadeIn>
@@ -608,6 +651,16 @@ export default function ByTheirFruit() {
   // Track user reviews: { churchId: { review, postedAt } }
   const [userReviews, setUserReviews] = useState({});
   const [isEditing, setIsEditing] = useState(false);
+
+  // Church claiming
+  const [showClaimModal, setShowClaimModal] = useState(false);
+  const [claimData, setClaimData] = useState({ fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "" });
+  const [claimSubmitting, setClaimSubmitting] = useState(false);
+  const [claimStatus, setClaimStatus] = useState(null); // null | 'pending' | 'approved' | 'rejected'
+  // Church owner response
+  const [responseText, setResponseText] = useState("");
+  const [respondingTo, setRespondingTo] = useState(null);
+  const [responseSubmitting, setResponseSubmitting] = useState(false);
 
   /* --- SEARCH CHURCHES FROM DB (server-side) --- */
   const [searchLoading, setSearchLoading] = useState(false);
@@ -694,7 +747,7 @@ export default function ByTheirFruit() {
   const fetchReviewsForChurch = useCallback(async (churchId) => {
     const { data, error } = await supabase
       .from("reviews")
-      .select("*, profiles(display_name, avatar_url)")
+      .select("*, profiles(display_name, avatar_url), church_responses(id, text, created_at, profiles(display_name))")
       .eq("church_id", churchId)
       .eq("status", "published")
       .order("created_at", { ascending: false });
@@ -904,6 +957,66 @@ export default function ByTheirFruit() {
     return true;
   };
 
+  /* --- CLAIM CHURCH --- */
+  const checkClaimStatus = async (churchId, userId) => {
+    if (!userId) { setClaimStatus(null); return; }
+    const { data } = await supabase
+      .from("claim_requests")
+      .select("status")
+      .eq("church_id", churchId)
+      .eq("user_id", userId)
+      .single();
+    setClaimStatus(data?.status || null);
+  };
+
+  const submitClaimRequest = async (churchId) => {
+    if (!user) { setShowAuthModal(true); return; }
+    if (!claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) {
+      alert("Please fill in your name, role, and work email.");
+      return;
+    }
+    setClaimSubmitting(true);
+    const { error } = await supabase.from("claim_requests").insert({
+      church_id: churchId,
+      user_id: user.id,
+      full_name: claimData.fullName,
+      role_at_church: claimData.roleAtChurch,
+      work_email: claimData.workEmail,
+      phone: claimData.phone || null,
+      message: claimData.message || null,
+    });
+    setClaimSubmitting(false);
+    if (error) {
+      if (error.code === "23505") alert("You've already submitted a claim for this church.");
+      else alert("Failed to submit claim: " + error.message);
+      return;
+    }
+    setClaimStatus("pending");
+    setShowClaimModal(false);
+    setClaimData({ fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "" });
+  };
+
+  /* --- CHURCH OWNER RESPONSE TO REVIEW --- */
+  const submitChurchResponse = async (reviewId, churchId) => {
+    if (!responseText.trim()) return;
+    setResponseSubmitting(true);
+    const { error } = await supabase.from("church_responses").insert({
+      review_id: reviewId,
+      church_id: churchId,
+      responder_id: user.id,
+      text: responseText.trim(),
+    });
+    setResponseSubmitting(false);
+    if (error) {
+      alert("Failed to post response: " + error.message);
+      return;
+    }
+    setResponseText("");
+    setRespondingTo(null);
+    // Refresh reviews to show the response
+    await fetchReviewsForChurch(churchId);
+  };
+
   /* --- HANDLE SIGN OUT --- */
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -964,6 +1077,7 @@ export default function ByTheirFruit() {
     setSelectedChurch(churches.find(ch => ch.id === c.id) || c);
     setPage("profile");
     fetchReviewsForChurch(c.id);
+    if (user) checkClaimStatus(c.id, user.id);
   };
 
   const handleRateSubmit = async () => {
@@ -1206,7 +1320,15 @@ export default function ByTheirFruit() {
               <button onClick={() => setPage("discover")} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 24, fontFamily: T.body }}>← Back</button>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
                 <div style={{ flex: 1 }}>
-                  <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 5px", letterSpacing: "-0.035em" }}>{c.name}</h1>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 5px", letterSpacing: "-0.035em" }}>{c.name}</h1>
+                    {c.claimedBy && (
+                      <span title="This church has been verified by its leadership" style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: T.radiusFull, background: T.greenSoft, border: `1px solid ${T.greenBorder}`, fontSize: 11, fontWeight: 700, color: T.green, whiteSpace: "nowrap" }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        Verified
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: 14, color: T.textSoft, fontWeight: 500 }}>{c.denomination}</div>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 10 }}>
                     {c.tags.map((tag, j) => <span key={j} style={{ fontSize: 11.5, padding: "4px 12px", borderRadius: T.radiusFull, background: T.accentSoft, color: T.accent, fontWeight: 600, border: `1px solid ${T.accentBorder}` }}>{tag}</span>)}
@@ -1287,7 +1409,69 @@ export default function ByTheirFruit() {
                   </div>
                 )}
               </div>
+
+              {/* Claim This Church CTA */}
+              {!c.claimedBy && (
+                <div style={{ marginTop: 16, padding: "16px 24px", borderRadius: T.radius, background: T.amberSoft, border: `1.5px solid ${T.amberBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Are you part of this church's leadership?</div>
+                    <div style={{ fontSize: 12, color: T.textSoft, marginTop: 2 }}>Claim this church to respond to reviews, access insights, and get a verified badge.</div>
+                  </div>
+                  {claimStatus === "pending" ? (
+                    <span style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.amberSoft, color: T.amber, border: `1.5px solid ${T.amberBorder}` }}>Claim Pending Review</span>
+                  ) : (
+                    <button onClick={() => { if (!user) { setShowAuthModal(true); } else { setShowClaimModal(true); } }} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, whiteSpace: "nowrap" }}>Claim This Church</button>
+                  )}
+                </div>
+              )}
             </FadeIn>
+
+            {/* Claim Church Modal */}
+            {showClaimModal && currentChurch && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowClaimModal(false)}>
+                <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
+                  <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Claim {currentChurch.name}</h2>
+                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 24px" }}>Tell us about your role at this church. We'll review your request and get back to you.</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your full name *</label>
+                      <input value={claimData.fullName} onChange={e => setClaimData(p => ({ ...p, fullName: e.target.value }))} placeholder="e.g. Pastor John Smith" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your role at this church *</label>
+                      <select value={claimData.roleAtChurch} onChange={e => setClaimData(p => ({ ...p, roleAtChurch: e.target.value }))} style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }}>
+                        <option value="">Select your role...</option>
+                        <option value="Senior Pastor">Senior Pastor</option>
+                        <option value="Associate Pastor">Associate Pastor</option>
+                        <option value="Youth Pastor">Youth Pastor</option>
+                        <option value="Worship Leader">Worship Leader</option>
+                        <option value="Church Administrator">Church Administrator</option>
+                        <option value="Elder/Deacon">Elder / Deacon</option>
+                        <option value="Board Member">Board Member</option>
+                        <option value="Office Staff">Office Staff</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Church work email *</label>
+                      <input type="email" value={claimData.workEmail} onChange={e => setClaimData(p => ({ ...p, workEmail: e.target.value }))} placeholder="e.g. pastor@gracechurch.org" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Phone number</label>
+                      <input type="tel" value={claimData.phone} onChange={e => setClaimData(p => ({ ...p, phone: e.target.value }))} placeholder="(optional)" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Anything else you'd like us to know?</label>
+                      <textarea value={claimData.message} onChange={e => setClaimData(p => ({ ...p, message: e.target.value }))} rows={3} placeholder="(optional)" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical" }} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
+                    <button onClick={() => setShowClaimModal(false)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
+                    <button onClick={() => submitClaimRequest(currentChurch.id)} disabled={claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) ? 0.5 : 1 }}>{claimSubmitting ? "Submitting..." : "Submit Claim Request"}</button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="btf-profile-grid" style={{ display: "grid", gridTemplateColumns: "270px 1fr", gap: 20, alignItems: "start", marginTop: 24 }}>
               <FadeIn delay={120}>
@@ -1333,7 +1517,21 @@ export default function ByTheirFruit() {
                   </div>
                 )}
 
-                {c.recentReviews.map((rev, i) => <ReviewCard key={rev.id || i} rev={rev} delay={240 + i * 70} userId={user?.id} />)}
+                {c.recentReviews.map((rev, i) => {
+                  const isOwner = user && c.claimedBy === user.id;
+                  const enrichedRev = isOwner ? {
+                    ...rev,
+                    _isChurchOwner: true,
+                    _showResponseForm: respondingTo === rev.id,
+                    _responseText: responseText,
+                    _responseSubmitting: responseSubmitting,
+                    _onStartResponse: () => { setRespondingTo(rev.id); setResponseText(""); },
+                    _onCancelResponse: () => { setRespondingTo(null); setResponseText(""); },
+                    _onResponseChange: (val) => setResponseText(val),
+                    _onSubmitResponse: () => submitChurchResponse(rev.id, c.id),
+                  } : rev;
+                  return <ReviewCard key={rev.id || i} rev={enrichedRev} delay={240 + i * 70} userId={user?.id} />;
+                })}
               </div>
             </div>
           </div>

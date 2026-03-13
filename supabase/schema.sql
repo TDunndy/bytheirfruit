@@ -139,6 +139,30 @@ CREATE TABLE review_flags (
 ALTER TABLE review_flags ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can flag reviews" ON review_flags FOR INSERT WITH CHECK (auth.uid() = flagged_by);
 
+-- Church claim requests
+CREATE TABLE claim_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  church_id UUID REFERENCES churches(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  full_name TEXT NOT NULL,
+  role_at_church TEXT NOT NULL,
+  work_email TEXT NOT NULL,
+  phone TEXT,
+  message TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  reviewed_by UUID REFERENCES profiles(id),
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(church_id, user_id)
+);
+
+ALTER TABLE claim_requests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view own claims" ON claim_requests FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "Users can submit claims" ON claim_requests FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Admins can view all claims" ON claim_requests FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'moderator'))
+);
+
 -- Church responses
 CREATE TABLE church_responses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
