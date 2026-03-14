@@ -754,6 +754,12 @@ export default function ByTheirFruit() {
   const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
   const [newsletterDone, setNewsletterDone] = useState(false);
 
+  // Abuse report modal
+  const [showAbuseModal, setShowAbuseModal] = useState(false);
+  const [abuseData, setAbuseData] = useState({ reportType: "", churchName: "", churchCity: "", churchState: "", description: "", contactMethod: "" });
+  const [abuseSubmitting, setAbuseSubmitting] = useState(false);
+  const [abuseSubmitted, setAbuseSubmitted] = useState(false);
+
   // Platform stats for social proof
   const [platformStats, setPlatformStats] = useState({ churches: 0, reviews: 0, users: 0 });
 
@@ -2903,8 +2909,133 @@ export default function ByTheirFruit() {
               <div style={{ fontSize: 11, color: T.textMuted }}>Matthew 7:16</div>
             </div>
           </div>
+
+          {/* Report Abuse */}
+          <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 16, paddingTop: 16, textAlign: "center" }}>
+            <button onClick={() => { setShowAbuseModal(true); setAbuseSubmitted(false); setAbuseData({ reportType: "", churchName: "", churchCity: "", churchState: "", description: "", contactMethod: "" }); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${T.redBorder}`, borderRadius: T.radiusFull, padding: "8px 18px", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.red, fontFamily: T.body, transition: "all 0.15s" }}
+              onMouseEnter={e => { e.currentTarget.style.background = T.redSoft; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Report Abuse Anonymously
+            </button>
+            <div style={{ fontSize: 10, color: T.textMuted, marginTop: 6 }}>If you or someone you know has experienced abuse at a church, we want to hear about it. No sign-in required. Your identity is never recorded.</div>
+          </div>
         </div>
       </footer>
+
+      {/* ANONYMOUS ABUSE REPORT MODAL */}
+      {showAbuseModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", padding: 20 }} onClick={() => setShowAbuseModal(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: T.surface, borderRadius: 16, padding: "32px 28px", maxHeight: "90vh", overflow: "auto", boxShadow: "0 24px 48px rgba(0,0,0,0.15)", animation: "modalIn 0.25s ease" }}>
+            {abuseSubmitted ? (
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <div style={{ width: 56, height: 56, borderRadius: 28, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>✓</div>
+                <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.03em" }}>Report received</h2>
+                <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 8px" }}>Your report has been securely submitted. No identifying information was stored.</p>
+                <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 24px" }}>If you provided a way to contact you, we may reach out. Otherwise, we will investigate this matter privately.</p>
+                <button onClick={() => setShowAbuseModal(false)} style={{ padding: "10px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Close</button>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 18, background: T.redSoft, border: `1.5px solid ${T.redBorder}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.red} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  </div>
+                  <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.03em" }}>Report Abuse Anonymously</h2>
+                </div>
+
+                <div style={{ padding: "12px 14px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}`, margin: "16px 0 20px" }}>
+                  <p style={{ fontSize: 12, color: T.textSoft, lineHeight: 1.6, margin: 0 }}>
+                    <strong style={{ color: T.text }}>Your privacy is protected.</strong> This form does not require sign-in. We do not store your identity, IP address, or any identifying information. Reports cannot be traced back to you. Only site administrators can view submissions.
+                  </p>
+                </div>
+
+                {/* Type of abuse */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>Type of Concern <span style={{ color: T.red }}>*</span></label>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {[
+                      { value: "church_leader", label: "Leadership Abuse" },
+                      { value: "financial", label: "Financial Misconduct" },
+                      { value: "spiritual", label: "Spiritual Manipulation" },
+                      { value: "sexual", label: "Sexual Misconduct" },
+                      { value: "discrimination", label: "Discrimination" },
+                      { value: "other", label: "Other" },
+                    ].map(opt => (
+                      <button key={opt.value} onClick={() => setAbuseData(p => ({ ...p, reportType: opt.value }))} style={{
+                        padding: "7px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 500,
+                        fontFamily: T.body, cursor: "pointer", transition: "all 0.15s",
+                        background: abuseData.reportType === opt.value ? T.red : T.surfaceAlt,
+                        color: abuseData.reportType === opt.value ? "#fff" : T.textSoft,
+                        border: `1px solid ${abuseData.reportType === opt.value ? T.red : T.border}`,
+                      }}>{opt.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Church info */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>Church Information <span style={{ fontWeight: 400, textTransform: "none" }}>(if known)</span></label>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <input value={abuseData.churchName} onChange={e => setAbuseData(p => ({ ...p, churchName: e.target.value }))} placeholder="Church name" style={{ flex: 2, minWidth: 160, padding: "9px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.text, outline: "none", fontFamily: T.body }} />
+                    <input value={abuseData.churchCity} onChange={e => setAbuseData(p => ({ ...p, churchCity: e.target.value }))} placeholder="City" style={{ flex: 1, minWidth: 100, padding: "9px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.text, outline: "none", fontFamily: T.body }} />
+                    <select value={abuseData.churchState} onChange={e => setAbuseData(p => ({ ...p, churchState: e.target.value }))} style={{ padding: "9px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 70 }}>
+                      <option value="">State</option>
+                      {US_STATES.filter(s => s !== "All").map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>What happened? <span style={{ color: T.red }}>*</span></label>
+                  <textarea value={abuseData.description} onChange={e => setAbuseData(p => ({ ...p, description: e.target.value }))} placeholder="Please describe what you experienced or witnessed. Include as much detail as you're comfortable sharing — dates, names, patterns of behavior. Everything here is anonymous." rows={5} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical", lineHeight: 1.6, boxSizing: "border-box" }} />
+                  {abuseData.description.length > 0 && abuseData.description.length < 20 && (
+                    <div style={{ fontSize: 11, color: T.amber, marginTop: 4 }}>Please provide at least 20 characters ({20 - abuseData.description.length} more needed)</div>
+                  )}
+                </div>
+
+                {/* Optional contact */}
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>How can we follow up? <span style={{ fontWeight: 400, textTransform: "none" }}>(completely optional)</span></label>
+                  <input value={abuseData.contactMethod} onChange={e => setAbuseData(p => ({ ...p, contactMethod: e.target.value }))} placeholder="Email, phone, or leave blank to remain fully anonymous" style={{ width: "100%", padding: "9px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} />
+                  <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>If you provide contact info, only administrators will see it. It is never stored with your identity.</div>
+                </div>
+
+                {/* Submit */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button disabled={!abuseData.reportType || abuseData.description.length < 20 || abuseSubmitting} onClick={async () => {
+                    setAbuseSubmitting(true);
+                    const { error } = await supabase.from("abuse_reports").insert({
+                      report_type: abuseData.reportType,
+                      church_name: abuseData.churchName || null,
+                      church_city: abuseData.churchCity || null,
+                      church_state: abuseData.churchState || null,
+                      description: abuseData.description,
+                      contact_method: abuseData.contactMethod || null,
+                    });
+                    setAbuseSubmitting(false);
+                    if (error) {
+                      showToast("Failed to submit report. Please try again.", "error");
+                    } else {
+                      setAbuseSubmitted(true);
+                    }
+                  }} style={{
+                    flex: 1, padding: "12px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600,
+                    background: T.red, color: "#fff", border: "none",
+                    cursor: abuseSubmitting ? "wait" : "pointer", fontFamily: T.body,
+                    opacity: (!abuseData.reportType || abuseData.description.length < 20 || abuseSubmitting) ? 0.5 : 1,
+                  }}>{abuseSubmitting ? "Submitting..." : "Submit Report"}</button>
+                  <button onClick={() => setShowAbuseModal(false)} style={{
+                    padding: "12px 24px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500,
+                    background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`,
+                    cursor: "pointer", fontFamily: T.body,
+                  }}>Cancel</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
