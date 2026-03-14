@@ -1488,7 +1488,7 @@ export default function ByTheirFruit() {
             <button onClick={() => { navigate("saved"); fetchSavedChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "saved" ? T.text : "transparent", color: page === "saved" ? T.bg : T.textSoft, border: `1px solid ${page === "saved" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Saved</button>
           )}
           {hasClaimed && (
-            <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accent : T.accentSoft, color: page === "dashboard" ? "#fff" : T.accent, border: `1px solid ${page === "dashboard" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Dashboard</button>
+            <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accent : T.accentSoft, color: page === "dashboard" ? "#fff" : T.accent, border: `1px solid ${page === "dashboard" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Church Dashboard</button>
           )}
           {/* Theme toggle */}
           <button onClick={() => setTheme(isDark ? "light" : "dark")} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={{ padding: "5px 8px", borderRadius: T.radiusFull, fontSize: 15, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1, transition: "all 0.15s" }}>{isDark ? "☀️" : "🌙"}</button>
@@ -1517,7 +1517,7 @@ export default function ByTheirFruit() {
             <button onClick={() => { navigate("saved"); fetchSavedChurches(user.id); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "saved" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "saved" ? T.border : "transparent"}`, textAlign: "left" }}>Saved</button>
           )}
           {hasClaimed && (
-            <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accentSoft : "transparent", color: T.accent, border: `1px solid ${page === "dashboard" ? T.accentBorder : "transparent"}`, textAlign: "left" }}>Dashboard</button>
+            <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accentSoft : "transparent", color: T.accent, border: `1px solid ${page === "dashboard" ? T.accentBorder : "transparent"}`, textAlign: "left" }}>Church Dashboard</button>
           )}
         </div>
       )}
@@ -2189,7 +2189,7 @@ export default function ByTheirFruit() {
       {!loading && page === "dashboard" && user && hasClaimed && (
         <div style={{ maxWidth: 900, margin: "0 auto", padding: "36px 24px" }}>
           <FadeIn>
-            <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Dashboard</h1>
+            <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Church Dashboard</h1>
             <p style={{ fontSize: 14, color: T.textMuted, margin: "0 0 28px" }}>Your church insights and reviews</p>
 
             {myChurchesLoading && (
