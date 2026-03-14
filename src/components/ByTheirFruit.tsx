@@ -311,20 +311,34 @@ function RatingSlider({ label, desc, value, onChange, comment, onCommentChange, 
             <span style={{ fontSize: 9, color: T.textMuted, fontWeight: 500 }}>Poor</span>
             <span style={{ fontSize: 9, color: T.textMuted, fontWeight: 500 }}>Excellent</span>
           </div>
-          {value > 0 && !showComment && (
+          {value > 0 && value <= 2.9 && (
+            <div style={{ marginTop: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.amber, marginBottom: 4 }}>A comment is required for scores below 3.0</div>
+              <input
+                value={comment || ""} onChange={e => onCommentChange(e.target.value)}
+                placeholder={`What specifically could improve about ${label.toLowerCase().split("&")[0].trim()}?`}
+                style={{
+                  width: "100%", padding: "8px 12px", borderRadius: T.radiusSm,
+                  fontSize: 12, border: `1.5px solid ${!comment?.trim() ? T.amber : T.borderLight}`, background: T.surfaceAlt,
+                  color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box",
+                }}
+              />
+            </div>
+          )}
+          {value > 2.9 && !showComment && (
             <button onClick={() => setShowComment(true)} style={{
               marginTop: 4, fontSize: 11, color: T.accent, background: "none", border: "none",
               cursor: "pointer", fontFamily: T.body, fontWeight: 600, padding: 0,
             }}>+ Add a comment about {label.split("&")[0].split("/")[0].trim().toLowerCase()}</button>
           )}
-          {value > 0 && showComment && (
+          {value > 2.9 && showComment && (
             <input
               value={comment || ""} onChange={e => onCommentChange(e.target.value)}
               placeholder={`Optional: what specifically about ${label.toLowerCase().split("&")[0].trim()}?`}
               style={{
                 width: "100%", marginTop: 6, padding: "8px 12px", borderRadius: T.radiusSm,
                 fontSize: 12, border: `1px solid ${T.borderLight}`, background: T.surfaceAlt,
-                color: T.text, outline: "none", fontFamily: T.body,
+                color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box",
               }}
             />
           )}
@@ -557,7 +571,29 @@ function UserMenu({ user, onSignOut, onNavigate }) {
 function ReviewCard({ rev, delay = 0, userId }) {
   const [flagged, setFlagged] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [likeCount, setLikeCount] = useState(rev.likeCount || 0);
+  const [liked, setLiked] = useState(rev.userLiked || false);
+  const [liking, setLiking] = useState(false);
   const hasComments = rev.comments && Object.keys(rev.comments).length > 0;
+
+  const handleLike = async () => {
+    if (!userId || liking) return;
+    setLiking(true);
+    if (liked) {
+      // Unlike
+      await supabase.from("review_likes").delete().eq("review_id", rev.id).eq("user_id", userId);
+      setLiked(false);
+      setLikeCount(prev => Math.max(0, prev - 1));
+    } else {
+      // Like
+      const { error } = await supabase.from("review_likes").insert({ review_id: rev.id, user_id: userId });
+      if (!error) {
+        setLiked(true);
+        setLikeCount(prev => prev + 1);
+      }
+    }
+    setLiking(false);
+  };
 
   const handleFlag = async () => {
     if (!userId) return;
@@ -654,12 +690,21 @@ function ReviewCard({ rev, delay = 0, userId }) {
         )}
 
         <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          {rev._isChurchOwner && !rev._showResponseForm && rev.responses?.length === 0 && (
-            <button onClick={() => rev._onStartResponse()} style={{ fontSize: 11, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, padding: 0 }}>
-              Reply as church
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {rev._isChurchOwner && !rev._showResponseForm && rev.responses?.length === 0 && (
+              <button onClick={() => rev._onStartResponse()} style={{ fontSize: 11, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, padding: 0 }}>
+                Reply as church
+              </button>
+            )}
+            {/* Like / Helpful button */}
+            <button onClick={handleLike} disabled={!userId || liking} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: liked ? T.accent : T.textMuted, background: liked ? T.accentSoft : "none", border: liked ? `1px solid ${T.accentBorder}` : "1px solid transparent", borderRadius: T.radiusFull, cursor: userId ? "pointer" : "default", fontFamily: T.body, padding: "3px 10px", transition: "all 0.15s", opacity: !userId ? 0.4 : 1 }}
+              onMouseEnter={e => { if (userId && !liked) e.currentTarget.style.color = T.accent; }}
+              onMouseLeave={e => { if (!liked) e.currentTarget.style.color = T.textMuted; }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill={liked ? T.accent : "none"} stroke={liked ? T.accent : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" /></svg>
+              Helpful{likeCount > 0 ? ` (${likeCount})` : ""}
             </button>
-          )}
-          <div style={{ marginLeft: "auto" }}>
+          </div>
+          <div>
             {flagged ? (
               <span style={{ fontSize: 11, color: T.textMuted, fontStyle: "italic" }}>Flagged for review</span>
             ) : (
@@ -913,17 +958,23 @@ export default function ByTheirFruit() {
   const fetchReviewsForChurch = useCallback(async (churchId) => {
     const { data, error } = await supabase
       .from("reviews")
-      .select("*, profiles(display_name, avatar_url), church_responses(id, text, created_at, profiles(display_name))")
+      .select("*, profiles(display_name, avatar_url), church_responses(id, text, created_at, profiles(display_name)), review_likes(user_id)")
       .eq("church_id", churchId)
       .eq("status", "published")
       .order("created_at", { ascending: false });
     if (!error && data) {
-      const reviews = data.map(dbReviewToLocal);
+      const reviews = data.map(r => {
+        const review = dbReviewToLocal(r);
+        const likes = r.review_likes || [];
+        review.likeCount = likes.length;
+        review.userLiked = user ? likes.some(l => l.user_id === user.id) : false;
+        return review;
+      });
       setChurches(prev => prev.map(c =>
         c.id === churchId ? { ...c, recentReviews: reviews } : c
       ));
     }
-  }, []);
+  }, [user]);
 
   /* --- LOAD USER'S OWN REVIEWS --- */
   const fetchUserReviews = useCallback(async (userId) => {
@@ -2196,10 +2247,24 @@ export default function ByTheirFruit() {
                 </div>
               ))}
 
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                <button onClick={() => setRateStep(0)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
-                <button onClick={() => setRateStep(2)} disabled={Object.keys(rateScores).filter(k => !rateSkipped[k]).length === 0} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: Object.keys(rateScores).filter(k => !rateSkipped[k]).length === 0 ? 0.3 : 1 }}>Continue →</button>
-              </div>
+              {(() => {
+                const activeScores = Object.entries(rateScores).filter(([k]) => !rateSkipped[k]);
+                const lowWithoutComment = activeScores.filter(([k, v]) => v <= 2.9 && !rateComments[k]?.trim());
+                const canProceed = activeScores.length > 0 && lowWithoutComment.length === 0;
+                return (
+                  <div style={{ marginTop: 8 }}>
+                    {lowWithoutComment.length > 0 && (
+                      <div style={{ padding: "10px 14px", borderRadius: T.radiusSm, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, marginBottom: 10, fontSize: 12, color: T.amber, fontWeight: 500 }}>
+                        Please add a comment for {lowWithoutComment.length === 1 ? "the category" : "the categories"} you rated below 3.0: {lowWithoutComment.map(([k]) => CATEGORIES.find(c => c.id === k)?.label.split("&")[0].trim()).join(", ")}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <button onClick={() => setRateStep(0)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
+                      <button onClick={() => { if (canProceed) setRateStep(2); else showToast("Please add comments for all categories rated below 3.0", "warning"); }} disabled={activeScores.length === 0} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: activeScores.length === 0 ? 0.3 : canProceed ? 1 : 0.6 }}>Continue →</button>
+                    </div>
+                  </div>
+                );
+              })()}
             </FadeIn>
           )}
 
