@@ -1335,9 +1335,16 @@ export default function ByTheirFruit() {
 
   /* --- HANDLE SIGN OUT --- */
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch (e) {
+      console.error("Sign out error:", e);
+    }
     setUser(null);
     setUserReviews({});
+    setUserFavorites(new Set());
+    setHasClaimed(false);
+    navigate("home");
   };
 
   /* --- RATE FLOW --- */
