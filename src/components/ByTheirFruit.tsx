@@ -534,7 +534,7 @@ function ProfileCompleteModal({ userId, onClose }) {
   );
 }
 
-function UserMenu({ user, onSignOut }) {
+function UserMenu({ user, onSignOut, onNavigate }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ position: "relative" }}>
@@ -544,6 +544,8 @@ function UserMenu({ user, onSignOut }) {
       </button>
       {open && <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm, padding: "6px", minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.08)", zIndex: 200 }}>
         <div style={{ padding: "8px 12px", fontSize: 12, color: T.textMuted }}>{user.email}</div>
+        <div style={{ height: 1, background: T.border, margin: "4px 0" }} />
+        <button onClick={() => { onNavigate("myprofile"); setOpen(false); }} style={{ width: "100%", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 500, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: T.text, fontFamily: T.body }}>My Profile</button>
         <div style={{ height: 1, background: T.border, margin: "4px 0" }} />
         <button onClick={() => { onSignOut(); setOpen(false); }} style={{ width: "100%", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 500, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: T.red, fontFamily: T.body }}>Sign Out</button>
       </div>}
@@ -743,6 +745,8 @@ export default function ByTheirFruit() {
         setPage("terms");
       } else if (hash === "#/privacy") {
         setPage("privacy");
+      } else if (hash === "#/myprofile") {
+        setPage("myprofile");
       }
     };
     handleHash();
@@ -1500,13 +1504,13 @@ export default function ByTheirFruit() {
           {/* Theme toggle */}
           <button onClick={() => setTheme(isDark ? "light" : "dark")} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={{ padding: "5px 8px", borderRadius: T.radiusFull, fontSize: 15, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1, transition: "all 0.15s" }}>{isDark ? "☀️" : "🌙"}</button>
           <div style={{ width: 1, height: 20, background: T.border, margin: "0 2px" }} />
-          {user ? <UserMenu user={user} onSignOut={handleSignOut} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
+          {user ? <UserMenu user={user} onSignOut={handleSignOut} onNavigate={navigate} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
         </div>
 
         {/* Mobile nav: hamburger + user */}
         <div className="btf-mobile-nav" style={{ display: "none", alignItems: "center", gap: 8 }}>
           <button onClick={() => setTheme(isDark ? "light" : "dark")} style={{ padding: "4px 7px", borderRadius: T.radiusFull, fontSize: 14, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1 }}>{isDark ? "☀️" : "🌙"}</button>
-          {user ? <UserMenu user={user} onSignOut={handleSignOut} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "5px 12px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
+          {user ? <UserMenu user={user} onSignOut={handleSignOut} onNavigate={navigate} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "5px 12px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} style={{ padding: "4px 6px", background: "transparent", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2" strokeLinecap="round">{mobileMenuOpen ? <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></> : <><line x1="3" y1="7" x2="21" y2="7" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="17" x2="21" y2="17" /></>}</svg>
           </button>
@@ -2486,6 +2490,195 @@ export default function ByTheirFruit() {
           </FadeIn>
         </div>
       )}
+
+      {/* MY PROFILE PAGE */}
+      {!loading && page === "myprofile" && user && (() => {
+        function MyProfilePage() {
+          const [profileData, setProfileData] = useState(null);
+          const [displayName, setDisplayName] = useState("");
+          const [email, setEmail] = useState("");
+          const [phone, setPhone] = useState("");
+          const [gender, setGender] = useState("");
+          const [ageRange, setAgeRange] = useState("");
+          const [incomeBracket, setIncomeBracket] = useState("");
+          const [saving, setSaving] = useState(false);
+          const [saved, setSaved] = useState(false);
+          const [emailSent, setEmailSent] = useState(false);
+          const [emailError, setEmailError] = useState("");
+          const [loadingProfile, setLoadingProfile] = useState(true);
+
+          useEffect(() => {
+            async function loadProfile() {
+              const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+              if (data) {
+                setProfileData(data);
+                setDisplayName(data.display_name || "");
+                setPhone(data.phone || "");
+                setGender(data.gender || "");
+                setAgeRange(data.age_range || "");
+                setIncomeBracket(data.income_bracket || "");
+              }
+              setEmail(user.email || "");
+              setLoadingProfile(false);
+            }
+            loadProfile();
+          }, []);
+
+          const selectStyle = (selected) => ({
+            padding: "8px 14px", borderRadius: T.radiusFull, fontSize: 12.5, fontWeight: 500,
+            fontFamily: T.body, cursor: "pointer", transition: "all 0.15s",
+            background: selected ? T.text : T.surfaceAlt, color: selected ? T.bg : T.textSoft,
+            border: `1px solid ${selected ? T.text : T.border}`,
+          });
+
+          const inputStyle = {
+            width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 14,
+            fontFamily: T.body, border: `1.5px solid ${T.border}`, background: T.surfaceAlt,
+            color: T.text, outline: "none", transition: "border-color 0.15s",
+            boxSizing: "border-box",
+          };
+
+          const labelStyle = {
+            fontSize: 12, fontWeight: 600, color: T.textMuted, display: "block",
+            marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em",
+          };
+
+          const handleSaveProfile = async () => {
+            setSaving(true);
+            setSaved(false);
+            setEmailError("");
+
+            // Update profile fields in profiles table
+            const updates = { display_name: displayName };
+            if (gender) updates.gender = gender;
+            else updates.gender = null;
+            if (ageRange) updates.age_range = ageRange;
+            else updates.age_range = null;
+            if (incomeBracket) updates.income_bracket = incomeBracket;
+            else updates.income_bracket = null;
+            if (phone) updates.phone = phone;
+            else updates.phone = null;
+
+            await supabase.from("profiles").update(updates).eq("id", user.id);
+
+            // If email changed, update via Supabase Auth
+            if (email && email !== user.email) {
+              const { error } = await supabase.auth.updateUser({ email });
+              if (error) {
+                setEmailError(error.message);
+              } else {
+                setEmailSent(true);
+              }
+            }
+
+            setSaving(false);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 3000);
+          };
+
+          if (loadingProfile) return (
+            <div style={{ textAlign: "center", padding: "80px 24px" }}>
+              <div style={{ fontSize: 14, color: T.textMuted }}>Loading profile...</div>
+            </div>
+          );
+
+          return (
+            <div style={{ maxWidth: 560, margin: "0 auto", padding: "48px 24px" }}>
+              <button onClick={() => navigate("home")} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: T.textMuted, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, padding: 0, marginBottom: 24 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
+                Back
+              </button>
+
+              <h1 style={{ fontSize: 28, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.15, margin: "0 0 6px", letterSpacing: "-0.03em" }}>My Profile</h1>
+              <p style={{ fontSize: 14, color: T.textMuted, margin: "0 0 32px" }}>Manage your account details and preferences</p>
+
+              {/* Display Name */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>Display Name</label>
+                <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} placeholder="Your display name" />
+              </div>
+
+              {/* Email */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>Email Address</label>
+                <input type="email" value={email} onChange={e => { setEmail(e.target.value); setEmailSent(false); setEmailError(""); }} style={inputStyle} placeholder="your@email.com" />
+                {email !== user.email && (
+                  <div style={{ fontSize: 11.5, color: T.accent, marginTop: 6 }}>A confirmation email will be sent to verify the new address.</div>
+                )}
+                {emailSent && (
+                  <div style={{ fontSize: 11.5, color: "#22c55e", marginTop: 6 }}>Confirmation email sent! Please check your inbox.</div>
+                )}
+                {emailError && (
+                  <div style={{ fontSize: 11.5, color: T.red, marginTop: 6 }}>{emailError}</div>
+                )}
+              </div>
+
+              {/* Phone */}
+              <div style={{ marginBottom: 24 }}>
+                <label style={labelStyle}>Phone Number <span style={{ fontWeight: 400, textTransform: "none" }}>(optional)</span></label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} placeholder="(555) 123-4567" />
+              </div>
+
+              <div style={{ height: 1, background: T.border, margin: "8px 0 24px" }} />
+
+              {/* Gender */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>Gender</label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {["Male", "Female", "Prefer not to answer"].map(opt => (
+                    <button key={opt} onClick={() => setGender(gender === opt ? "" : opt)} style={selectStyle(gender === opt)}>{opt}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Age Range */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>Age Range</label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {["18-24", "25-34", "35-44", "45-54", "55-64", "65+", "Prefer not to answer"].map(opt => (
+                    <button key={opt} onClick={() => setAgeRange(ageRange === opt ? "" : opt)} style={selectStyle(ageRange === opt)}>{opt}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Income */}
+              <div style={{ marginBottom: 24 }}>
+                <label style={labelStyle}>Household Income</label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {["Under $25k", "$25k-$50k", "$50k-$75k", "$75k-$100k", "$100k-$150k", "$150k+", "Prefer not to answer"].map(opt => (
+                    <button key={opt} onClick={() => setIncomeBracket(incomeBracket === opt ? "" : opt)} style={selectStyle(incomeBracket === opt)}>{opt}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Privacy note */}
+              <div style={{ padding: "12px 14px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}`, marginBottom: 24 }}>
+                <p style={{ fontSize: 11.5, color: T.textMuted, lineHeight: 1.6, margin: 0 }}>
+                  Your demographic information is optional and kept confidential. It is only used in aggregate to help churches better understand their communities.
+                </p>
+              </div>
+
+              {/* Save button */}
+              <button onClick={handleSaveProfile} disabled={saving || !displayName.trim()} style={{
+                width: "100%", padding: "12px", borderRadius: T.radiusSm, fontSize: 15, fontWeight: 600,
+                background: saved ? "#22c55e" : T.text, color: T.bg, border: "none",
+                cursor: saving ? "wait" : "pointer", fontFamily: T.body,
+                opacity: (saving || !displayName.trim()) ? 0.6 : 1, transition: "all 0.2s",
+              }}>{saving ? "Saving..." : saved ? "Saved!" : "Save Changes"}</button>
+
+              {/* Account info */}
+              <div style={{ marginTop: 32, padding: "16px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Account Info</div>
+                <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.8 }}>
+                  <div>Signed in via <strong style={{ color: T.text }}>{profileData?.provider || "email"}</strong></div>
+                  <div>Member since <strong style={{ color: T.text }}>{profileData?.created_at ? new Date(profileData.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "—"}</strong></div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return <FadeIn><MyProfilePage /></FadeIn>;
+      })()}
 
       <footer style={{ borderTop: `1px solid ${T.border}`, marginTop: 60 }}>
         <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 24px 24px" }}>
