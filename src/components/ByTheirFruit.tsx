@@ -696,6 +696,22 @@ export default function ByTheirFruit() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
+  // Toast notification system
+  const [toasts, setToasts] = useState([]);
+  const showToast = useCallback((message, type = "info") => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500);
+  }, []);
+
+  // Newsletter / email signup
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterSubmitting, setNewsletterSubmitting] = useState(false);
+  const [newsletterDone, setNewsletterDone] = useState(false);
+
+  // Platform stats for social proof
+  const [platformStats, setPlatformStats] = useState({ churches: 0, reviews: 0, users: 0 });
+
   useEffect(() => { setMounted(true); }, []);
 
   // Hash-based routing for shareable URLs and back button
@@ -817,6 +833,13 @@ export default function ByTheirFruit() {
         .select("*", { count: "exact", head: true });
       if (error) console.error("fetchChurches error:", error);
       setTotalChurchCount(count || 0);
+
+      // Fetch platform stats for social proof
+      const [reviewRes, userRes] = await Promise.all([
+        supabase.from("reviews").select("*", { count: "exact", head: true }).eq("status", "published"),
+        supabase.from("profiles").select("*", { count: "exact", head: true }),
+      ]);
+      setPlatformStats({ churches: count || 0, reviews: reviewRes.count || 0, users: userRes.count || 0 });
     } catch (err) {
       console.error("fetchChurches exception:", err);
       setTotalChurchCount(0);
@@ -1146,7 +1169,7 @@ export default function ByTheirFruit() {
       .single();
 
     if (profile?.review_suspended) {
-      alert("Your reviewing ability has been temporarily paused while we verify your recent reviews. This helps us keep By Their Fruit trustworthy for everyone. We'll have this resolved soon!");
+      showToast("Your reviewing ability has been temporarily paused while we verify your recent reviews. We'll have this resolved soon!", "warning");
       return false;
     }
 
@@ -1161,7 +1184,7 @@ export default function ByTheirFruit() {
         .gte("created_at", todayStart.toISOString());
 
       if (todayCount >= 3) {
-        alert("You've reached the daily limit of 3 reviews. This helps keep By Their Fruit fair and trustworthy. You can submit more reviews tomorrow!");
+        showToast("You've reached the daily limit of 3 reviews. You can submit more tomorrow!", "warning");
         return false;
       }
     }
@@ -1189,7 +1212,7 @@ export default function ByTheirFruit() {
 
     if (result.error) {
       console.error("Review submit error:", result.error);
-      alert("Failed to submit review: " + result.error.message);
+      showToast("Failed to submit review: " + result.error.message, "error");
       return false;
     }
 
@@ -1221,7 +1244,7 @@ export default function ByTheirFruit() {
                 })
                 .eq("id", userId);
 
-              alert("Thanks for your review! We noticed you've reviewed churches across several states. To keep By Their Fruit trustworthy, we'll verify your reviews before you can submit more. This usually takes 24-48 hours.");
+              showToast("Thanks for your review! We noticed activity across several states — we'll verify your reviews within 24-48 hours.", "info");
             }
           }
         }
@@ -1257,7 +1280,7 @@ export default function ByTheirFruit() {
   const submitClaimRequest = async (churchId) => {
     if (!user) { setShowAuthModal(true); return; }
     if (!claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) {
-      alert("Please fill in your name, role, and work email.");
+      showToast("Please fill in your name, role, and work email.", "error");
       return;
     }
     setClaimSubmitting(true);
@@ -1273,8 +1296,8 @@ export default function ByTheirFruit() {
 
     if (error) {
       setClaimSubmitting(false);
-      if (error.code === "23505") alert("You've already submitted a claim for this church.");
-      else alert("Failed to submit claim: " + error.message);
+      if (error.code === "23505") showToast("You've already submitted a claim for this church.", "warning");
+      else showToast("Failed to submit claim: " + error.message, "error");
       return;
     }
 
@@ -1328,7 +1351,7 @@ export default function ByTheirFruit() {
     });
     setResponseSubmitting(false);
     if (error) {
-      alert("Failed to post response: " + error.message);
+      showToast("Failed to post response: " + error.message, "error");
       return;
     }
     setResponseText("");
@@ -1358,7 +1381,7 @@ export default function ByTheirFruit() {
 
     if (existingReview && !canEdit) {
       const daysLeft = Math.ceil((7 * 24 * 60 * 60 * 1000 - (Date.now() - existingReview.postedAt)) / (24 * 60 * 60 * 1000));
-      alert(`You've already reviewed this church. You can edit your review in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`);
+      showToast(`You've already reviewed this church. You can edit your review in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`, "info");
       return;
     }
 
@@ -1385,7 +1408,7 @@ export default function ByTheirFruit() {
       const canEdit = Date.now() - existing.postedAt >= 7 * 24 * 60 * 60 * 1000;
       if (!canEdit) {
         const daysLeft = Math.ceil((7 * 24 * 60 * 60 * 1000 - (Date.now() - existing.postedAt)) / (24 * 60 * 60 * 1000));
-        alert(`You've already reviewed ${c.name}. You can edit your review in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`);
+        showToast(`You've already reviewed ${c.name}. You can edit in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`, "info");
         return;
       }
       setIsEditing(true);
@@ -1454,7 +1477,7 @@ export default function ByTheirFruit() {
       added_by: user.id,
     }).select().single();
 
-    if (error) { alert("Failed to add church: " + error.message); return; }
+    if (error) { showToast("Failed to add church: " + error.message, "error"); return; }
     const newChurch = dbChurchToLocal(data);
     setChurches(prev => [...prev, newChurch]);
     setShowAddChurch(false);
@@ -1533,11 +1556,29 @@ export default function ByTheirFruit() {
         </div>
       )}
 
+      {/* TOAST NOTIFICATIONS */}
+      {toasts.length > 0 && (
+        <div style={{ position: "fixed", top: 64, right: 20, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8, maxWidth: 380 }}>
+          {toasts.map(toast => (
+            <div key={toast.id} style={{
+              padding: "12px 18px", borderRadius: T.radiusSm,
+              background: toast.type === "error" ? T.redSoft : toast.type === "warning" ? T.amberSoft : toast.type === "success" ? T.greenSoft : T.surface,
+              border: `1.5px solid ${toast.type === "error" ? T.redBorder : toast.type === "warning" ? T.amberBorder : toast.type === "success" ? T.greenBorder : T.border}`,
+              color: toast.type === "error" ? T.red : toast.type === "warning" ? T.amber : toast.type === "success" ? T.green : T.text,
+              fontSize: 13, fontWeight: 500, fontFamily: T.body, lineHeight: 1.5,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.12)", animation: "modalIn 0.25s ease",
+            }}>
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* LOADING */}
       {loading && (
         <div style={{ textAlign: "center", padding: "120px 24px" }}>
           <div style={{ display: "inline-block", width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
-          <div style={{ fontSize: 14, color: T.textMuted, marginTop: 12 }}>Loading churches...</div>
+          <div style={{ fontSize: 14, color: T.textMuted, marginTop: 12 }}>Finding churches near you...</div>
         </div>
       )}
 
@@ -1567,14 +1608,62 @@ export default function ByTheirFruit() {
               ))}
             </div>
           </FadeIn>
+          {/* Social Proof Stats */}
+          {(platformStats.churches > 0 || platformStats.reviews > 0 || platformStats.users > 0) && (
+            <FadeIn delay={250}>
+              <div style={{ marginTop: 48, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                {[
+                  { value: platformStats.churches, label: "Churches Listed" },
+                  { value: platformStats.reviews, label: "Reviews Submitted" },
+                  { value: platformStats.users, label: "Community Members" },
+                ].map((stat, i) => (
+                  <div key={i} style={{ textAlign: "center", padding: "20px 16px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 32, fontWeight: 800, fontFamily: T.heading, color: T.accent, letterSpacing: "-0.03em" }}>{stat.value}</div>
+                    <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 500, marginTop: 2 }}>{stat.label}</div>
+                  </div>
+                ))}
+              </div>
+            </FadeIn>
+          )}
+
           <FadeIn delay={300}>
-            <div style={{ marginTop: 48, padding: "36px 32px", borderRadius: 14, background: T === DARK ? T.surfaceAlt : T.text, color: T === DARK ? T.text : T.bg }}>
+            <div style={{ marginTop: 24, padding: "36px 32px", borderRadius: 14, background: T === DARK ? T.surfaceAlt : T.text, color: T === DARK ? T.text : T.bg }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.35, marginBottom: 6 }}>Framework</div>
               <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>The 10 Measures</h2>
               <p style={{ fontSize: 13, opacity: 0.55, margin: "0 0 24px" }}>Ten categories rooted in what scripture says a church should be.</p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 6 }}>
                 {CATEGORIES.map((cat, i) => <div key={i} style={{ padding: "9px 13px", borderRadius: T.radiusSm, background: T === DARK ? T.surface : "rgba(255,255,255,0.06)", border: `1px solid ${T === DARK ? T.border : "rgba(255,255,255,0.08)"}` }}><span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.8 }}>{cat.label}</span></div>)}
               </div>
+            </div>
+          </FadeIn>
+
+          {/* Email Newsletter Signup */}
+          <FadeIn delay={400}>
+            <div style={{ marginTop: 24, padding: "32px", borderRadius: 14, background: T.accentSoft, border: `1.5px solid ${T.accentBorder}`, textAlign: "center" }}>
+              <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 6px", letterSpacing: "-0.02em", color: T.text }}>Stay in the loop</h3>
+              <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px", maxWidth: 400, marginLeft: "auto", marginRight: "auto" }}>Get church data insights, community polls, and updates on what congregations across America are saying.</p>
+              {newsletterDone ? (
+                <div style={{ padding: "12px 20px", borderRadius: T.radiusFull, background: T.greenSoft, border: `1px solid ${T.greenBorder}`, color: T.green, fontSize: 14, fontWeight: 600, display: "inline-block" }}>You're on the list!</div>
+              ) : (
+                <div style={{ display: "flex", gap: 8, maxWidth: 400, margin: "0 auto" }}>
+                  <input type="email" value={newsletterEmail} onChange={e => setNewsletterEmail(e.target.value)} placeholder="Enter your email" style={{ flex: 1, padding: "11px 16px", borderRadius: T.radiusFull, fontSize: 14, border: `1.5px solid ${T.accentBorder}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} onKeyDown={e => { if (e.key === "Enter") document.getElementById("btf-subscribe-btn")?.click(); }} />
+                  <button id="btf-subscribe-btn" disabled={newsletterSubmitting || !newsletterEmail.includes("@")} onClick={async () => {
+                    setNewsletterSubmitting(true);
+                    const { error } = await supabase.from("newsletter_subscribers").insert({ email: newsletterEmail.trim().toLowerCase() });
+                    setNewsletterSubmitting(false);
+                    if (error) {
+                      if (error.code === "23505") { setNewsletterDone(true); showToast("You're already subscribed!", "info"); }
+                      else showToast("Something went wrong. Please try again.", "error");
+                    } else {
+                      setNewsletterDone(true);
+                      showToast("Welcome to the community!", "success");
+                    }
+                  }} style={{ padding: "11px 24px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: newsletterSubmitting ? "wait" : "pointer", fontFamily: T.body, whiteSpace: "nowrap", opacity: (newsletterSubmitting || !newsletterEmail.includes("@")) ? 0.6 : 1 }}>
+                    {newsletterSubmitting ? "..." : "Subscribe"}
+                  </button>
+                </div>
+              )}
+              <p style={{ fontSize: 11, color: T.textMuted, margin: "12px 0 0" }}>No spam, ever. Unsubscribe anytime.</p>
             </div>
           </FadeIn>
         </div>
@@ -1711,6 +1800,42 @@ export default function ByTheirFruit() {
                   </div>
                 )}
               </div>
+
+              {/* Share Buttons */}
+              {(() => {
+                const shareUrl = `https://bytheirfruit.church/#/church/${c.id}/${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "")}`;
+                const shareText = rated ? `${c.name} is rated ${overall.toFixed(1)}/5 on By Their Fruit — real reviews from real congregants.` : `Check out ${c.name} on By Their Fruit — real reviews from real congregants.`;
+                return (
+                  <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, marginRight: 4 }}>Share:</span>
+                    {/* Copy Link */}
+                    <button onClick={() => { navigator.clipboard.writeText(shareUrl); showToast("Link copied to clipboard!", "success"); }} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body, transition: "all 0.15s" }} onMouseEnter={e => { e.currentTarget.style.background = T.accent; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = T.accent; }} onMouseLeave={e => { e.currentTarget.style.background = T.surfaceAlt; e.currentTarget.style.color = T.textSoft; e.currentTarget.style.borderColor = T.border; }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+                      Copy Link
+                    </button>
+                    {/* Text/SMS */}
+                    <a href={`sms:?body=${encodeURIComponent(shareText + " " + shareUrl)}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.greenSoft, color: T.green, border: `1px solid ${T.greenBorder}`, cursor: "pointer", fontFamily: T.body, textDecoration: "none", transition: "all 0.15s" }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                      Text
+                    </a>
+                    {/* Facebook */}
+                    <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: "#e8f0fe", color: "#1877f2", border: "1px solid #b6d4fe", cursor: "pointer", fontFamily: T.body, textDecoration: "none" }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                      Facebook
+                    </a>
+                    {/* X / Twitter */}
+                    <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.text, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body, textDecoration: "none" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                      Post
+                    </a>
+                    {/* Email */}
+                    <a href={`mailto:?subject=${encodeURIComponent("Check out " + c.name + " on By Their Fruit")}&body=${encodeURIComponent(shareText + "\n\n" + shareUrl)}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body, textDecoration: "none" }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                      Email
+                    </a>
+                  </div>
+                );
+              })()}
 
               {/* Contact & Info Card */}
               <div style={{ marginTop: 20, padding: "20px 24px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
