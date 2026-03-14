@@ -427,7 +427,6 @@ function AuthModal({ onClose, onAuth, mode: im }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
           {[
             { p: "google", l: "Continue with Google", i: <GoogleIcon /> },
-            { p: "facebook", l: "Continue with Facebook", i: <FacebookIcon /> },
             { p: "azure", l: "Continue with Microsoft", i: <MicrosoftIcon /> },
           ].map(({ p, l, i }) => (
             <button key={p} onClick={() => socialLogin(p)} disabled={loading} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "11px 16px", borderRadius: T.radiusSm, fontSize: 13.5, fontWeight: 500, fontFamily: T.body, background: T.surface, color: T.text, border: `1.5px solid ${T.border}`, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.6 : 1, transition: "all 0.15s" }}>{i}{l}</button>
