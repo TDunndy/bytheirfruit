@@ -56,7 +56,7 @@ function Badge({ status }) {
     moderator: { bg: "rgba(102,205,170,0.12)", color: "#66cdaa", border: "transparent" },
     user: { bg: T.surfaceAlt, color: T.textMuted, border: T.border },
   }[status] || { bg: T.surfaceAlt, color: T.textMuted, border: T.border };
-  return <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: T.radiusFull, background: s.bg, color: s.color, border: `1px solid ${s.border}`, textTransform: "uppercase", letterSpacing: "0.04em" }}>{status}</span>;
+  return <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: T.radiusFull, background: s.bg, color: s.color, border: `1px solid ${s.border}`, textTransform: "uppercase", letterSpacing: "0.04em", width: "fit-content", display: "inline-block" }}>{status}</span>;
 }
 
 function Button({ onClick, variant = "primary", children, disabled = false, style = {} }) {
@@ -871,12 +871,12 @@ export default function AdminDashboard() {
             }} />
 
             <div style={{ borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr auto auto 1fr auto", padding: "12px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 0.8fr", padding: "12px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 <span>Name</span><span>Provider</span><span>Role</span><span>Status</span><span>Joined</span><span>Actions</span>
               </div>
               {filteredUsers.map(u => (
                 <div key={u.id}>
-                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr auto auto 1fr auto", padding: "12px 16px", borderBottom: `1px solid ${T.borderLight}`, fontSize: 13, alignItems: "center" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 0.8fr", padding: "12px 16px", borderBottom: `1px solid ${T.borderLight}`, fontSize: 13, alignItems: "center" }}>
                     <div>
                       <span style={{ fontWeight: 600 }}>{u.display_name}</span>
                       {u.gender && <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 6 }}>({u.gender})</span>}
