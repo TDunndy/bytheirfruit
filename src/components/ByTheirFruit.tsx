@@ -169,7 +169,7 @@ function dbReviewToLocal(r) {
   });
   return {
     id: r.id,
-    author: r.profiles?.display_name || "Anonymous",
+    author: firstName(r.profiles?.display_name),
     role: r.reviewer_role,
     date: new Date(r.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
     text: r.text,
@@ -184,6 +184,11 @@ function dbReviewToLocal(r) {
       date: new Date(resp.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
     })),
   };
+}
+
+function firstName(name) {
+  if (!name) return "Anonymous";
+  return name.trim().split(/\s+/)[0];
 }
 
 /* --- HELPERS --- */
@@ -2742,7 +2747,7 @@ export default function ByTheirFruit() {
                           <div key={rev.id} style={{ padding: "16px", borderRadius: T.radiusSm, border: `1px solid ${T.borderLight}`, background: T.bg }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                               <div>
-                                <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{rev.profiles?.display_name || "Anonymous"}</span>
+                                <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{firstName(rev.profiles?.display_name)}</span>
                                 <span style={{ fontSize: 12, color: T.textMuted, marginLeft: 8 }}>{rev.reviewer_role}</span>
                               </div>
                               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
