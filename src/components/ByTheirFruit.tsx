@@ -107,6 +107,16 @@ const CATEGORIES = [
 
 const SCORE_FIELDS = ["teaching", "welcome", "community", "worship", "prayer", "kids", "youth", "leadership", "service", "finances"];
 
+/* --- HAVERSINE DISTANCE (miles) --- */
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 3958.8; // Earth radius in miles
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 /* --- DB MAPPERS --- */
 function dbChurchToLocal(c) {
   const scores = {};
@@ -145,6 +155,8 @@ function dbChurchToLocal(c) {
     recentReviews: [], // loaded separately
     claimedBy: c.claimed_by || null,
     claimedAt: c.claimed_at || null,
+    latitude: c.latitude || null,
+    longitude: c.longitude || null,
   };
 }
 
@@ -834,6 +846,10 @@ export default function ByTheirFruit() {
   const [addData, setAddData] = useState({ name: "", address: "", city: "", state: "FL", denomination: "", size: "", serviceTimes: "" });
   const [submitting, setSubmitting] = useState(false);
 
+  // Geolocation for review submissions
+  const [reviewerLocation, setReviewerLocation] = useState(null); // { lat, lng }
+  const [locationStatus, setLocationStatus] = useState("idle"); // idle | requesting | granted | denied | unavailable
+
   // Track user reviews: { churchId: { review, postedAt } }
   const [userReviews, setUserReviews] = useState({});
   const [isEditing, setIsEditing] = useState(false);
@@ -1216,7 +1232,7 @@ export default function ByTheirFruit() {
 
   /* --- SUBMIT REVIEW TO DB --- */
   const submitReviewToDB = async (reviewData, userId) => {
-    const { churchId, scores, comments, text, role, isEdit } = reviewData;
+    const { churchId, scores, comments, text, role, isEdit, reviewerLat, reviewerLng } = reviewData;
 
     // --- CHECK: Is user suspended from reviewing? ---
     const { data: profile } = await supabase
@@ -1246,11 +1262,24 @@ export default function ByTheirFruit() {
       }
     }
 
+    // Calculate distance if reviewer location and church location are available
+    const church = churches.find(c => c.id === churchId);
+    let distanceMiles = null;
+    let locationVerified = false;
+    if (reviewerLat && reviewerLng && church?.latitude && church?.longitude) {
+      distanceMiles = Math.round(haversineDistance(reviewerLat, reviewerLng, church.latitude, church.longitude) * 10) / 10;
+      locationVerified = true;
+    }
+
     const row = {
       church_id: churchId,
       user_id: userId,
       reviewer_role: role,
       text,
+      reviewer_lat: reviewerLat || null,
+      reviewer_lng: reviewerLng || null,
+      distance_miles: distanceMiles,
+      location_verified: locationVerified,
     };
     SCORE_FIELDS.forEach(f => {
       row[`score_${f}`] = scores[f] != null ? Math.round(scores[f]) : null;
@@ -1308,6 +1337,22 @@ export default function ByTheirFruit() {
       } catch (err) {
         console.error("Geo-flag check error:", err);
         // Don't block the review if the flag check fails
+      }
+    }
+
+    // --- DISTANCE FLAG: Auto-flag submissions 50+ miles from church ---
+    if (!isEdit && distanceMiles !== null && distanceMiles > 50) {
+      try {
+        await supabase
+          .from("profiles")
+          .update({
+            review_suspended: true,
+            suspension_reason: `Auto-flagged: submitted experience from ${Math.round(distanceMiles)} miles away from ${church?.name || "church"}`
+          })
+          .eq("id", userId);
+        showToast("Thanks for your submission! Because your location is far from this church, our team will verify it within 24-48 hours.", "info");
+      } catch (err) {
+        console.error("Distance flag error:", err);
       }
     }
 
@@ -1446,6 +1491,7 @@ export default function ByTheirFruit() {
     setRateSearch(""); setRateSkipped({});
     setShowAddChurch(false);
     setAddData({ name: "", address: "", city: "", state: "FL", denomination: "", size: "", serviceTimes: "" });
+    setReviewerLocation(null); setLocationStatus("idle");
 
     if (existingReview && canEdit) {
       setIsEditing(true);
@@ -1502,6 +1548,8 @@ export default function ByTheirFruit() {
       text: rateText,
       role: rateRole,
       isEdit: isEditing,
+      reviewerLat: reviewerLocation?.lat || null,
+      reviewerLng: reviewerLocation?.lng || null,
     };
 
     if (!user) {
@@ -2307,6 +2355,30 @@ export default function ByTheirFruit() {
               <div style={{ marginBottom: 16 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 7 }}>Your relationship</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{["First-time Visitor", "Repeat Visitor", "Member (< 1 yr)", "Member (1\u20133 yrs)", "Member (3+ yrs)", "Former Member"].map(r => <Chip key={r} active={rateRole === r} onClick={() => setRateRole(r)}>{r}</Chip>)}</div></div>
               <div style={{ marginBottom: 20 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your experience</label><textarea value={rateText} onChange={e => setRateText(e.target.value)} placeholder="Share your experience — what stood out, what could improve, what should a visitor know?" rows={5} maxLength={2000} style={{ width: "100%", padding: "12px 16px", borderRadius: T.radius, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", resize: "vertical", lineHeight: 1.65, fontFamily: T.body }} /></div>
               <div style={{ fontSize: 11, color: rateText.length >= 2000 ? T.red : rateText.length > 1800 ? T.amber : T.textMuted, marginBottom: 20 }}>{rateText.length}/2,000 characters</div>
+              {/* Location verification */}
+              <div style={{ padding: "14px 16px", borderRadius: T.radius, background: T.surfaceAlt, border: `1px solid ${T.border}`, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, fontFamily: T.heading, marginBottom: 2 }}>📍 Verify your location</div>
+                    <div style={{ fontSize: 11, color: T.textMuted }}>Optional — helps confirm you're near this church</div>
+                  </div>
+                  {locationStatus === "idle" && (
+                    <button onClick={() => {
+                      if (!navigator.geolocation) { setLocationStatus("unavailable"); return; }
+                      setLocationStatus("requesting");
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => { setReviewerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocationStatus("granted"); },
+                        () => { setLocationStatus("denied"); },
+                        { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+                      );
+                    }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Share Location</button>
+                  )}
+                  {locationStatus === "requesting" && <span style={{ fontSize: 11, color: T.textMuted }}>Requesting...</span>}
+                  {locationStatus === "granted" && <span style={{ fontSize: 11, color: T.green, fontWeight: 600 }}>✓ Location shared</span>}
+                  {locationStatus === "denied" && <span style={{ fontSize: 11, color: T.textMuted }}>Location declined</span>}
+                  {locationStatus === "unavailable" && <span style={{ fontSize: 11, color: T.textMuted }}>Not available</span>}
+                </div>
+              </div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 20 }}>
                 {Object.entries(rateScores).filter(([k]) => !rateSkipped[k]).map(([k, v]) => { const cat = CATEGORIES.find(c => c.id === k); const r = Math.round(v); return <span key={k} style={{ fontSize: 11, padding: "3px 10px", borderRadius: T.radiusFull, background: scoreBg(r), border: `1px solid ${scoreBorder2(r)}`, color: scoreColor(r), fontWeight: 700, fontFamily: T.heading }}>{cat?.label.split("&")[0].split("/")[0].trim()} {v.toFixed(1)}</span>; })}
                 {Object.keys(rateSkipped).filter(k => rateSkipped[k]).length > 0 && (
