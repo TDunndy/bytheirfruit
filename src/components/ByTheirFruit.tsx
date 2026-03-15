@@ -890,6 +890,11 @@ export default function ByTheirFruit() {
   // Reviewer history (for church owners to see a reviewer's other experiences)
   const [reviewerHistory, setReviewerHistory] = useState(null); // { userId, name, reviews: [] }
   const [reviewerHistoryLoading, setReviewerHistoryLoading] = useState(false);
+  // Church report modal
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportData, setReportData] = useState({ reason: "", description: "" });
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
 
   // My Churches state
   const [myChurchesData, setMyChurchesData] = useState({ reviewed: [], claimed: [] });
@@ -2043,6 +2048,11 @@ export default function ByTheirFruit() {
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                       Email
                     </a>
+                    {/* Report Church */}
+                    <button onClick={() => { setShowReportModal(true); setReportSubmitted(false); setReportData({ reason: "", description: "" }); }} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: "none", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body, transition: "all 0.15s" }} onMouseEnter={e => { e.currentTarget.style.color = T.red; e.currentTarget.style.borderColor = T.red; }} onMouseLeave={e => { e.currentTarget.style.color = T.textMuted; e.currentTarget.style.borderColor = T.border; }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                      Report
+                    </button>
                   </div>
                 );
               })()}
@@ -2275,6 +2285,67 @@ export default function ByTheirFruit() {
                       <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading }}>Email verified!</div>
                       <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4 }}>Redirecting you to set up your subscription...</div>
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Report Church Modal */}
+            {showReportModal && currentChurch && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowReportModal(false)}>
+                <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
+                  {reportSubmitted ? (
+                    <div style={{ textAlign: "center", padding: "12px 0" }}>
+                      <div style={{ width: 56, height: 56, borderRadius: 28, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>✔</div>
+                      <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.03em" }}>Report received</h2>
+                      <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 20px" }}>Thank you for helping us maintain the integrity of our platform. Our team will review this report.</p>
+                      <button onClick={() => setShowReportModal(false)} style={{ padding: "10px 28px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Close</button>
+                    </div>
+                  ) : (
+                    <>
+                      <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Report {currentChurch.name}</h2>
+                      <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px" }}>Help us keep By Their Fruit accurate. Flag this church if something seems off.</p>
+
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 10 }}>What's the issue?</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+                        {[
+                          { value: "not_christian", label: "Not a Christian church" },
+                          { value: "lgbtq_affirming", label: "LGBTQ+ affirming" },
+                          { value: "false_teaching", label: "False teaching" },
+                          { value: "cult_or_abusive", label: "Cult or abusive practices" },
+                          { value: "closed_or_moved", label: "Closed or moved" },
+                          { value: "duplicate", label: "Duplicate listing" },
+                          { value: "other", label: "Other" },
+                        ].map(opt => (
+                          <button key={opt.value} onClick={() => setReportData(p => ({ ...p, reason: opt.value }))} style={{
+                            padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.body, transition: "all 0.15s",
+                            background: reportData.reason === opt.value ? T.red : T.surfaceAlt,
+                            color: reportData.reason === opt.value ? "#fff" : T.textSoft,
+                            border: `1px solid ${reportData.reason === opt.value ? T.red : T.border}`,
+                          }}>{opt.label}</button>
+                        ))}
+                      </div>
+
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>Additional details (optional)</div>
+                      <textarea value={reportData.description} onChange={e => setReportData(p => ({ ...p, description: e.target.value }))} placeholder="Provide any additional context..." rows={3} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.text, fontSize: 13, fontFamily: T.body, resize: "vertical", outline: "none", boxSizing: "border-box" }} />
+
+                      <button disabled={!reportData.reason || reportSubmitting} onClick={async () => {
+                        setReportSubmitting(true);
+                        const { error } = await supabase.from("church_reports").insert({
+                          church_id: currentChurch.id,
+                          user_id: user?.id || null,
+                          reason: reportData.reason,
+                          description: reportData.description || null,
+                        });
+                        setReportSubmitting(false);
+                        if (error) { showToast("Failed to submit report. Please try again.", "error"); }
+                        else { setReportSubmitted(true); }
+                      }} style={{
+                        marginTop: 16, width: "100%", padding: "12px 24px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: T.body, transition: "all 0.2s",
+                        background: T.red, color: "#fff",
+                        opacity: (!reportData.reason || reportSubmitting) ? 0.5 : 1,
+                      }}>{reportSubmitting ? "Submitting..." : "Submit Report"}</button>
+                    </>
                   )}
                 </div>
               </div>

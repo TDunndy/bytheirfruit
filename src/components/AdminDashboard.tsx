@@ -214,6 +214,8 @@ export default function AdminDashboard() {
   const [churchReviewsModal, setChurchReviewsModal] = useState(null);
   const [churchReviewsList, setChurchReviewsList] = useState([]);
   const [toast, setToast] = useState(null);
+  const [churchReports, setChurchReports] = useState([]);
+  const [reportFilter, setReportFilter] = useState("pending");
 
   const showToast = (msg, color = T.green) => {
     setToast({ msg, color });
@@ -242,11 +244,12 @@ export default function AdminDashboard() {
 
   const fetchData = useCallback(async () => {
     setLoadingData(true);
-    const [usersRes, churchCountRes, reviewsRes, flagsRes] = await Promise.all([
+    const [usersRes, churchCountRes, reviewsRes, flagsRes, reportsRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("churches").select("*", { count: "exact", head: true }),
       supabase.from("reviews").select("*, profiles(display_name, id), churches(name, id, city, state)").order("created_at", { ascending: false }),
       supabase.from("review_flags").select("*").order("created_at", { ascending: false }),
+      supabase.from("church_reports").select("*, churches(name, city, state)").order("created_at", { ascending: false }),
     ]);
 
     if (usersRes.data) setUsers(usersRes.data);
@@ -254,6 +257,7 @@ export default function AdminDashboard() {
     setChurches([]);
     if (reviewsRes.data) setReviews(reviewsRes.data);
     if (flagsRes.data) setReviewFlags(flagsRes.data);
+    if (reportsRes.data) setChurchReports(reportsRes.data);
     setLoadingData(false);
   }, []);
 
@@ -504,6 +508,7 @@ export default function AdminDashboard() {
     { id: "reviews", label: "Reviews" },
     { id: "users", label: "Users" },
     { id: "churches", label: "Churches" },
+    { id: "reports", label: "Reports" },
     { id: "demographics", label: "Demographics" },
     { id: "settings", label: "Settings" },
   ];
@@ -1156,6 +1161,88 @@ export default function AdminDashboard() {
             </div>
           </>
         )}
+
+        {/* === CHURCH REPORTS === */}
+        {!loadingData && tab === "reports" && (() => {
+          const REASON_LABELS = { not_christian: "Not Christian", lgbtq_affirming: "LGBTQ+ Affirming", false_teaching: "False Teaching", cult_or_abusive: "Cult / Abusive", closed_or_moved: "Closed / Moved", duplicate: "Duplicate", other: "Other" };
+          const REASON_COLORS = { not_christian: T.amber, lgbtq_affirming: T.purple, false_teaching: T.red, cult_or_abusive: T.red, closed_or_moved: T.textMuted, duplicate: T.textMuted, other: T.textSoft };
+          const filtered = churchReports.filter(r => reportFilter === "all" ? true : r.status === reportFilter);
+          const pendingCount = churchReports.filter(r => r.status === "pending").length;
+          return (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+                <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Church Reports <span style={{ fontSize: 14, fontWeight: 500, color: T.textMuted }}>({churchReports.length})</span></h1>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {["pending", "reviewed", "actioned", "dismissed", "all"].map(f => (
+                    <button key={f} onClick={() => setReportFilter(f)} style={{
+                      padding: "5px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.body, border: "none",
+                      background: reportFilter === f ? T.text : T.surfaceAlt, color: reportFilter === f ? T.bg : T.textMuted,
+                    }}>{f.charAt(0).toUpperCase() + f.slice(1)} {f === "pending" && pendingCount > 0 ? `(${pendingCount})` : ""}</button>
+                  ))}
+                </div>
+              </div>
+
+              {filtered.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "60px 20px", color: T.textMuted }}>
+                  <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>🏳️</div>
+                  <div style={{ fontSize: 14 }}>No {reportFilter === "all" ? "" : reportFilter} reports</div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {filtered.map(report => (
+                    <div key={report.id} style={{ padding: "16px 20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                            <a href={`/#/church/${report.church_id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, color: T.accent, textDecoration: "none", letterSpacing: "-0.02em" }}>{report.churches?.name || "Unknown"}</a>
+                            <span style={{ fontSize: 12, color: T.textMuted }}>{report.churches?.city}, {report.churches?.state}</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: T.radiusFull, background: `${REASON_COLORS[report.reason] || T.textMuted}20`, color: REASON_COLORS[report.reason] || T.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>{REASON_LABELS[report.reason] || report.reason}</span>
+                            <span style={{ fontSize: 11, color: T.textMuted }}>{formatDateTime(report.created_at)}</span>
+                            <Badge status={report.status} />
+                          </div>
+                          {report.description && <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6, marginTop: 4 }}>{report.description}</div>}
+                          {report.admin_notes && <div style={{ fontSize: 12, color: T.amber, marginTop: 6, fontStyle: "italic" }}>Admin: {report.admin_notes}</div>}
+                        </div>
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                          {report.status === "pending" && (
+                            <>
+                              <Button variant="green" onClick={async () => {
+                                await supabase.from("church_reports").update({ status: "reviewed", reviewed_at: new Date().toISOString() }).eq("id", report.id);
+                                setChurchReports(prev => prev.map(r => r.id === report.id ? { ...r, status: "reviewed", reviewed_at: new Date().toISOString() } : r));
+                                showToast("Marked as reviewed");
+                              }}>Reviewed</Button>
+                              <Button variant="amber" onClick={async () => {
+                                await supabase.from("church_reports").update({ status: "actioned", reviewed_at: new Date().toISOString() }).eq("id", report.id);
+                                setChurchReports(prev => prev.map(r => r.id === report.id ? { ...r, status: "actioned", reviewed_at: new Date().toISOString() } : r));
+                                showToast("Report actioned");
+                              }}>Action</Button>
+                              <Button variant="secondary" onClick={async () => {
+                                await supabase.from("church_reports").update({ status: "dismissed", reviewed_at: new Date().toISOString() }).eq("id", report.id);
+                                setChurchReports(prev => prev.map(r => r.id === report.id ? { ...r, status: "dismissed", reviewed_at: new Date().toISOString() } : r));
+                                showToast("Report dismissed");
+                              }}>Dismiss</Button>
+                            </>
+                          )}
+                          <Button variant="secondary" onClick={async () => {
+                            if (confirm("Delete this church from the database? This cannot be undone.")) {
+                              await supabase.from("reviews").delete().eq("church_id", report.church_id);
+                              await supabase.from("church_reports").delete().eq("church_id", report.church_id);
+                              await supabase.from("churches").delete().eq("id", report.church_id);
+                              setChurchReports(prev => prev.filter(r => r.church_id !== report.church_id));
+                              showToast("Church deleted", T.red);
+                            }
+                          }}>Delete Church</Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* === SETTINGS === */}
         {!loadingData && tab === "settings" && (
