@@ -871,12 +871,12 @@ export default function AdminDashboard() {
             }} />
 
             <div style={{ borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 0.8fr", padding: "12px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(150px, 2fr) minmax(70px, 0.8fr) minmax(70px, 0.6fr) minmax(70px, 0.6fr) minmax(90px, 0.8fr) minmax(100px, 0.8fr)", gap: "0 12px", padding: "12px 16px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 <span>Name</span><span>Provider</span><span>Role</span><span>Status</span><span>Joined</span><span>Actions</span>
               </div>
               {filteredUsers.map(u => (
                 <div key={u.id}>
-                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 0.8fr", padding: "12px 16px", borderBottom: `1px solid ${T.borderLight}`, fontSize: 13, alignItems: "center" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(150px, 2fr) minmax(70px, 0.8fr) minmax(70px, 0.6fr) minmax(70px, 0.6fr) minmax(90px, 0.8fr) minmax(100px, 0.8fr)", gap: "0 12px", padding: "12px 16px", borderBottom: `1px solid ${T.borderLight}`, fontSize: 13, alignItems: "center" }}>
                     <div>
                       <span style={{ fontWeight: 600 }}>{u.display_name}</span>
                       {u.gender && <span style={{ fontSize: 10, color: T.textMuted, marginLeft: 6 }}>({u.gender})</span>}
