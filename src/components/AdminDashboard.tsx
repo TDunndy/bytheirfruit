@@ -885,7 +885,11 @@ export default function AdminDashboard() {
                     <Badge status={u.role} />
                     <Badge status={u.status} />
                     <span style={{ fontSize: 11, color: T.textMuted }}>{formatDate(u.created_at)}</span>
-                    <button onClick={() => setUserRoleModal(u)} style={{ fontSize: 11, color: T.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>Edit</button>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <button onClick={() => setExpandedUser(expandedUser === u.id ? null : u.id)} style={{ fontSize: 11, color: expandedUser === u.id ? T.textMuted : T.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>{expandedUser === u.id ? "Hide" : "Details"}</button>
+                      <span style={{ color: T.border }}>|</span>
+                      <button onClick={() => setUserRoleModal(u)} style={{ fontSize: 11, color: T.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>Edit</button>
+                    </div>
                   </div>
                   {expandedUser === u.id && (
                     <div style={{ padding: "16px", background: T.surfaceAlt, borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
@@ -907,11 +911,7 @@ export default function AdminDashboard() {
                         ))}
                         {reviews.filter(r => r.user_id === u.id).length === 0 && <div style={{ fontSize: 11, color: T.textMuted }}>No reviews</div>}
                       </div>
-                      <Button onClick={() => setExpandedUser(null)} variant="secondary">Collapse</Button>
                     </div>
-                  )}
-                  {expandedUser !== u.id && (
-                    <button onClick={() => setExpandedUser(u.id)} style={{ width: "100%", padding: "6px", fontSize: 10, color: T.accent, fontWeight: 600, background: "none", border: "none", borderBottom: `1px solid ${T.borderLight}`, cursor: "pointer", fontFamily: T.body }}>Details</button>
                   )}
                 </div>
               ))}
