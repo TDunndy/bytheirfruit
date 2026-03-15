@@ -842,6 +842,7 @@ export default function ByTheirFruit() {
   const [rateSkipped, setRateSkipped] = useState({});
   const [rateText, setRateText] = useState("");
   const [rateRole, setRateRole] = useState("");
+  const [rateLastVisited, setRateLastVisited] = useState("");
   const [showAddChurch, setShowAddChurch] = useState(false);
   const [addData, setAddData] = useState({ name: "", address: "", city: "", state: "FL", denomination: "", size: "", serviceTimes: "" });
   const [submitting, setSubmitting] = useState(false);
@@ -1232,7 +1233,7 @@ export default function ByTheirFruit() {
 
   /* --- SUBMIT REVIEW TO DB --- */
   const submitReviewToDB = async (reviewData, userId) => {
-    const { churchId, scores, comments, text, role, isEdit, reviewerLat, reviewerLng } = reviewData;
+    const { churchId, scores, comments, text, role, lastVisited, isEdit, reviewerLat, reviewerLng } = reviewData;
 
     // --- CHECK: Is user suspended from reviewing? ---
     const { data: profile } = await supabase
@@ -1276,6 +1277,7 @@ export default function ByTheirFruit() {
       user_id: userId,
       reviewer_role: role,
       text,
+      last_visited: lastVisited || null,
       reviewer_lat: reviewerLat || null,
       reviewer_lng: reviewerLng || null,
       distance_miles: distanceMiles,
@@ -1501,7 +1503,7 @@ export default function ByTheirFruit() {
       setRateRole(existingReview.review.role || "");
     } else {
       setIsEditing(false);
-      setRateScores({}); setRateComments({}); setRateText(""); setRateRole("");
+      setRateScores({}); setRateComments({}); setRateText(""); setRateRole(""); setRateLastVisited("");
     }
   };
 
@@ -1547,6 +1549,7 @@ export default function ByTheirFruit() {
       comments: filteredComments,
       text: rateText,
       role: rateRole,
+      lastVisited: rateLastVisited,
       isEdit: isEditing,
       reviewerLat: reviewerLocation?.lat || null,
       reviewerLng: reviewerLocation?.lng || null,
@@ -2353,6 +2356,7 @@ export default function ByTheirFruit() {
               <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Share your experience</h2>
               <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px" }}>Your honest experience helps families find the right church and helps churches grow.</p>
               <div style={{ marginBottom: 16 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 7 }}>Your relationship</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{["First-time Visitor", "Repeat Visitor", "Member (< 1 yr)", "Member (1\u20133 yrs)", "Member (3+ yrs)", "Former Member"].map(r => <Chip key={r} active={rateRole === r} onClick={() => setRateRole(r)}>{r}</Chip>)}</div></div>
+              <div style={{ marginBottom: 16 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 7 }}>Last visited</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{["This week", "This month", "1\u20133 months ago", "3\u20136 months ago", "6\u201312 months ago", "Over a year ago"].map(v => <Chip key={v} active={rateLastVisited === v} onClick={() => setRateLastVisited(v)}>{v}</Chip>)}</div></div>
               <div style={{ marginBottom: 20 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your experience</label><textarea value={rateText} onChange={e => setRateText(e.target.value)} placeholder="Share your experience — what stood out, what could improve, what should a visitor know?" rows={5} maxLength={2000} style={{ width: "100%", padding: "12px 16px", borderRadius: T.radius, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", resize: "vertical", lineHeight: 1.65, fontFamily: T.body }} /></div>
               <div style={{ fontSize: 11, color: rateText.length >= 2000 ? T.red : rateText.length > 1800 ? T.amber : T.textMuted, marginBottom: 20 }}>{rateText.length}/2,000 characters</div>
               {/* Location verification */}
@@ -2391,7 +2395,7 @@ export default function ByTheirFruit() {
                 <button onClick={() => setRateStep(1)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {!user && <span style={{ fontSize: 12, color: T.textMuted }}>Sign in required</span>}
-                  <button onClick={handleRateSubmit} disabled={!rateRole || !rateText.trim() || submitting} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!rateRole || !rateText.trim() || submitting) ? 0.3 : 1, boxShadow: "0 2px 8px rgba(37,99,235,0.2)" }}>{submitting ? "Submitting..." : !user ? "Sign In & Submit" : isEditing ? "Update Experience" : "Submit Experience"}</button>
+                  <button onClick={handleRateSubmit} disabled={!rateRole || !rateLastVisited || !rateText.trim() || submitting} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!rateRole || !rateLastVisited || !rateText.trim() || submitting) ? 0.3 : 1, boxShadow: "0 2px 8px rgba(37,99,235,0.2)" }}>{submitting ? "Submitting..." : !user ? "Sign In & Submit" : isEditing ? "Update Experience" : "Submit Experience"}</button>
                 </div>
               </div>
             </FadeIn>
