@@ -430,7 +430,7 @@ function AuthModal({ onClose, onAuth, mode: im }) {
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><Logo size={15} /></div>
           <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{mode === "signin" ? "Welcome back" : "Create your account"}</h2>
-          <p style={{ fontSize: 13, color: T.textMuted, margin: 0 }}>{mode === "signin" ? "Sign in to post your review" : "Sign up to share your experience"}</p>
+          <p style={{ fontSize: 13, color: T.textMuted, margin: 0 }}>{mode === "signin" ? "Sign in to share your experience" : "Sign up to share your experience"}</p>
         </div>
         {confirmMsg && (
           <div style={{ padding: "10px 14px", borderRadius: T.radiusSm, background: T.greenSoft, border: `1px solid ${T.greenBorder}`, color: T.green, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>{confirmMsg}</div>
@@ -613,7 +613,7 @@ function ReviewCard({ rev, delay = 0, userId }) {
     <FadeIn delay={delay}>
       <div style={{ padding: "20px 22px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, marginBottom: 8, position: "relative" }}>
         {rev.pending && (
-          <div style={{ position: "absolute", top: 12, right: 14, padding: "3px 8px", borderRadius: T.radiusFull, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, fontSize: 10, fontWeight: 600, color: T.amber }}>Score pending Saturday</div>
+          <div style={{ position: "absolute", top: 12, right: 14, padding: "3px 8px", borderRadius: T.radiusFull, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, fontSize: 10, fontWeight: 600, color: T.amber }}>Under review</div>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -681,7 +681,7 @@ function ReviewCard({ rev, delay = 0, userId }) {
         {rev._showResponseForm && (
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.borderLight}` }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: T.accent, marginBottom: 6 }}>Respond as church leadership:</div>
-            <textarea value={rev._responseText || ""} onChange={e => rev._onResponseChange(e.target.value)} rows={3} placeholder="Write a thoughtful response to this review..." style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.accentBorder}`, background: T.accentSoft, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical" }} />
+            <textarea value={rev._responseText || ""} onChange={e => rev._onResponseChange(e.target.value)} rows={3} placeholder="Write a thoughtful response to this experience..." style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.accentBorder}`, background: T.accentSoft, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical" }} />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
               <button onClick={() => rev._onCancelResponse()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
               <button onClick={() => rev._onSubmitResponse()} disabled={rev._responseSubmitting} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: rev._responseSubmitting ? 0.5 : 1 }}>{rev._responseSubmitting ? "Posting..." : "Post Response"}</button>
@@ -1241,7 +1241,7 @@ export default function ByTheirFruit() {
         .gte("created_at", todayStart.toISOString());
 
       if (todayCount >= 3) {
-        showToast("You've reached the daily limit of 3 reviews. You can submit more tomorrow!", "warning");
+        showToast("You've reached the daily limit of 3 experience submissions. You can submit more tomorrow!", "warning");
         return false;
       }
     }
@@ -1438,7 +1438,7 @@ export default function ByTheirFruit() {
 
     if (existingReview && !canEdit) {
       const daysLeft = Math.ceil((7 * 24 * 60 * 60 * 1000 - (Date.now() - existingReview.postedAt)) / (24 * 60 * 60 * 1000));
-      showToast(`You've already reviewed this church. You can edit your review in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`, "info");
+      showToast(`You've already shared your experience with this church. You can update your experience in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`, "info");
       return;
     }
 
@@ -1465,7 +1465,7 @@ export default function ByTheirFruit() {
       const canEdit = Date.now() - existing.postedAt >= 7 * 24 * 60 * 60 * 1000;
       if (!canEdit) {
         const daysLeft = Math.ceil((7 * 24 * 60 * 60 * 1000 - (Date.now() - existing.postedAt)) / (24 * 60 * 60 * 1000));
-        showToast(`You've already reviewed ${c.name}. You can edit in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`, "info");
+        showToast(`You've already shared your experience with ${c.name}. You can update in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`, "info");
         return;
       }
       setIsEditing(true);
@@ -1571,7 +1571,7 @@ export default function ByTheirFruit() {
 
         {/* Desktop nav */}
         <div className="btf-desktop-nav" style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          <button onClick={() => startRateFlow()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "rate" ? T.accent : T.accentSoft, color: page === "rate" ? "#fff" : T.accent, border: `1px solid ${page === "rate" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Rate a Church</button>
+          <button onClick={() => startRateFlow()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "rate" ? T.accent : T.accentSoft, color: page === "rate" ? "#fff" : T.accent, border: `1px solid ${page === "rate" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Share Your Experience</button>
           {["discover", "about"].map(id => (
             <button key={id} onClick={() => navigate(id)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.text : "transparent", color: page === id ? T.bg : T.textSoft, border: `1px solid ${page === id ? T.text : "transparent"}`, transition: "all 0.15s" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
           ))}
@@ -1600,7 +1600,7 @@ export default function ByTheirFruit() {
       {/* Mobile menu dropdown */}
       {mobileMenuOpen && (
         <div className="btf-mobile-menu" style={{ position: "sticky", top: 49, zIndex: 99, background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <button onClick={() => { startRateFlow(); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", textAlign: "left" }}>Rate a Church</button>
+          <button onClick={() => { startRateFlow(); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", textAlign: "left" }}>Share Your Experience</button>
           {["discover", "about"].map(id => (
             <button key={id} onClick={() => navigate(id)} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === id ? T.border : "transparent"}`, textAlign: "left" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
           ))}
@@ -1646,9 +1646,9 @@ export default function ByTheirFruit() {
             <div style={{ textAlign: "center", marginBottom: 64 }}>
               <div style={{ display: "inline-block", padding: "5px 14px", borderRadius: T.radiusFull, background: T.surfaceAlt, border: `1px solid ${T.border}`, fontSize: 12, fontWeight: 600, color: T.textSoft, marginBottom: 24 }}>Matthew 7:16</div>
               <h1 className="btf-hero-title" style={{ fontSize: 54, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.06, margin: "0 0 20px", letterSpacing: "-0.045em" }}>You will recognize<br />them by their fruit.</h1>
-              <p style={{ fontSize: 17, color: T.textSoft, lineHeight: 1.65, maxWidth: 480, margin: "0 auto 36px" }}>Churches tell you who they are. Their people show you. Real reviews from real congregants — honest, structured, and built to help churches grow.</p>
+              <p style={{ fontSize: 17, color: T.textSoft, lineHeight: 1.65, maxWidth: 480, margin: "0 auto 36px" }}>Churches tell you who they are. Their people show you. Real experiences from real congregants — honest, structured, and built to help churches grow.</p>
               <div className="btf-hero-buttons" style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                <button onClick={() => startRateFlow()} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, boxShadow: "0 2px 12px rgba(37,99,235,0.2)" }}>Rate a Church</button>
+                <button onClick={() => startRateFlow()} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, boxShadow: "0 2px 12px rgba(37,99,235,0.2)" }}>Share Your Experience</button>
                 <button onClick={() => navigate("discover")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Find a Church</button>
                 <button onClick={() => navigate("about")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: "transparent", color: T.text, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>How It Works</button>
               </div>
@@ -1671,7 +1671,7 @@ export default function ByTheirFruit() {
               <div style={{ marginTop: 48, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                 {[
                   { value: platformStats.churches, label: "Churches Listed" },
-                  { value: platformStats.reviews, label: "Reviews Submitted" },
+                  { value: platformStats.reviews, label: "Experiences Shared" },
                   { value: platformStats.users, label: "Community Members" },
                 ].map((stat, i) => (
                   <div key={i} style={{ textAlign: "center", padding: "20px 16px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
@@ -1686,8 +1686,8 @@ export default function ByTheirFruit() {
           <FadeIn delay={300}>
             <div style={{ marginTop: 24, padding: "36px 32px", borderRadius: 14, background: T === DARK ? T.surfaceAlt : T.text, color: T === DARK ? T.text : T.bg }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.35, marginBottom: 6 }}>Framework</div>
-              <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>The 10 Measures</h2>
-              <p style={{ fontSize: 13, opacity: 0.55, margin: "0 0 24px" }}>Ten categories rooted in what scripture says a church should be.</p>
+              <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>The 10 Church Experiences</h2>
+              <p style={{ fontSize: 13, opacity: 0.55, margin: "0 0 24px" }}>Ten areas of church life rooted in what scripture says a healthy church looks like.</p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 6 }}>
                 {CATEGORIES.map((cat, i) => <div key={i} style={{ padding: "9px 13px", borderRadius: T.radiusSm, background: T === DARK ? T.surface : "rgba(255,255,255,0.06)", border: `1px solid ${T === DARK ? T.border : "rgba(255,255,255,0.08)"}` }}><span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.8 }}>{cat.label}</span></div>)}
               </div>
@@ -1795,12 +1795,12 @@ export default function ByTheirFruit() {
                       {rated ? (
                         <div style={{ padding: "8px 14px", borderRadius: T.radiusSm, textAlign: "center", background: scoreBg(overall), border: `1px solid ${scoreBorder2(overall)}`, minWidth: 58 }}>
                           <div style={{ fontSize: 24, fontWeight: 800, fontFamily: T.heading, color: scoreColor(overall), lineHeight: 1 }}>{overall.toFixed(1)}</div>
-                          <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{church.totalReviews} reviews</div>
+                          <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{church.totalReviews} experiences</div>
                         </div>
                       ) : (
                         <div style={{ padding: "10px 14px", borderRadius: T.radiusSm, textAlign: "center", background: T.surfaceAlt, border: `1.5px dashed ${T.border}`, minWidth: 58 }}>
                           <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, lineHeight: 1.3 }}>Not yet<br />rated</div>
-                          {church.totalReviews > 0 && <div style={{ fontSize: 10, color: T.textMuted, marginTop: 3 }}>{church.totalReviews}/{MIN_REVIEWS_FOR_SCORE} reviews</div>}
+                          {church.totalReviews > 0 && <div style={{ fontSize: 10, color: T.textMuted, marginTop: 3 }}>{church.totalReviews}/{MIN_REVIEWS_FOR_SCORE} experiences</div>}
                         </div>
                       )}
                     </div>
@@ -1815,7 +1815,7 @@ export default function ByTheirFruit() {
             })}
           </div>
           <div style={{ marginTop: 20, padding: "18px 20px", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", transition: "all 0.15s" }} onClick={() => startRateFlow()} onMouseEnter={e => e.currentTarget.style.borderColor = T.accent} onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
-            <div><div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Don't see your church?</div><div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>Rate a church or add a new one to our directory.</div></div>
+            <div><div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Don't see your church?</div><div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>Share an experience or add a new church to our directory.</div></div>
             <div style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.accentSoft, color: T.accent, border: `1px solid ${T.accentBorder}`, flexShrink: 0 }}>Add Church</div>
           </div>
         </div>
@@ -1848,12 +1848,12 @@ export default function ByTheirFruit() {
                 {rated ? (
                   <div style={{ padding: "12px 20px", borderRadius: T.radius, textAlign: "center", background: scoreBg(overall), border: `1.5px solid ${scoreBorder2(overall)}` }}>
                     <div style={{ fontSize: 36, fontWeight: 800, fontFamily: T.heading, color: scoreColor(overall), lineHeight: 1 }}>{overall.toFixed(1)}</div>
-                    <div style={{ fontSize: 11, color: T.textMuted, marginTop: 3 }}>{c.totalReviews} reviews</div>
+                    <div style={{ fontSize: 11, color: T.textMuted, marginTop: 3 }}>{c.totalReviews} experiences</div>
                   </div>
                 ) : (
                   <div style={{ padding: "14px 20px", borderRadius: T.radius, textAlign: "center", background: T.surfaceAlt, border: `1.5px dashed ${T.border}` }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: T.textSoft }}>Not yet rated</div>
-                    <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{c.totalReviews > 0 ? `${c.totalReviews}/${MIN_REVIEWS_FOR_SCORE} reviews needed` : "Be the first to review"}</div>
+                    <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{c.totalReviews > 0 ? `${c.totalReviews}/${MIN_REVIEWS_FOR_SCORE} experiences needed` : "Be the first to share"}</div>
                   </div>
                 )}
               </div>
@@ -1861,7 +1861,7 @@ export default function ByTheirFruit() {
               {/* Share Buttons */}
               {(() => {
                 const shareUrl = `https://bytheirfruit.church/#/church/${c.id}/${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "")}`;
-                const shareText = rated ? `${c.name} is rated ${overall.toFixed(1)}/5 on By Their Fruit — real reviews from real congregants.` : `Check out ${c.name} on By Their Fruit — real reviews from real congregants.`;
+                const shareText = rated ? `${c.name} is rated ${overall.toFixed(1)}/5 on By Their Fruit — real experiences from real congregants.` : `Check out ${c.name} on By Their Fruit — real experiences from real congregants.`;
                 return (
                   <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, marginRight: 4 }}>Share:</span>
@@ -2133,9 +2133,9 @@ export default function ByTheirFruit() {
 
                 {c.recentReviews.length === 0 && (
                   <div style={{ padding: "40px 20px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: T.textSoft, marginBottom: 4 }}>No reviews yet</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: T.textSoft, marginBottom: 4 }}>No experiences yet</div>
                     <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Be the first to share your experience at {c.name}.</div>
-                    <button onClick={() => startRateFlow(c)} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Write the First Review</button>
+                    <button onClick={() => startRateFlow(c)} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Share Your Experience</button>
                   </div>
                 )}
 
@@ -2193,7 +2193,7 @@ export default function ByTheirFruit() {
                           <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{c.name}</div>
                           <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{c.denomination} · {c.city}, {c.state}</div>
                         </div>
-                        {c.totalReviews > 0 && <div style={{ padding: "3px 8px", borderRadius: T.radiusFull, fontSize: 10, background: T.surfaceAlt, color: T.textMuted, fontWeight: 600 }}>{c.totalReviews} reviews</div>}
+                        {c.totalReviews > 0 && <div style={{ padding: "3px 8px", borderRadius: T.radiusFull, fontSize: 10, background: T.surfaceAlt, color: T.textMuted, fontWeight: 600 }}>{c.totalReviews} experiences</div>}
                       </div>
                     ))}
                   </>
@@ -2236,7 +2236,28 @@ export default function ByTheirFruit() {
                 <div><div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{rateChurch.name}</div><div style={{ fontSize: 12, color: T.textSoft }}>{rateChurch.denomination} · {rateChurch.city}, {rateChurch.state}</div></div>
                 <button onClick={() => setRateStep(0)} style={{ fontSize: 12, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>Change</button>
               </div>
-              <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{isEditing ? "Update your ratings" : "Rate your experience"}</h2>
+
+              {/* Before You Share - Matthew 18 Guidance & Community Guidelines */}
+              <div style={{ padding: "16px 14px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}`, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
+                  <div style={{ fontSize: 18, marginTop: 2 }}>📖</div>
+                  <div>
+                    <h3 style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, margin: "0 0 6px", letterSpacing: "-0.01em" }}>Before You Share</h3>
+                    <p style={{ fontSize: 12, color: T.textSoft, lineHeight: 1.6, margin: "0 0 10px" }}>Scripture calls us to address personal grievances directly with our brothers and sisters before bringing them to a wider audience (Matthew 18:15-17). If your concern involves a specific person or a personal conflict, we encourage you to seek resolution privately first. This platform is for sharing your overall church experience, not for settling personal disputes.</p>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginBottom: 8, letterSpacing: "-0.01em" }}>Community Guidelines</div>
+                <ul style={{ fontSize: 11, color: T.textSoft, lineHeight: 1.7, margin: "0 0 0 16px", paddingLeft: 0 }}>
+                  <li>Share from your own firsthand experience — not secondhand stories or rumors</li>
+                  <li>Focus on your experience, not doctrinal debates (e.g., Calvinism vs. Arminianism disagreements will not be published)</li>
+                  <li>No naming specific individuals in a negative context</li>
+                  <li>No personal attacks, threats, or inflammatory language</li>
+                  <li>Coordinated review campaigns will be detected and removed</li>
+                  <li>Constructive criticism is welcome — help churches grow, don't tear them down</li>
+                </ul>
+              </div>
+
+              <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{isEditing ? "Update your ratings" : "Rate your church experience"}</h2>
               <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px" }}>Slide or tap stars. Only rate what you've experienced. Add optional comments to explain your rating.</p>
 
               {CATEGORY_GROUPS.map(group => (
@@ -2281,10 +2302,11 @@ export default function ByTheirFruit() {
                 <div><div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{rateChurch.name}</div><div style={{ fontSize: 12, color: T.textSoft }}>{Object.keys(rateScores).filter(k => !rateSkipped[k]).length} rated · {Object.keys(rateSkipped).filter(k => rateSkipped[k]).length} skipped · Avg {(() => { const vals = Object.entries(rateScores).filter(([k]) => !rateSkipped[k]).map(([,v]) => v); return vals.length ? (vals.reduce((a,b) => a+b, 0) / vals.length).toFixed(1) : "\u2014"; })()}</div></div>
                 <button onClick={() => setRateStep(1)} style={{ fontSize: 12, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>Edit Ratings</button>
               </div>
-              <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Tell your story</h2>
-              <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px" }}>Help other visitors and help this church grow.</p>
+              <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Share your experience</h2>
+              <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px" }}>Your honest experience helps families find the right church and helps churches grow.</p>
               <div style={{ marginBottom: 16 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 7 }}>Your relationship</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{["First-time Visitor", "Repeat Visitor", "Member (< 1 yr)", "Member (1\u20133 yrs)", "Member (3+ yrs)", "Former Member"].map(r => <Chip key={r} active={rateRole === r} onClick={() => setRateRole(r)}>{r}</Chip>)}</div></div>
-              <div style={{ marginBottom: 20 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your review</label><textarea value={rateText} onChange={e => setRateText(e.target.value)} placeholder="Be specific \u2014 what stood out, what could improve, what should a visitor know?" rows={5} style={{ width: "100%", padding: "12px 16px", borderRadius: T.radius, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", resize: "vertical", lineHeight: 1.65, fontFamily: T.body }} /></div>
+              <div style={{ marginBottom: 20 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your experience</label><textarea value={rateText} onChange={e => setRateText(e.target.value)} placeholder="Share your experience — what stood out, what could improve, what should a visitor know?" rows={5} maxLength={2000} style={{ width: "100%", padding: "12px 16px", borderRadius: T.radius, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", resize: "vertical", lineHeight: 1.65, fontFamily: T.body }} /></div>
+              <div style={{ fontSize: 11, color: rateText.length >= 2000 ? T.red : rateText.length > 1800 ? T.amber : T.textMuted, marginBottom: 20 }}>{rateText.length}/2,000 characters</div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 20 }}>
                 {Object.entries(rateScores).filter(([k]) => !rateSkipped[k]).map(([k, v]) => { const cat = CATEGORIES.find(c => c.id === k); const r = Math.round(v); return <span key={k} style={{ fontSize: 11, padding: "3px 10px", borderRadius: T.radiusFull, background: scoreBg(r), border: `1px solid ${scoreBorder2(r)}`, color: scoreColor(r), fontWeight: 700, fontFamily: T.heading }}>{cat?.label.split("&")[0].split("/")[0].trim()} {v.toFixed(1)}</span>; })}
                 {Object.keys(rateSkipped).filter(k => rateSkipped[k]).length > 0 && (
@@ -2297,7 +2319,7 @@ export default function ByTheirFruit() {
                 <button onClick={() => setRateStep(1)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {!user && <span style={{ fontSize: 12, color: T.textMuted }}>Sign in required</span>}
-                  <button onClick={handleRateSubmit} disabled={!rateRole || !rateText.trim() || submitting} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!rateRole || !rateText.trim() || submitting) ? 0.3 : 1, boxShadow: "0 2px 8px rgba(37,99,235,0.2)" }}>{submitting ? "Submitting..." : !user ? "Sign In & Submit" : isEditing ? "Update Review" : "Submit Review"}</button>
+                  <button onClick={handleRateSubmit} disabled={!rateRole || !rateText.trim() || submitting} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!rateRole || !rateText.trim() || submitting) ? 0.3 : 1, boxShadow: "0 2px 8px rgba(37,99,235,0.2)" }}>{submitting ? "Submitting..." : !user ? "Sign In & Submit" : isEditing ? "Update Experience" : "Submit Experience"}</button>
                 </div>
               </div>
             </FadeIn>
@@ -2308,12 +2330,12 @@ export default function ByTheirFruit() {
             <FadeIn>
               <div style={{ textAlign: "center", padding: "60px 0" }}>
                 <div style={{ width: 64, height: 64, borderRadius: 32, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 20px" }}>✔</div>
-                <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 8px", letterSpacing: "-0.03em" }}>{isEditing ? "Review updated" : "Review submitted"}</h2>
-                <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 4px" }}>Your review of <strong>{rateChurch?.name}</strong> has been {isEditing ? "updated" : "posted"}.</p>
-                <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 32px" }}>Scores will be recalculated this Saturday.</p>
+                <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 8px", letterSpacing: "-0.03em" }}>{isEditing ? "Experience updated" : "Experience submitted"}</h2>
+                <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 4px" }}>Your experience with <strong>{rateChurch?.name}</strong> has been submitted and is now under review.</p>
+                <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 32px" }}>Our team reviews every submission within 6-48 hours to ensure it meets our community guidelines. You'll see it published once approved.</p>
                 <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                   <button onClick={() => { const c = churches.find(ch => ch.id === rateChurch?.id); if (c) viewChurch(c); }} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>View Church Profile</button>
-                  <button onClick={() => startRateFlow()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Rate Another</button>
+                  <button onClick={() => startRateFlow()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Share Another Experience</button>
                 </div>
               </div>
             </FadeIn>
@@ -2335,7 +2357,7 @@ export default function ByTheirFruit() {
                 <p style={{ fontSize: 17, fontStyle: "italic", lineHeight: 1.6, margin: "0 0 8px", opacity: 0.85 }}>"Beware of false prophets, who come to you in sheep's clothing but inwardly are ravenous wolves. You will recognize them by their fruits."</p>
                 <div style={{ fontSize: 12, opacity: 0.4, fontWeight: 600 }}>Matthew 7:15–16 ESV</div>
               </div>
-              <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "36px 0 14px", letterSpacing: "-0.03em" }}>The 10 Measures</h3>
+              <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "36px 0 14px", letterSpacing: "-0.03em" }}>The 10 Church Experiences</h3>
               {CATEGORY_GROUPS.map(group => (
                 <div key={group.label} style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: T.textMuted, marginBottom: 8 }}>{group.label}</div>
@@ -2350,8 +2372,8 @@ export default function ByTheirFruit() {
                 </div>
               ))}
               <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "36px 0 10px", letterSpacing: "-0.03em" }}>Moderation</h3>
-              <p>Every review passes through AI moderation. We filter personal attacks, coordinated campaigns, and doctrinal arguments disguised as reviews. Users can flag reviews they believe are inappropriate.</p>
-              <p>Churches can respond to reviews publicly. They cannot delete, edit, or pay to suppress them.</p>
+              <p>Every experience submission is reviewed before publication. We filter personal attacks, coordinated campaigns, and doctrinal arguments disguised as experience ratings. Users can flag submissions they believe are inappropriate.</p>
+              <p>Churches can respond to experiences publicly. They cannot delete, edit, or pay to suppress them.</p>
             </div>
           </FadeIn>
         </div>
@@ -2383,7 +2405,7 @@ export default function ByTheirFruit() {
                     <button onClick={(e) => { e.stopPropagation(); toggleFavorite(ch.id); }} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: 4, lineHeight: 1 }}>❤️</button>
                     <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 2 }}>{ch.name}</div>
                     <div style={{ fontSize: 13, color: T.textMuted }}>{ch.denomination} &middot; {ch.city}, {ch.state}</div>
-                    {ch.scoreOverall && <div style={{ marginTop: 8, display: "inline-block", padding: "4px 10px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 700, fontFamily: T.heading, color: scoreColor(ch.scoreOverall), background: scoreBg(ch.scoreOverall), border: `1px solid ${scoreBorder2(ch.scoreOverall)}` }}>{ch.scoreOverall.toFixed(1)} &middot; {ch.totalReviews} review{ch.totalReviews !== 1 ? "s" : ""}</div>}
+                    {ch.scoreOverall && <div style={{ marginTop: 8, display: "inline-block", padding: "4px 10px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 700, fontFamily: T.heading, color: scoreColor(ch.scoreOverall), background: scoreBg(ch.scoreOverall), border: `1px solid ${scoreBorder2(ch.scoreOverall)}` }}>{ch.scoreOverall.toFixed(1)} &middot; {ch.totalReviews} experience{ch.totalReviews !== 1 ? "s" : ""}</div>}
                   </div>
                 ))}
               </div>
@@ -2421,7 +2443,7 @@ export default function ByTheirFruit() {
                       </div>
                       <div style={{ textAlign: "center" }}>
                         <div style={{ fontSize: 36, fontFamily: T.heading, fontWeight: 800, color: scoreColor(oc.scoreOverall || 0) }}>{oc.scoreOverall ? oc.scoreOverall.toFixed(1) : "—"}</div>
-                        <div style={{ fontSize: 11, color: T.textMuted }}>{oc.totalReviews} review{oc.totalReviews !== 1 ? "s" : ""}</div>
+                        <div style={{ fontSize: 11, color: T.textMuted }}>{oc.totalReviews} experience{oc.totalReviews !== 1 ? "s" : ""}</div>
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
@@ -2522,12 +2544,12 @@ export default function ByTheirFruit() {
                     </div>
                   )}
 
-                  {/* Recent Reviews with Response Ability */}
+                  {/* Recent Experiences with Response Ability */}
                   <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                    <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Reviews ({ownerReviews.length})</h3>
+                    <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Experiences ({ownerReviews.length})</h3>
                     {ownerReviews.length === 0 && (
                       <div style={{ padding: "32px 20px", textAlign: "center", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px dashed ${T.border}` }}>
-                        <div style={{ fontSize: 14, color: T.textMuted }}>No reviews yet. Share your church profile to get started.</div>
+                        <div style={{ fontSize: 14, color: T.textMuted }}>No experiences yet. Share your church profile to get started.</div>
                       </div>
                     )}
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -2882,13 +2904,13 @@ export default function ByTheirFruit() {
             {/* Brand column */}
             <div style={{ minWidth: 180 }}>
               <div style={{ marginBottom: 8 }}><Logo size={14} color={T.text} /></div>
-              <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.5, maxWidth: 260 }}>Real reviews from real congregants — honest, structured, and built to help churches grow.</div>
+              <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.5, maxWidth: 260 }}>Real experiences from real congregants — honest, structured, and built to help churches grow.</div>
             </div>
             {/* Navigation column */}
             <div style={{ minWidth: 120 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Explore</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[{ label: "Discover", page: "discover" }, { label: "Rate a Church", page: "rate" }, { label: "About", page: "about" }].map(link => (
+                {[{ label: "Discover", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "About", page: "about" }].map(link => (
                   <button key={link.page} onClick={() => { if (link.page === "rate") startRateFlow(); else navigate(link.page); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: T.textSoft, fontFamily: T.body, textAlign: "left" }} onMouseEnter={e => e.currentTarget.style.color = T.accent} onMouseLeave={e => e.currentTarget.style.color = T.textSoft}>{link.label}</button>
                 ))}
               </div>
