@@ -785,7 +785,7 @@ export default function AdminDashboard() {
                             <div>
                               <span style={{ fontSize: 13, fontWeight: 700 }}>{r.profiles?.display_name || "Anonymous"}</span>
                               <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 8 }}>{r.reviewer_role}</span>
-                              <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 8 }}>→ {r.churches?.name || "Unknown"}</span>
+                              <a href={`/#/profile/${r.church_id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, marginLeft: 8, textDecoration: "none", fontWeight: 600 }}>→ {r.churches?.name || "Unknown"}</a>
                             </div>
                           </div>
                         </div>
@@ -897,13 +897,13 @@ export default function AdminDashboard() {
                       <div style={{ marginBottom: 12 }}>
                         <div style={{ fontWeight: 600, color: T.textMuted, fontSize: 11, marginBottom: 6, textTransform: "uppercase" }}>User Reviews ({reviews.filter(r => r.user_id === u.id).length})</div>
                         {reviews.filter(r => r.user_id === u.id).slice(0, 5).map(r => (
-                          <div key={r.id} style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <a key={r.id} href={`/#/profile/${r.church_id}`} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", color: "inherit", cursor: "pointer" }}>
                             <div>
-                              <div style={{ fontWeight: 600 }}>{r.churches?.name}</div>
-                              <div style={{ fontSize: 11, color: T.textMuted }}>{formatDate(r.created_at)}</div>
+                              <div style={{ fontWeight: 600, color: T.accent }}>{r.churches?.name}</div>
+                              <div style={{ fontSize: 11, color: T.textMuted }}>{r.churches?.city}, {r.churches?.state} · {formatDate(r.created_at)}</div>
                             </div>
                             <Badge status={r.status} />
-                          </div>
+                          </a>
                         ))}
                         {reviews.filter(r => r.user_id === u.id).length === 0 && <div style={{ fontSize: 11, color: T.textMuted }}>No reviews</div>}
                       </div>
