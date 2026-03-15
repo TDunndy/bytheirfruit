@@ -871,6 +871,9 @@ export default function ByTheirFruit() {
   });
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimStatus, setClaimStatus] = useState(null); // null | 'pending' | 'approved' | 'rejected'
+  const [claimStep, setClaimStep] = useState("form"); // "form" | "verify" | "done"
+  const [verifyCodeInput, setVerifyCodeInput] = useState("");
+  const [verifyError, setVerifyError] = useState("");
   // Church owner response
   const [responseText, setResponseText] = useState("");
   const [respondingTo, setRespondingTo] = useState(null);
@@ -1381,14 +1384,45 @@ export default function ByTheirFruit() {
     setClaimStatus(data?.status || null);
   };
 
-  const submitClaimRequest = async (churchId) => {
+  // Step 1: Validate email domain and send verification code
+  const sendClaimVerification = async (churchId) => {
     if (!user) { setShowAuthModal(true); return; }
     if (!claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) {
       showToast("Please fill in your name, role, and work email.", "error");
       return;
     }
+
+    // Client-side domain check
+    const church = churches.find(c => c.id === churchId);
+    if (church?.website) {
+      try {
+        const websiteDomain = new URL(
+          church.website.startsWith("http") ? church.website : `https://${church.website}`
+        ).hostname.replace(/^www\./, "");
+        const emailDomain = claimData.workEmail.split("@")[1]?.toLowerCase();
+        if (emailDomain !== websiteDomain) {
+          showToast(`Your email must match the church website domain (@${websiteDomain})`, "error");
+          return;
+        }
+      } catch { /* skip domain check if URL parse fails */ }
+    }
+
     setClaimSubmitting(true);
-    const { error } = await supabase.from("claim_requests").insert({
+    setVerifyError("");
+
+    // Call edge function to generate code and send email
+    const { data, error } = await supabase.functions.invoke("send-verification-email", {
+      body: { churchId, claimEmail: claimData.workEmail, userId: user.id },
+    });
+
+    if (error || data?.error) {
+      setClaimSubmitting(false);
+      showToast(data?.error || error?.message || "Failed to send verification email", "error");
+      return;
+    }
+
+    // Also submit to claim_requests for record-keeping
+    await supabase.from("claim_requests").upsert({
       church_id: churchId,
       user_id: user.id,
       full_name: claimData.fullName,
@@ -1396,17 +1430,51 @@ export default function ByTheirFruit() {
       work_email: claimData.workEmail,
       phone: claimData.phone || null,
       message: claimData.message || null,
-    });
+    }, { onConflict: "church_id,user_id" });
 
-    if (error) {
+    setClaimSubmitting(false);
+    setClaimStep("verify");
+    showToast("Verification code sent to " + claimData.workEmail, "success");
+  };
+
+  // Step 2: Verify the code and proceed to payment
+  const verifyClaimCode = async (churchId) => {
+    if (!verifyCodeInput.trim()) return;
+    setClaimSubmitting(true);
+    setVerifyError("");
+
+    // Check code against church_claims table
+    const { data: claim, error } = await supabase
+      .from("church_claims")
+      .select("verification_code")
+      .eq("church_id", churchId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (error || !claim) {
       setClaimSubmitting(false);
-      if (error.code === "23505") showToast("You've already submitted a claim for this church.", "warning");
-      else showToast("Failed to submit claim: " + error.message, "error");
+      setVerifyError("No pending claim found. Please try again.");
       return;
     }
 
-    // Update church record with new fields
+    if (claim.verification_code !== verifyCodeInput.trim()) {
+      setClaimSubmitting(false);
+      setVerifyError("Incorrect code. Please check your email and try again.");
+      return;
+    }
+
+    // Code correct — mark as verified
+    await supabase.from("church_claims").update({
+      verified: true,
+      verified_at: new Date().toISOString(),
+    }).eq("church_id", churchId).eq("user_id", user.id);
+
+    // Update church record with claim info and form data
     await supabase.from("churches").update({
+      claimed_by: user.id,
+      claimed_at: new Date().toISOString(),
+      claim_email: claimData.workEmail,
+      claim_verified: true,
       service_days: claimData.serviceDays,
       avg_attendance: claimData.avgAttendance ? parseInt(claimData.avgAttendance) : null,
       staff_count: claimData.staffCount ? parseInt(claimData.staffCount) : null,
@@ -1426,21 +1494,27 @@ export default function ByTheirFruit() {
     }).eq("id", churchId);
 
     setClaimSubmitting(false);
+    setClaimStep("done");
     setClaimStatus("pending");
-    setShowClaimModal(false);
-    setClaimData({
-      fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "",
-      serviceDays: [{ day: "Sunday", times: "9:00 AM, 11:00 AM" }],
-      avgAttendance: "", staffCount: "", volunteerCount: "", campusCount: "1",
-      programs: [],
-      website: "", churchEmail: "", churchPhone: "",
-      facebook: "", instagram: "", youtube: "", livestream: "",
-      pastorName: "", yearFounded: "", description: ""
-    });
+    showToast("Email verified! Redirecting to payment...", "success");
 
     // Redirect to Stripe for $39/month subscription payment
-    const stripePaymentUrl = `https://buy.stripe.com/test_3cI3cvb1P6bC4GefFbgw000?prefilled_email=${encodeURIComponent(claimData.workEmail)}&client_reference_id=${encodeURIComponent(user.id)}`;
-    window.open(stripePaymentUrl, "_blank");
+    setTimeout(() => {
+      const stripePaymentUrl = `https://buy.stripe.com/test_3cI3cvb1P6bC4GefFbgw000?prefilled_email=${encodeURIComponent(claimData.workEmail)}&client_reference_id=${encodeURIComponent(user.id)}`;
+      window.open(stripePaymentUrl, "_blank");
+      setShowClaimModal(false);
+      setClaimStep("form");
+      setVerifyCodeInput("");
+      setClaimData({
+        fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "",
+        serviceDays: [{ day: "Sunday", times: "9:00 AM, 11:00 AM" }],
+        avgAttendance: "", staffCount: "", volunteerCount: "", campusCount: "1",
+        programs: [],
+        website: "", churchEmail: "", churchPhone: "",
+        facebook: "", instagram: "", youtube: "", livestream: "",
+        pastorName: "", yearFounded: "", description: ""
+      });
+    }, 1500);
   };
 
   /* --- CHURCH OWNER RESPONSE TO REVIEW --- */
@@ -2028,12 +2102,13 @@ export default function ByTheirFruit() {
             {showClaimModal && currentChurch && (
               <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowClaimModal(false)}>
                 <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
-                  <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Claim {currentChurch.name}</h2>
-                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 16px" }}>Tell us about your role at this church. After submitting, you'll be directed to set up your subscription.</p>
+                  <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{claimStep === "verify" ? "Verify your email" : claimStep === "done" ? "Verified!" : `Claim ${currentChurch.name}`}</h2>
+                  {claimStep === "form" && <>
+                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 16px" }}>Tell us about your role at this church. We'll verify your church email, then direct you to set up your subscription.</p>
                   <div style={{ padding: "12px 16px", borderRadius: T.radiusSm, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Church Subscription</div>
-                      <div style={{ fontSize: 11, color: T.textSoft, marginTop: 1 }}>Verified badge, respond to reviews, insights dashboard</div>
+                      <div style={{ fontSize: 11, color: T.textSoft, marginTop: 1 }}>Verified badge, respond to experiences, insights dashboard</div>
                     </div>
                     <div style={{ fontSize: 20, fontWeight: 800, fontFamily: T.heading, color: T.accent }}>$39<span style={{ fontSize: 12, fontWeight: 500, color: T.textMuted }}>/mo</span></div>
                   </div>
@@ -2138,10 +2213,41 @@ export default function ByTheirFruit() {
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-                    <button onClick={() => setShowClaimModal(false)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
-                    <button onClick={() => submitClaimRequest(currentChurch.id)} disabled={claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) ? 0.5 : 1 }}>{claimSubmitting ? "Submitting..." : "Continue to Payment →"}</button>
-                  </div>
+                  </>}
+                  {claimStep === "form" && (
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
+                      <button onClick={() => { setShowClaimModal(false); setClaimStep("form"); }} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
+                      <button onClick={() => sendClaimVerification(currentChurch.id)} disabled={claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) ? 0.5 : 1 }}>{claimSubmitting ? "Sending..." : "Verify Email →"}</button>
+                    </div>
+                  )}
+
+                  {claimStep === "verify" && (
+                    <div style={{ marginTop: 24 }}>
+                      <div style={{ padding: "20px", borderRadius: T.radius, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, textAlign: "center", marginBottom: 20 }}>
+                        <div style={{ fontSize: 28, marginBottom: 8 }}>📧</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 4 }}>Check your email</div>
+                        <div style={{ fontSize: 12, color: T.textSoft }}>We sent a 6-digit code to <strong>{claimData.workEmail}</strong></div>
+                      </div>
+                      <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Verification code</label>
+                      <input value={verifyCodeInput} onChange={e => { setVerifyCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setVerifyError(""); }} placeholder="Enter 6-digit code" maxLength={6} style={{ width: "100%", padding: "14px 16px", borderRadius: T.radiusSm, fontSize: 20, fontWeight: 700, letterSpacing: "6px", textAlign: "center", border: `1.5px solid ${verifyError ? T.red : T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: "monospace" }} />
+                      {verifyError && <div style={{ fontSize: 12, color: T.red, marginTop: 6 }}>{verifyError}</div>}
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+                        <button onClick={() => { setClaimStep("form"); setVerifyCodeInput(""); setVerifyError(""); }} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button onClick={() => sendClaimVerification(currentChurch.id)} disabled={claimSubmitting} style={{ padding: "10px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Resend</button>
+                          <button onClick={() => verifyClaimCode(currentChurch.id)} disabled={claimSubmitting || verifyCodeInput.length !== 6} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || verifyCodeInput.length !== 6) ? 0.5 : 1 }}>{claimSubmitting ? "Verifying..." : "Verify & Continue to Payment →"}</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {claimStep === "done" && (
+                    <div style={{ marginTop: 24, textAlign: "center", padding: "20px 0" }}>
+                      <div style={{ width: 56, height: 56, borderRadius: 28, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>✔</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading }}>Email verified!</div>
+                      <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4 }}>Redirecting you to set up your subscription...</div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
