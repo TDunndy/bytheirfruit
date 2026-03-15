@@ -169,7 +169,7 @@ function dbReviewToLocal(r) {
   });
   return {
     id: r.id,
-    author: firstName(r.profiles?.display_name),
+    author: r.profiles?.display_name || "Anonymous",
     role: r.reviewer_role,
     date: new Date(r.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
     text: r.text,
@@ -186,10 +186,12 @@ function dbReviewToLocal(r) {
   };
 }
 
-function firstName(name) {
+// Tiered name display: "public" = first name only, "church" = first + last initial, "admin" = full name
+function displayName(name, level = "public") {
   if (!name) return "Anonymous";
+  if (level === "admin") return name;
   const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return `${parts[0]} ${parts[1].charAt(0)}.`;
+  if (level === "church" && parts.length >= 2) return `${parts[0]} ${parts[1].charAt(0)}.`;
   return parts[0];
 }
 
@@ -587,7 +589,7 @@ function UserMenu({ user, onSignOut, onNavigate }) {
 }
 
 /* --- REVIEW CARD WITH FLAG + CATEGORY COMMENTS --- */
-function ReviewCard({ rev, delay = 0, userId }) {
+function ReviewCard({ rev, delay = 0, userId, nameLevel = "public" }) {
   const [flagged, setFlagged] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [likeCount, setLikeCount] = useState(rev.likeCount || 0);
@@ -636,9 +638,9 @@ function ReviewCard({ rev, delay = 0, userId }) {
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 26, height: 26, borderRadius: 13, background: rev.pending ? T.accent : T.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: rev.pending ? "#fff" : T.textMuted, fontFamily: T.heading, border: rev.pending ? "none" : `1px solid ${T.border}` }}>{rev.author.charAt(0)}</div>
+            <div style={{ width: 26, height: 26, borderRadius: 13, background: rev.pending ? T.accent : T.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: rev.pending ? "#fff" : T.textMuted, fontFamily: T.heading, border: rev.pending ? "none" : `1px solid ${T.border}` }}>{displayName(rev.author, nameLevel).charAt(0)}</div>
             <div>
-              <span style={{ fontSize: 13.5, fontWeight: 700, fontFamily: T.heading }}>{rev.author}</span>
+              <span style={{ fontSize: 13.5, fontWeight: 700, fontFamily: T.heading }}>{displayName(rev.author, nameLevel)}</span>
               <span style={{ fontSize: 12, color: T.textMuted, marginLeft: 8 }}>{rev.role}</span>
             </div>
           </div>
@@ -885,6 +887,9 @@ export default function ByTheirFruit() {
   const [responseText, setResponseText] = useState("");
   const [respondingTo, setRespondingTo] = useState(null);
   const [responseSubmitting, setResponseSubmitting] = useState(false);
+  // Reviewer history (for church owners to see a reviewer's other experiences)
+  const [reviewerHistory, setReviewerHistory] = useState(null); // { userId, name, reviews: [] }
+  const [reviewerHistoryLoading, setReviewerHistoryLoading] = useState(false);
 
   // My Churches state
   const [myChurchesData, setMyChurchesData] = useState({ reviewed: [], claimed: [] });
@@ -1543,6 +1548,22 @@ export default function ByTheirFruit() {
     setRespondingTo(null);
     // Refresh reviews to show the response
     await fetchReviewsForChurch(churchId);
+  };
+
+  // Fetch all reviews by a specific user (for church owners)
+  const fetchReviewerHistory = async (reviewerUserId, reviewerName) => {
+    setReviewerHistoryLoading(true);
+    const { data } = await supabase
+      .from("reviews")
+      .select("*, churches(name, city, state)")
+      .eq("user_id", reviewerUserId)
+      .order("created_at", { ascending: false });
+    setReviewerHistory({
+      userId: reviewerUserId,
+      name: displayName(reviewerName, "church"),
+      reviews: data || [],
+    });
+    setReviewerHistoryLoading(false);
   };
 
   /* --- HANDLE SIGN OUT --- */
@@ -2316,7 +2337,7 @@ export default function ByTheirFruit() {
                     _onResponseChange: (val) => setResponseText(val),
                     _onSubmitResponse: () => submitChurchResponse(rev.id, c.id),
                   } : rev;
-                  return <ReviewCard key={rev.id || i} rev={enrichedRev} delay={240 + i * 70} userId={user?.id} />;
+                  return <ReviewCard key={rev.id || i} rev={enrichedRev} delay={240 + i * 70} userId={user?.id} nameLevel={isOwner ? "church" : "public"} />;
                 })}
               </div>
             </div>
@@ -2749,7 +2770,7 @@ export default function ByTheirFruit() {
                           <div key={rev.id} style={{ padding: "16px", borderRadius: T.radiusSm, border: `1px solid ${T.borderLight}`, background: T.bg }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                               <div>
-                                <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{firstName(rev.profiles?.display_name)}</span>
+                                <button onClick={() => fetchReviewerHistory(rev.user_id, rev.profiles?.display_name)} style={{ fontWeight: 600, fontSize: 14, color: T.accent, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: T.body, textDecoration: "underline", textDecorationColor: "transparent" }} onMouseEnter={e => e.target.style.textDecorationColor = T.accent} onMouseLeave={e => e.target.style.textDecorationColor = "transparent"}>{displayName(rev.profiles?.display_name, "church")}</button>
                                 <span style={{ fontSize: 12, color: T.textMuted, marginLeft: 8 }}>{rev.reviewer_role}</span>
                               </div>
                               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2780,6 +2801,45 @@ export default function ByTheirFruit() {
                 </div>
               );
             })()}
+
+            {/* Reviewer History Modal */}
+            {reviewerHistory && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setReviewerHistory(null)}>
+                <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "28px 24px", maxWidth: 520, width: "100%", maxHeight: "80vh", overflow: "auto" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                    <div>
+                      <h3 style={{ fontSize: 18, fontFamily: T.heading, fontWeight: 800, margin: "0 0 2px", letterSpacing: "-0.02em" }}>All experiences by {reviewerHistory.name}</h3>
+                      <div style={{ fontSize: 12, color: T.textMuted }}>{reviewerHistory.reviews.length} experience{reviewerHistory.reviews.length !== 1 ? "s" : ""} across all churches</div>
+                    </div>
+                    <button onClick={() => setReviewerHistory(null)} style={{ fontSize: 18, background: "none", border: "none", color: T.textMuted, cursor: "pointer" }}>✕</button>
+                  </div>
+                  {reviewerHistoryLoading && <div style={{ textAlign: "center", padding: "30px 0", color: T.textMuted }}>Loading...</div>}
+                  {!reviewerHistoryLoading && reviewerHistory.reviews.map(r => {
+                    const scores = SCORE_FIELDS.map(f => r[`score_${f}`]).filter(v => v != null);
+                    const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+                    return (
+                      <div key={r.id} style={{ padding: "14px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <div>
+                            <span style={{ fontWeight: 700, fontSize: 13, fontFamily: T.heading }}>{r.churches?.name || "Unknown"}</span>
+                            <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 8 }}>{r.churches?.city}, {r.churches?.state}</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            {avg && <span style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, color: scoreColor(avg) }}>{avg.toFixed(1)}</span>}
+                            <span style={{ fontSize: 11, color: T.textMuted }}>{new Date(r.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 4 }}>{r.reviewer_role}{r.last_visited ? ` · Last visited: ${r.last_visited}` : ""}</div>
+                        {r.text && <p style={{ fontSize: 13, color: T.textSoft, margin: "4px 0 0", lineHeight: 1.6 }}>{r.text}</p>}
+                      </div>
+                    );
+                  })}
+                  {!reviewerHistoryLoading && reviewerHistory.reviews.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "30px 0", color: T.textMuted }}>No experiences found</div>
+                  )}
+                </div>
+              </div>
+            )}
           </FadeIn>
         </div>
       )}
