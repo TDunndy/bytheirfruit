@@ -908,6 +908,51 @@ export default function ByTheirFruit() {
   const [savedChurches, setSavedChurches] = useState(null);
   const [hasClaimed, setHasClaimed] = useState(false);
 
+  // Cookie consent state
+  const [cookieConsent, setCookieConsent] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("btf_cookie_consent");
+      return stored ? JSON.parse(stored) : null; // null = not yet decided
+    }
+    return null;
+  });
+
+  // Load analytics scripts when consent is given
+  useEffect(() => {
+    if (!cookieConsent || !cookieConsent.marketing) return;
+    // Google Analytics (GA4) — replace G-XXXXXXXXXX with your actual ID
+    if (!document.getElementById("gtag-script")) {
+      const gtagId = "G-XXXXXXXXXX"; // TODO: Replace with real GA4 Measurement ID
+      const s1 = document.createElement("script");
+      s1.id = "gtag-script";
+      s1.async = true;
+      s1.src = `https://www.googletagmanager.com/gtag/js?id=${gtagId}`;
+      document.head.appendChild(s1);
+      const s2 = document.createElement("script");
+      s2.textContent = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${gtagId}');`;
+      document.head.appendChild(s2);
+    }
+    // Facebook Pixel — replace PIXEL_ID with your actual ID
+    if (!document.getElementById("fb-pixel")) {
+      const pixelId = "PIXEL_ID"; // TODO: Replace with real Facebook Pixel ID
+      const s = document.createElement("script");
+      s.id = "fb-pixel";
+      s.textContent = `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${pixelId}');fbq('track','PageView');`;
+      document.head.appendChild(s);
+    }
+  }, [cookieConsent]);
+
+  const handleCookieConsent = (acceptAll) => {
+    const consent = {
+      essential: true, // always on
+      analytics: acceptAll,
+      marketing: acceptAll,
+      timestamp: new Date().toISOString(),
+    };
+    setCookieConsent(consent);
+    localStorage.setItem("btf_cookie_consent", JSON.stringify(consent));
+  };
+
 
   /* --- SEARCH CHURCHES FROM DB (server-side) --- */
   const [searchLoading, setSearchLoading] = useState(false);
@@ -2339,7 +2384,19 @@ export default function ByTheirFruit() {
                         });
                         setReportSubmitting(false);
                         if (error) { showToast("Failed to submit report. Please try again.", "error"); }
-                        else { setReportSubmitted(true); }
+                        else {
+                          setReportSubmitted(true);
+                          // Send admin notification email (fire and forget)
+                          supabase.functions.invoke("notify-admin-report", {
+                            body: {
+                              churchName: currentChurch.name,
+                              churchCity: currentChurch.city,
+                              churchState: currentChurch.state,
+                              reason: reportData.reason,
+                              description: reportData.description || "",
+                            },
+                          }).catch(() => {}); // Don't block on notification failure
+                        }
                       }} style={{
                         marginTop: 16, width: "100%", padding: "12px 24px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: T.body, transition: "all 0.2s",
                         background: T.red, color: "#fff",
@@ -3008,7 +3065,7 @@ export default function ByTheirFruit() {
               <p>Depending on your jurisdiction, you may have the right to: access, correct, or delete your personal information; object to or restrict certain processing of your information; request a portable copy of your information; and withdraw consent where processing is based on consent. To exercise any of these rights, contact us at <a href="mailto:info@bytheirfruit.church" style={{ color: T.accent }}>info@bytheirfruit.church</a>. We will respond to your request within 30 days.</p>
 
               <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>7. Cookies and Tracking Technologies</h2>
-              <p>The Service uses cookies and similar technologies for authentication and session management. We use essential cookies required for the Service to function (such as login session tokens). We do not use advertising cookies or third-party tracking cookies for behavioral advertising. You can control cookies through your browser settings, but disabling essential cookies may prevent you from using certain features of the Service.</p>
+              <p>The Service uses cookies and similar technologies for authentication, session management, analytics, and marketing. We use three categories of cookies: (1) <strong>Essential cookies</strong> required for the Service to function, such as login session tokens and cookie consent preferences; (2) <strong>Analytics cookies</strong> (Google Analytics) to understand how visitors use the Service, helping us improve the experience; and (3) <strong>Marketing cookies</strong> (Facebook Pixel, Google Ads) used for retargeting and measuring ad effectiveness. When you first visit the site, you can choose to accept all cookies or only essential ones via our consent banner. You can change your preference at any time by clearing your browser cookies and revisiting the site. Disabling essential cookies may prevent you from using certain features of the Service.</p>
 
               <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>8. Children's Privacy</h2>
               <p>The Service is not directed to children under the age of 18. We do not knowingly collect personal information from children under 18. If we learn that we have collected personal information from a child under 18, we will take steps to delete such information promptly. If you believe a child under 18 has provided us with personal information, please contact us at <a href="mailto:info@bytheirfruit.church" style={{ color: T.accent }}>info@bytheirfruit.church</a>.</p>
@@ -3375,6 +3432,38 @@ export default function ByTheirFruit() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Cookie Consent Banner */}
+      {cookieConsent === null && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10000,
+          background: darkMode ? "rgba(24,24,27,0.97)" : "rgba(255,255,255,0.97)",
+          backdropFilter: "blur(12px)", borderTop: `1px solid ${T.border}`,
+          padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 16, flexWrap: "wrap",
+          boxShadow: "0 -4px 24px rgba(0,0,0,0.12)",
+        }}>
+          <div style={{ flex: 1, minWidth: 240, maxWidth: 620 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 4, fontFamily: T.heading }}>We value your privacy</div>
+            <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.5, fontFamily: T.body }}>
+              We use cookies and similar technologies to improve your experience, analyze traffic, and for marketing purposes. You can choose to accept all cookies or only essential ones.{" "}
+              <a onClick={() => setCurrentPage("privacy")} style={{ color: T.accent, cursor: "pointer", textDecoration: "underline" }}>Privacy Policy</a>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <button onClick={() => handleCookieConsent(false)} style={{
+              padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600,
+              background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`,
+              cursor: "pointer", fontFamily: T.body, transition: "all 0.15s",
+            }}>Essential Only</button>
+            <button onClick={() => handleCookieConsent(true)} style={{
+              padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600,
+              background: T.accent, color: "#fff", border: "none",
+              cursor: "pointer", fontFamily: T.body, transition: "all 0.15s",
+            }}>Accept All</button>
           </div>
         </div>
       )}
