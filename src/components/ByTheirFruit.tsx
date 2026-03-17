@@ -1890,7 +1890,7 @@ export default function ByTheirFruit() {
         <div style={{ maxWidth: 840, margin: "0 auto", padding: "36px 24px" }}>
           <FadeIn>
             <h2 style={{ fontSize: 26, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Discover churches</h2>
-            <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 20px" }}>Rated by the people who attend — not the church itself.</p>
+            
           </FadeIn>
           <FadeIn delay={80}>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
