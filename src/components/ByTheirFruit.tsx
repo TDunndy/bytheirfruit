@@ -319,13 +319,13 @@ function RatingSlider({ label, desc, value, onChange, comment, onCommentChange, 
             ))}
           </div>
           <div style={{ position: "relative", height: 28, display: "flex", alignItems: "center" }}>
-            <div style={{ position: "absolute", left: 0, right: 0, height: 6, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
-              <div style={{ height: "100%", borderRadius: 3, width: `${fillPct}%`, background: `linear-gradient(90deg, ${sliderColor}cc, ${sliderColor})`, transition: "width 0.15s ease" }} />
+            <div style={{ position: "absolute", left: 0, right: 0, height: 8, borderRadius: 4, background: T.surfaceAlt, overflow: "hidden" }}>
+              <div style={{ height: "100%", borderRadius: 4, width: `${fillPct}%`, background: `linear-gradient(90deg, ${sliderColor}, ${sliderColor})`, transition: "width 0.15s ease" }} />
             </div>
             <input type="range" min="1" max="5" step="0.1" value={value || 1} onChange={e => onChange(parseFloat(e.target.value))}
               style={{ position: "absolute", left: -2, right: -2, top: 0, width: "calc(100% + 4px)", height: 28, opacity: 0, cursor: "pointer", margin: 0 }} />
             {value > 0 && (
-              <div style={{ position: "absolute", left: `${fillPct}%`, transform: "translateX(-50%)", width: 16, height: 16, borderRadius: 8, background: sliderColor, border: "2px solid #fff", boxShadow: `0 1px 4px ${sliderColor}44`, transition: "left 0.15s ease", pointerEvents: "none" }} />
+              <div style={{ position: "absolute", left: `${fillPct}%`, transform: "translateX(-50%)", width: 20, height: 20, borderRadius: 10, background: sliderColor, border: "2.5px solid #fff", boxShadow: `0 1px 4px ${sliderColor}44`, transition: "left 0.15s ease", pointerEvents: "none" }} />
             )}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2, marginBottom: value > 0 ? 6 : 0 }}>
@@ -2864,6 +2864,24 @@ export default function ByTheirFruit() {
                               </div>
                             </div>
                             {rev.text && <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 10px", lineHeight: 1.6 }}>{rev.text}</p>}
+                            {/* Category Score Bars */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+                              {SCORE_FIELDS.map(f => {
+                                const s = rev[`score_${f}`];
+                                if (s == null) return null;
+                                const cat = CATEGORIES.find(c => c.id === f);
+                                const pct = ((s - 1) / 4) * 100;
+                                return (
+                                  <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 500, width: 90, flexShrink: 0 }}>{cat?.label.split("&")[0].split("/")[0].trim()}</div>
+                                    <div style={{ flex: 1, height: 6, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden", position: "relative" }}>
+                                      <div style={{ height: "100%", borderRadius: 3, width: `${pct}%`, background: `linear-gradient(90deg, ${scoreColor(s)}, ${scoreColor(s)})`, transition: "width 0.3s ease" }} />
+                                    </div>
+                                    <div style={{ fontSize: 11, fontWeight: 700, fontFamily: T.heading, color: scoreColor(s), minWidth: 24, textAlign: "right" }}>{s}</div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                             {/* Response actions */}
                             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                               {respondingTo === rev.id ? (
