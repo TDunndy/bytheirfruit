@@ -756,6 +756,10 @@ export default function ByTheirFruit() {
   const [filterState, setFilterState] = useState("All");
   const [filterCity, setFilterCity] = useState("");
   const [filterZip, setFilterZip] = useState("");
+  const [nearMeActive, setNearMeActive] = useState(false);
+  const [nearMeLocation, setNearMeLocation] = useState(null);
+  const [nearMeLoading, setNearMeLoading] = useState(false);
+  const [nearMeDistances, setNearMeDistances] = useState({});
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileComplete, setShowProfileComplete] = useState(false);
@@ -973,9 +977,75 @@ export default function ByTheirFruit() {
     }
   }, []);
 
+  /* --- NEAR ME: geolocation search --- */
+  const searchNearMe = useCallback(async (lat, lng) => {
+    setSearchLoading(true);
+    try {
+      // Fetch churches that have coordinates, up to 200
+      const { data, error } = await supabase
+        .from("churches")
+        .select("*")
+        .not("latitude", "is", null)
+        .not("longitude", "is", null)
+        .limit(500);
+      if (error) { console.error("Near me error:", error); return; }
+      if (!data) return;
+      // Calculate distances and sort
+      const withDist = data.map(c => ({
+        ...c,
+        _dist: haversineDistance(lat, lng, c.latitude, c.longitude)
+      })).sort((a, b) => a._dist - b._dist).slice(0, 50);
+      const distMap = {};
+      withDist.forEach(c => { distMap[c.id] = c._dist; });
+      setNearMeDistances(distMap);
+      setChurches(withDist.map(dbChurchToLocal));
+    } catch (err) {
+      console.error("Near me exception:", err);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  const handleNearMe = useCallback(() => {
+    if (nearMeActive) {
+      // Turn off near me
+      setNearMeActive(false);
+      setNearMeLocation(null);
+      setNearMeDistances({});
+      setChurches([]);
+      return;
+    }
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+    setNearMeLoading(true);
+    setDiscoverSearchQuery("");
+    setFilterState("All");
+    setFilterCity("");
+    setFilterZip("");
+    setFilterDenom("All");
+    setCurrentPage(1);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setNearMeLocation(loc);
+        setNearMeActive(true);
+        setNearMeLoading(false);
+        searchNearMe(loc.lat, loc.lng);
+      },
+      (err) => {
+        setNearMeLoading(false);
+        if (err.code === 1) alert("Location access was denied. Please allow location access in your browser settings to use this feature.");
+        else alert("Could not determine your location. Please try again.");
+      },
+      { enableHighAccuracy: false, timeout: 10000 }
+    );
+  }, [nearMeActive, searchNearMe]);
+
   // Debounced search for Discover page
   useEffect(() => {
-    if (page !== "discover") return;
+    if (page !== "discover" || nearMeActive) return;
     const timer = setTimeout(() => {
       searchChurchesDB(discoverSearchQuery, filterDenom, filterState, filterCity, filterZip);
     }, 300);
@@ -1894,7 +1964,13 @@ export default function ByTheirFruit() {
           </FadeIn>
           <FadeIn delay={80}>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-              <input value={discoverSearchQuery} onChange={e => { setDiscoverSearchQuery(e.target.value); setCurrentPage(1); }} placeholder="Search church name..." style={{ width: "100%", padding: "11px 16px", borderRadius: T.radiusFull, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} />
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input value={discoverSearchQuery} onChange={e => { setDiscoverSearchQuery(e.target.value); setCurrentPage(1); if (nearMeActive) { setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); } }} placeholder="Search church name..." style={{ width: "100%", padding: "11px 16px", borderRadius: T.radiusFull, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} />
+                <button onClick={handleNearMe} disabled={nearMeLoading} style={{ padding: "11px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: nearMeLoading ? "wait" : "pointer", background: nearMeActive ? T.accent : T.surface, color: nearMeActive ? "#fff" : T.textSoft, border: `1.5px solid ${nearMeActive ? T.accent : T.border}`, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s", opacity: nearMeLoading ? 0.6 : 1 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4m10-10h-4M6 12H2"/></svg>
+                  {nearMeLoading ? "Locating..." : nearMeActive ? "Near Me ✓" : "Near Me"}
+                </button>
+              </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <select value={filterState} onChange={e => { setFilterState(e.target.value); setFilterCity(""); setCurrentPage(1); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 120 }}>
                   {US_STATES.map(s => <option key={s} value={s}>{s === "All" ? "All States" : `${s} — ${STATE_NAMES[s] || s}`}</option>)}
@@ -1904,14 +1980,14 @@ export default function ByTheirFruit() {
                 <select value={filterDenom} onChange={e => { setFilterDenom(e.target.value); setCurrentPage(1); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 160 }}>
                   {denoms.map(d => <option key={d} value={d}>{d === "All" ? "All Denominations" : d}</option>)}
                 </select>
-                {(filterState !== "All" || filterCity || filterZip || filterDenom !== "All" || discoverSearchQuery) && (
-                  <button onClick={() => { setFilterState("All"); setFilterCity(""); setFilterZip(""); setFilterDenom("All"); setDiscoverSearchQuery(""); setCurrentPage(1); }} style={{ padding: "8px 14px", borderRadius: T.radiusSm, fontSize: 12, fontWeight: 600, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.textSoft, cursor: "pointer", fontFamily: T.body }}>Clear filters</button>
+                {(filterState !== "All" || filterCity || filterZip || filterDenom !== "All" || discoverSearchQuery || nearMeActive) && (
+                  <button onClick={() => { setFilterState("All"); setFilterCity(""); setFilterZip(""); setFilterDenom("All"); setDiscoverSearchQuery(""); setCurrentPage(1); setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); }} style={{ padding: "8px 14px", borderRadius: T.radiusSm, fontSize: 12, fontWeight: 600, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.textSoft, cursor: "pointer", fontFamily: T.body }}>Clear filters</button>
                 )}
               </div>
             </div>
           </FadeIn>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {filteredChurches.length === 0 && !searchLoading && !discoverSearchQuery && filterDenom === "All" && filterState === "All" && !filterCity && !filterZip && (
+            {filteredChurches.length === 0 && !searchLoading && !discoverSearchQuery && filterDenom === "All" && filterState === "All" && !filterCity && !filterZip && !nearMeActive && (
               <div style={{ padding: "48px 20px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={T.border} strokeWidth="1.5" style={{ margin: "0 auto 14px", display: "block" }}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                 <div style={{ fontSize: 17, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 4 }}>Search {totalChurchCount.toLocaleString()} churches</div>
@@ -1945,7 +2021,7 @@ export default function ByTheirFruit() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                       <div style={{ flex: 1 }}>
                         <h3 style={{ fontSize: 18, fontFamily: T.heading, fontWeight: 700, margin: "0 0 3px", letterSpacing: "-0.02em" }}>{church.name}</h3>
-                        <div style={{ fontSize: 13, color: T.textMuted }}>{church.denomination} · {church.city}, {church.state}{church.size ? ` · ${church.size}` : ""}</div>
+                        <div style={{ fontSize: 13, color: T.textMuted }}>{church.denomination} · {church.city}, {church.state}{church.size ? ` · ${church.size}` : ""}{nearMeActive && nearMeDistances[church.id] != null && <span style={{ color: T.accent, fontWeight: 600 }}> · {nearMeDistances[church.id] < 1 ? "< 1" : Math.round(nearMeDistances[church.id])} mi</span>}</div>
                         {church.address && !church.address.toLowerCase().startsWith("po box") && <div style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>{church.address}</div>}
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
                           {church.tags.slice(0, 4).map((tag, j) => <span key={j} style={{ fontSize: 11, padding: "2px 9px", borderRadius: T.radiusFull, background: T.surfaceAlt, color: T.textSoft, fontWeight: 500, border: `1px solid ${T.borderLight}` }}>{tag}</span>)}
