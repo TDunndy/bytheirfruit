@@ -23,7 +23,9 @@ const SCORE_FIELDS = ["teaching", "welcome", "community", "worship", "prayer", "
 const SCORE_LABELS = { teaching: "Teaching", welcome: "Welcome", community: "Community", worship: "Worship", prayer: "Prayer", kids: "Kids Program", youth: "Youth Program", leadership: "Leadership", service: "Service", finances: "Finances" };
 
 /* --- HELPERS --- */
-const scoreColor = (s) => s >= 4.5 ? T.green : s >= 3.5 ? T.amber : T.red;
+function scoreHue(s) { const t = Math.max(0, Math.min(1, (s - 1) / 4)); const eased = t * t * (3 - 2 * t); return eased * 142; }
+const scoreColor = (s) => `hsl(${scoreHue(s)}, 72%, 45%)`;
+const scoreBg = (s) => `hsl(${scoreHue(s)}, 50%, 12%)`;
 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
 const formatDateTime = (d) => d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "—";
 
@@ -826,7 +828,7 @@ export default function AdminDashboard() {
 
                       <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 10 }}>
                         {Object.entries(scores).map(([k, v]) => (
-                          <span key={k} style={{ fontSize: 9, padding: "2px 6px", borderRadius: T.radiusFull, background: scoreColor(v) === T.green ? T.greenSoft : scoreColor(v) === T.amber ? T.amberSoft : T.redSoft, color: scoreColor(v), fontWeight: 700, fontFamily: T.heading }}>{k.slice(0, 3).toUpperCase()} {v}</span>
+                          <span key={k} style={{ fontSize: 9, padding: "2px 6px", borderRadius: T.radiusFull, background: scoreBg(v), color: scoreColor(v), fontWeight: 700, fontFamily: T.heading }}>{k.slice(0, 3).toUpperCase()} {v}</span>
                         ))}
                       </div>
 
@@ -1046,7 +1048,7 @@ export default function AdminDashboard() {
                               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                                 {SCORE_FIELDS.map(f => (
                                   c[`score_${f}`] && (
-                                    <span key={f} style={{ fontSize: 10, padding: "3px 8px", borderRadius: T.radiusFull, background: scoreColor(parseFloat(c[`score_${f}`])) === T.green ? T.greenSoft : scoreColor(parseFloat(c[`score_${f}`])) === T.amber ? T.amberSoft : T.redSoft, color: scoreColor(parseFloat(c[`score_${f}`])), fontWeight: 700, fontFamily: T.heading }}>{f.slice(0, 3).toUpperCase()} {parseFloat(c[`score_${f}`]).toFixed(1)}</span>
+                                    <span key={f} style={{ fontSize: 10, padding: "3px 8px", borderRadius: T.radiusFull, background: scoreBg(parseFloat(c[`score_${f}`])), color: scoreColor(parseFloat(c[`score_${f}`])), fontWeight: 700, fontFamily: T.heading }}>{f.slice(0, 3).toUpperCase()} {parseFloat(c[`score_${f}`]).toFixed(1)}</span>
                                   )
                                 ))}
                                 {!SCORE_FIELDS.some(f => c[`score_${f}`]) && <span style={{ fontSize: 11, color: T.textMuted }}>No scores yet</span>}
