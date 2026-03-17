@@ -1517,7 +1517,7 @@ export default function ByTheirFruit() {
 
     // Redirect to Stripe for $39/month subscription payment
     setTimeout(() => {
-      const stripePaymentUrl = `https://buy.stripe.com/test_3cI3cvb1P6bC4GefFbgw000?prefilled_email=${encodeURIComponent(claimData.workEmail)}&client_reference_id=${encodeURIComponent(user.id)}`;
+      const stripePaymentUrl = `https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00?prefilled_email=${encodeURIComponent(claimData.workEmail)}&client_reference_id=${encodeURIComponent(user.id)}`;
       window.open(stripePaymentUrl, "_blank");
       setShowClaimModal(false);
       setClaimStep("form");
