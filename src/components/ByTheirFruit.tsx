@@ -1738,7 +1738,7 @@ export default function ByTheirFruit() {
         <div className="btf-desktop-nav" style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <button onClick={() => navigate("discover")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "discover" ? T.text : "transparent", color: page === "discover" ? T.bg : T.textSoft, border: `1px solid ${page === "discover" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Find a Church</button>
           <button onClick={() => startRateFlow()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "rate" ? T.text : "transparent", color: page === "rate" ? T.bg : T.textSoft, border: `1px solid ${page === "rate" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Share Your Experience</button>
-          <button onClick={() => navigate("about")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "about" ? T.text : "transparent", color: page === "about" ? T.bg : T.textSoft, border: `1px solid ${page === "about" ? T.text : "transparent"}`, transition: "all 0.15s" }}>About</button>
+          <button onClick={() => navigate("about")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "about" ? T.text : "transparent", color: page === "about" ? T.bg : T.textSoft, border: `1px solid ${page === "about" ? T.text : "transparent"}`, transition: "all 0.15s" }}>How It Works</button>
           
           {hasClaimed && (
             <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accent : T.accentSoft, color: page === "dashboard" ? "#fff" : T.accent, border: `1px solid ${page === "dashboard" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Church Dashboard</button>
@@ -1764,7 +1764,7 @@ export default function ByTheirFruit() {
         <div className="btf-mobile-menu" style={{ position: "sticky", top: 49, zIndex: 99, background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
           <button onClick={() => { navigate("discover"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "discover" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "discover" ? T.border : "transparent"}`, textAlign: "left" }}>Find a Church</button>
           <button onClick={() => { startRateFlow(); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", textAlign: "left" }}>Share Your Experience</button>
-          <button onClick={() => { navigate("about"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "about" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "about" ? T.border : "transparent"}`, textAlign: "left" }}>About</button>
+          <button onClick={() => { navigate("about"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "about" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "about" ? T.border : "transparent"}`, textAlign: "left" }}>How It Works</button>
           
           {hasClaimed && (
             <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accentSoft : "transparent", color: T.accent, border: `1px solid ${page === "dashboard" ? T.accentBorder : "transparent"}`, textAlign: "left" }}>Church Dashboard</button>
@@ -2637,12 +2637,17 @@ export default function ByTheirFruit() {
       {!loading && page === "about" && (
         <div style={{ maxWidth: 600, margin: "0 auto", padding: "56px 24px" }}>
           <FadeIn>
-            <h1 style={{ fontSize: 34, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.12, margin: "0 0 28px", letterSpacing: "-0.04em" }}>The church doesn't get to grade its own homework.</h1>
+            <h1 style={{ fontSize: 34, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.12, margin: "0 0 28px", letterSpacing: "-0.04em" }}>How It Works</h1>
             <div style={{ fontSize: 15, color: T.textSoft, lineHeight: 1.75 }}>
-              <p>Every church in America has a website that says the same things. <em>Welcoming community. Bible-based teaching. A place to belong.</em> But how do you know if it's true?</p>
-              <p><strong style={{ color: T.text }}>By Their Fruit</strong> exists because we believe the body of Christ — the actual people in the pews — are the most honest witnesses to what a church really is.</p>
-              <p>Our platform gathers structured, thoughtful experiences from congregants and visitors across ten categories rooted in what scripture says a healthy church should look like. Experiences post immediately. Scores update in real time as experiences are approved — giving a trustworthy, always-current picture.</p>
-              <p>This isn't about tearing churches down. It's about building them up through honest feedback.</p>
+              <p>Every church has a website that says the same things. <em>Welcoming community. Bible-based teaching. A place to belong.</em> But how do you know if it's true? The people who attend do.</p>
+              <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 10px", letterSpacing: "-0.03em", color: T.text }}>1. Find a church</h3>
+              <p>Search by name, city, state, or denomination. Every church in our directory can be discovered and explored.</p>
+              <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 10px", letterSpacing: "-0.03em", color: T.text }}>2. Read real experiences</h3>
+              <p>See structured, honest feedback from actual congregants and visitors across ten categories rooted in what scripture says a healthy church should look like.</p>
+              <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 10px", letterSpacing: "-0.03em", color: T.text }}>3. Share your own</h3>
+              <p>Rate your church across ten biblical categories. Add comments to explain your ratings. Your experience helps others find the right church — and helps churches grow.</p>
+              <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 10px", letterSpacing: "-0.03em", color: T.text }}>4. Churches can respond</h3>
+              <p>Verified church owners can claim their profile, respond to experiences publicly, and access insights about their congregation. They cannot delete, edit, or pay to suppress feedback.</p>
               <div style={{ padding: "28px", borderRadius: T.radius, background: T === DARK ? T.surfaceAlt : T.text, color: T === DARK ? T.text : T.bg, margin: "28px 0", textAlign: "center" }}>
                 <p style={{ fontSize: 17, fontStyle: "italic", lineHeight: 1.6, margin: "0 0 8px", opacity: 0.85 }}>"Beware of false prophets, who come to you in sheep's clothing but inwardly are ravenous wolves. You will recognize them by their fruits."</p>
                 <div style={{ fontSize: 12, opacity: 0.4, fontWeight: 600 }}>Matthew 7:15–16 ESV</div>
@@ -3239,7 +3244,7 @@ export default function ByTheirFruit() {
             <div style={{ minWidth: 120 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Explore</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[{ label: "Discover", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "About", page: "about" }].map(link => (
+                {[{ label: "Discover", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "How It Works", page: "about" }].map(link => (
                   <button key={link.page} onClick={() => { if (link.page === "rate") startRateFlow(); else navigate(link.page); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: T.textSoft, fontFamily: T.body, textAlign: "left" }} onMouseEnter={e => e.currentTarget.style.color = T.accent} onMouseLeave={e => e.currentTarget.style.color = T.textSoft}>{link.label}</button>
                 ))}
               </div>
