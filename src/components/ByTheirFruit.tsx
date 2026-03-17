@@ -909,6 +909,11 @@ export default function ByTheirFruit() {
 
   const [ownerDemographics, setOwnerDemographics] = useState(null);
   const [ownerReviews, setOwnerReviews] = useState([]);
+  const [dashboardBenchmarks, setDashboardBenchmarks] = useState({ national: {}, state: {}, city: {} });
+  const [dashboardTrends, setDashboardTrends] = useState([]);
+  const [dashboardTab, setDashboardTab] = useState("overview");
+  const [benchmarkLevel, setBenchmarkLevel] = useState("city");
+  const [expandedReview, setExpandedReview] = useState(null);
 
   // Favorites state
   const [userFavorites, setUserFavorites] = useState(new Set());
@@ -1170,22 +1175,45 @@ export default function ByTheirFruit() {
 
   // Fetch owner dashboard data for a claimed church
   const fetchOwnerDashboard = useCallback(async (churchId) => {
-    // Fetch all reviews for this church with reviewer profiles for demographics
+    // Fetch all reviews for this church with reviewer profiles
     const { data: reviews } = await supabase
       .from("reviews")
       .select("*, profiles!reviews_user_id_fkey(display_name, gender, age_range, income_bracket)")
       .eq("church_id", churchId)
-      .eq("status", "published")
+      .in("status", ["published", "pending", "hidden", "flagged"])
       .order("created_at", { ascending: false });
-
     setOwnerReviews(reviews || []);
+
+    // Fetch church info for benchmarks
+    const { data: churchData } = await supabase.from("churches").select("*").eq("id", churchId).single();
+
+    // Fetch regional benchmarks (city, state, national)
+    const benchmarks = { national: {}, state: {}, city: {} };
+    if (churchData) {
+      const { data: benchData } = await supabase.from("regional_benchmarks").select("*");
+      if (benchData) {
+        benchData.forEach(b => {
+          if (b.region_type === "national") benchmarks.national[b.category] = { avg: parseFloat(b.avg_score), churches: b.church_count };
+          else if (b.region_type === "state" && b.region_value === churchData.state) benchmarks.state[b.category] = { avg: parseFloat(b.avg_score), churches: b.church_count };
+          else if (b.region_type === "city" && b.region_value === churchData.city + ", " + churchData.state) benchmarks.city[b.category] = { avg: parseFloat(b.avg_score), churches: b.church_count };
+        });
+      }
+    }
+    setDashboardBenchmarks(benchmarks);
+
+    // Fetch score snapshots for trends (last 12 months)
+    const { data: snapshots } = await supabase
+      .from("score_snapshots")
+      .select("*")
+      .eq("church_id", churchId)
+      .gte("snapshot_date", new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
+      .order("snapshot_date", { ascending: true });
+    setDashboardTrends(snapshots || []);
 
     // Compute demographics from reviewer profiles
     if (reviews && reviews.length > 0) {
-      const genderCounts = {};
-      const ageCounts = {};
-      const incomeCounts = {};
-      const roleCounts = {};
+      const genderCounts = {}, ageCounts = {}, incomeCounts = {}, roleCounts = {};
+      const scoreAvgs = {};
       reviews.forEach(r => {
         const g = r.profiles?.gender || "Not specified";
         const a = r.profiles?.age_range || "Not specified";
@@ -1196,8 +1224,6 @@ export default function ByTheirFruit() {
         incomeCounts[inc] = (incomeCounts[inc] || 0) + 1;
         roleCounts[role] = (roleCounts[role] || 0) + 1;
       });
-      // Score averages per category
-      const scoreAvgs = {};
       SCORE_FIELDS.forEach(f => {
         const vals = reviews.map(r => r[`score_${f}`]).filter(v => v != null);
         if (vals.length > 0) scoreAvgs[f] = vals.reduce((a, b) => a + b, 0) / vals.length;
@@ -1208,10 +1234,7 @@ export default function ByTheirFruit() {
     }
 
     // Fetch church responses
-    const { data: responses } = await supabase
-      .from("church_responses")
-      .select("*")
-      .eq("church_id", churchId);
+    const { data: responses } = await supabase.from("church_responses").select("*").eq("church_id", churchId);
     return responses || [];
   }, []);
 
@@ -2791,13 +2814,10 @@ export default function ByTheirFruit() {
         </div>
       )}
 
-      {/* DASHBOARD */}
+      {/* INTELLIGENCE DASHBOARD */}
       {!loading && page === "dashboard" && user && hasClaimed && (
-        <div style={{ maxWidth: 900, margin: "0 auto", padding: "36px 24px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px" }}>
           <FadeIn>
-            <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Church Dashboard</h1>
-            <p style={{ fontSize: 14, color: T.textMuted, margin: "0 0 28px" }}>Your church insights and experiences</p>
-
             {myChurchesLoading && (
               <div style={{ textAlign: "center", padding: "60px 24px" }}>
                 <div style={{ display: "inline-block", width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
@@ -2805,185 +2825,429 @@ export default function ByTheirFruit() {
             )}
 
             {!myChurchesLoading && myChurchesData.claimed.length > 0 && (() => {
-              const oc = myChurchesData.claimed[0]; // primary claimed church
+              const oc = myChurchesData.claimed[0];
+              const ocScores = {};
+              SCORE_FIELDS.forEach(f => { if (oc[`score_${f}`] != null) ocScores[f] = parseFloat(oc[`score_${f}`]); });
+              const overall = Object.values(ocScores).length > 0 ? Object.values(ocScores).reduce((a, b) => a + b, 0) / Object.values(ocScores).length : 0;
+              const benchmarks = dashboardBenchmarks[benchmarkLevel] || {};
+
+              const getTrend = (catId) => {
+                const catSnaps = dashboardTrends.filter(s => s.category === catId);
+                if (catSnaps.length < 2) return null;
+                const recent = catSnaps.slice(-3);
+                const older = catSnaps.slice(0, Math.max(1, Math.floor(catSnaps.length / 2)));
+                const recentAvg = recent.reduce((acc, s) => acc + (parseFloat(s.score_value) || 0), 0) / recent.length;
+                const olderAvg = older.reduce((acc, s) => acc + (parseFloat(s.score_value) || 0), 0) / older.length;
+                return recentAvg - olderAvg;
+              };
+
+              const lowestCategories = CATEGORIES
+                .map(cat => ({ ...cat, score: ocScores[cat.id] || 0 }))
+                .filter(cat => cat.score > 0)
+                .sort((a, b) => a.score - b.score)
+                .slice(0, 3);
+
+              const categoryInsights = {
+                teaching: "Strong biblical teaching is foundational. Consider sermon recordings or study guides to deepen impact.",
+                welcome: "First impressions matter. Train greeters and follow-up teams to strengthen visitor experience.",
+                community: "Deep relationships are the heart of church life. Invest in small groups and discipleship.",
+                worship: "Authentic worship connects people to God. Ensure music selections serve the message, not distract from it.",
+                prayer: "Prayer is the breath of the church. Dedicate time and resources to corporate and personal intercession.",
+                kids: "Children\u2019s ministry shapes the next generation. Ensure safety, teaching quality, and volunteer engagement.",
+                youth: "Youth thrive with mentorship. Connect teens with mature believers and meaningful discipleship.",
+                leadership: "Transparency builds trust. Communicate decisions, finances, and vision openly with your congregation.",
+                service: "The gospel comes alive in action. Mobilize your congregation for local and global outreach.",
+                finances: "Wise stewardship glorifies God. Annual reports and clear communication about giving build confidence.",
+              };
+
               return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  {/* Church Header Card */}
-                  <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+                <div>
+                  {/* HEADER */}
+                  <div style={{ marginBottom: 32 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                          <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>{oc.name}</h2>
+                          <h1 style={{ fontSize: 32, fontFamily: T.heading, fontWeight: 800, margin: 0, letterSpacing: "-0.035em" }}>{oc.name}</h1>
                           <span style={{ padding: "3px 10px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 700, background: T.greenSoft, color: T.green, border: `1px solid ${T.greenBorder}` }}>Verified Owner</span>
                         </div>
-                        <div style={{ fontSize: 13, color: T.textSoft }}>{oc.denomination} &middot; {oc.city}, {oc.state}</div>
+                        <div style={{ fontSize: 14, color: T.textSoft }}>{oc.denomination || "Non-Denominational"} &middot; {oc.city}, {oc.state}</div>
                       </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 36, fontFamily: T.heading, fontWeight: 800, color: oc.scoreOverall ? scoreColor(oc.scoreOverall) : T.textMuted }}>{oc.scoreOverall ? oc.scoreOverall.toFixed(1) : "—"}</div>
-                        <div style={{ fontSize: 11, color: T.textMuted }}>{oc.totalReviews} experience{oc.totalReviews !== 1 ? "s" : ""}</div>
+                      <div style={{ padding: "16px 24px", borderRadius: T.radius, textAlign: "center", background: scoreBg(overall), border: `1.5px solid ${scoreBorder2(overall)}` }}>
+                        <div style={{ fontSize: 40, fontWeight: 800, fontFamily: T.heading, color: overall > 0 ? scoreColor(overall) : T.textMuted, lineHeight: 1 }}>
+                          {overall > 0 ? overall.toFixed(1) : "\u2014"}
+                        </div>
+                        <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4 }}>{ownerReviews.length} review{ownerReviews.length !== 1 ? "s" : ""}</div>
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-                      <button onClick={() => viewChurch(oc)} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>View Public Profile</button>
+
+                    {/* TAB NAVIGATION */}
+                    <div style={{ display: "flex", gap: 8, borderBottom: `1.5px solid ${T.border}`, paddingBottom: 0 }}>
+                      {["overview", "benchmarks", "experiences", "demographics"].map(tab => (
+                        <button key={tab} onClick={() => setDashboardTab(tab)} style={{
+                          padding: "12px 20px", background: "none", border: "none",
+                          borderBottom: dashboardTab === tab ? `2px solid ${T.accent}` : "2px solid transparent",
+                          color: dashboardTab === tab ? T.accent : T.textMuted,
+                          fontSize: 14, fontWeight: dashboardTab === tab ? 600 : 500,
+                          cursor: "pointer", fontFamily: T.body, transition: "all 0.2s",
+                        }}>
+                          {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Score Breakdown */}
-                  {ownerDemographics && ownerDemographics.totalReviews > 0 && (
-                    <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                      <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Score Breakdown</h3>
-                      <div className="btf-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px" }}>
-                        {CATEGORIES.map(cat => {
-                          const avg = ownerDemographics.scoreAvgs[cat.key];
-                          if (avg == null) return null;
-                          return (
-                            <div key={cat.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.borderLight}` }}>
-                              <span style={{ fontSize: 13, color: T.textSoft }}>{cat.label}</span>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ width: 60, height: 6, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
-                                  <div style={{ width: `${(avg / 5) * 100}%`, height: "100%", borderRadius: 3, background: scoreColor(avg) }} />
+                  {/* ========== OVERVIEW TAB ========== */}
+                  {dashboardTab === "overview" && (
+                    <FadeIn>
+                      {/* Quick Stats */}
+                      <div className="btf-grid-2" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 }}>
+                        {[
+                          { label: "Total Reviews", value: ownerReviews.length },
+                          { label: "Avg Score", value: overall > 0 ? overall.toFixed(1) : "\u2014" },
+                          { label: "Most Common Role", value: Object.entries(ownerDemographics?.roleCounts || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || "\u2014" },
+                          { label: "Trend", value: ownerReviews.length > 1 ? "Stable" : "New" },
+                        ].map((stat, i) => (
+                          <div key={i} style={{ padding: "16px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
+                            <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 600, marginBottom: 6 }}>{stat.label}</div>
+                            <div style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, color: T.text }}>{stat.value}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Scorecard with Trends */}
+                      <div style={{ marginBottom: 32, padding: "24px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
+                        <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 20px", color: T.text }}>Church Health Scorecard</h3>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                          {CATEGORIES
+                            .map(cat => ({ ...cat, score: ocScores[cat.id] || 0 }))
+                            .sort((a, b) => a.score - b.score)
+                            .map(cat => {
+                              const trend = getTrend(cat.id);
+                              return (
+                                <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontFamily: T.body, fontWeight: 500, color: T.text, marginBottom: 6 }}>{cat.label}</div>
+                                    <div style={{ height: 6, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
+                                      <div style={{ height: "100%", borderRadius: 3, width: `${(cat.score / 5) * 100}%`, background: cat.score > 0 ? scoreColor(cat.score) : T.surfaceAlt, transition: "width 0.6s ease" }} />
+                                    </div>
+                                  </div>
+                                  <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 80 }}>
+                                    <span style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, color: cat.score > 0 ? scoreColor(cat.score) : T.textMuted, width: 28, textAlign: "right" }}>
+                                      {cat.score > 0 ? cat.score.toFixed(1) : "\u2014"}
+                                    </span>
+                                    {trend !== null && (
+                                      <span style={{ fontSize: 14, fontWeight: 700, color: trend > 0.1 ? T.green : trend < -0.1 ? T.red : T.textMuted }}>
+                                        {trend > 0.1 ? "\u25B2" : trend < -0.1 ? "\u25BC" : "\u2014"}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <span style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, color: scoreColor(avg), minWidth: 24, textAlign: "right" }}>{avg.toFixed(1)}</span>
+                              );
+                            })}
+                        </div>
+                      </div>
+
+                      {/* Gap Analysis / Growth Opportunities */}
+                      {lowestCategories.length > 0 && (
+                        <div>
+                          <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", color: T.text }}>Growth Opportunities</h3>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+                            {lowestCategories.map(cat => {
+                              const cityAvg = dashboardBenchmarks.city[cat.id]?.avg || 0;
+                              const stateAvg = dashboardBenchmarks.state[cat.id]?.avg || 0;
+                              const natAvg = dashboardBenchmarks.national[cat.id]?.avg || 0;
+                              const isAboveCity = cat.score > cityAvg && cityAvg > 0;
+                              return (
+                                <FadeIn key={cat.id}>
+                                  <div style={{
+                                    padding: "20px", borderRadius: T.radius, background: T.surface,
+                                    border: `1.5px solid ${cat.score < 3 ? (T.redBorder || T.border) : (T.amberBorder || T.border)}`,
+                                    borderLeft: `4px solid ${scoreColor(cat.score)}`,
+                                  }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                                      <h4 style={{ fontSize: 14, fontFamily: T.heading, fontWeight: 700, margin: 0, color: T.text }}>{cat.label}</h4>
+                                      <span style={{ fontSize: 16, fontWeight: 800, fontFamily: T.heading, color: scoreColor(cat.score) }}>{cat.score.toFixed(1)}</span>
+                                    </div>
+                                    <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 12, fontWeight: 500 }}>
+                                      City avg: {cityAvg > 0 ? cityAvg.toFixed(1) : "\u2014"} &middot; State avg: {stateAvg > 0 ? stateAvg.toFixed(1) : "\u2014"} &middot; National avg: {natAvg > 0 ? natAvg.toFixed(1) : "\u2014"}
+                                    </div>
+                                    {cityAvg > 0 && (
+                                      <div style={{
+                                        padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 11, fontWeight: 600, marginBottom: 12,
+                                        background: isAboveCity ? (T.greenSoft || "#e8f5e9") : (T.amberSoft || "#fff8e1"),
+                                        border: `1px solid ${isAboveCity ? (T.greenBorder || T.border) : (T.amberBorder || T.border)}`,
+                                        color: isAboveCity ? (T.green || "#2e7d32") : (T.amber || "#f57f17"),
+                                      }}>
+                                        {isAboveCity ? "\u2713 Above city average" : "Below city average"}
+                                      </div>
+                                    )}
+                                    <p style={{ fontSize: 12, color: T.textSoft, lineHeight: 1.5, margin: 0 }}>{categoryInsights[cat.id]}</p>
+                                  </div>
+                                </FadeIn>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </FadeIn>
+                  )}
+
+                  {/* ========== BENCHMARKS TAB ========== */}
+                  {dashboardTab === "benchmarks" && (
+                    <FadeIn>
+                      <div style={{ marginBottom: 24 }}>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {["city", "state", "national"].map(level => (
+                            <button key={level} onClick={() => setBenchmarkLevel(level)} style={{
+                              padding: "8px 16px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600,
+                              background: benchmarkLevel === level ? T.text : T.surfaceAlt,
+                              color: benchmarkLevel === level ? (T === DARK ? "#000" : "#fff") : T.textSoft,
+                              border: `1.5px solid ${benchmarkLevel === level ? T.text : T.border}`,
+                              cursor: "pointer", fontFamily: T.body, transition: "all 0.15s",
+                            }}>
+                              {level.charAt(0).toUpperCase() + level.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="btf-grid-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+                        {CATEGORIES.map(cat => {
+                          const churchScore = ocScores[cat.id] || 0;
+                          const benchScore = benchmarks[cat.id]?.avg || 0;
+                          const delta = churchScore - benchScore;
+                          const isAbove = delta > 0;
+                          return (
+                            <FadeIn key={cat.id}>
+                              <div style={{ padding: "18px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
+                                <div style={{ fontSize: 13, fontFamily: T.heading, fontWeight: 700, marginBottom: 14, color: T.text }}>{cat.label}</div>
+                                <div style={{ display: "flex", gap: 16, alignItems: "flex-end", marginBottom: 12 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>Your Score</div>
+                                    <div style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, color: churchScore > 0 ? scoreColor(churchScore) : T.textMuted }}>{churchScore > 0 ? churchScore.toFixed(1) : "\u2014"}</div>
+                                  </div>
+                                  <div style={{ width: 2, height: 40, background: T.border }} />
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600, marginBottom: 6, textTransform: "uppercase" }}>{benchmarkLevel} Avg</div>
+                                    <div style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, color: T.textMuted }}>{benchScore > 0 ? benchScore.toFixed(1) : "\u2014"}</div>
+                                  </div>
+                                </div>
+                                {churchScore > 0 && benchScore > 0 && (
+                                  <div style={{
+                                    padding: "6px 10px", borderRadius: T.radiusSm, fontSize: 12, fontWeight: 700, textAlign: "center",
+                                    background: isAbove ? (T.greenSoft || "#e8f5e9") : (T.amberSoft || "#fff8e1"),
+                                    border: `1px solid ${isAbove ? (T.greenBorder || T.border) : (T.amberBorder || T.border)}`,
+                                    color: isAbove ? (T.green || "#2e7d32") : (T.amber || "#f57f17"),
+                                  }}>
+                                    {isAbove ? "+" : ""}{delta.toFixed(2)} {isAbove ? "above" : "below"} average
+                                  </div>
+                                )}
                               </div>
-                            </div>
+                            </FadeIn>
                           );
                         })}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Reviewer Demographics */}
-                  {ownerDemographics && ownerDemographics.totalReviews > 0 && (
-                    <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                      <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Reviewer Demographics</h3>
-                      <div className="btf-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                        {/* Reviewer Roles */}
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Reviewer Type</div>
-                          {Object.entries(ownerDemographics.roleCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
-                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
-                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
-                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
-                                </div>
-                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        {/* Age Ranges */}
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Age Range</div>
-                          {Object.entries(ownerDemographics.ageCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
-                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
-                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
-                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
-                                </div>
-                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        {/* Gender */}
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Gender</div>
-                          {Object.entries(ownerDemographics.genderCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
-                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
-                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
-                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
-                                </div>
-                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        {/* Income */}
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Income Bracket</div>
-                          {Object.entries(ownerDemographics.incomeCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
-                            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0" }}>
-                              <span style={{ fontSize: 13, color: T.textSoft }}>{k}</span>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ width: 50, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden" }}>
-                                  <div style={{ width: `${(v / ownerDemographics.totalReviews) * 100}%`, height: "100%", borderRadius: 3, background: T.accent }} />
-                                </div>
-                                <span style={{ fontSize: 12, color: T.textMuted, minWidth: 16, textAlign: "right" }}>{v}</span>
-                              </div>
-                            </div>
-                          ))}
+                      <div style={{ marginTop: 32, padding: "20px", borderRadius: T.radius, background: T.accentSoft || "rgba(59,130,246,0.08)", border: `1.5px solid ${T.accentBorder || T.border}` }}>
+                        <div style={{ fontSize: 13, fontFamily: T.heading, fontWeight: 700, color: T.accent, marginBottom: 6 }}>Summary</div>
+                        <div style={{ fontSize: 14, color: T.accent }}>
+                          Your church ranks above the {benchmarkLevel} average in{" "}
+                          <strong>{SCORE_FIELDS.filter(f => (ocScores[f] || 0) > (benchmarks[f]?.avg || 0)).length} of 10</strong>{" "}categories.
                         </div>
                       </div>
-                    </div>
+                    </FadeIn>
                   )}
 
-                  {/* Recent Experiences with Response Ability */}
-                  <div style={{ padding: "24px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                    <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Experiences ({ownerReviews.length})</h3>
-                    {ownerReviews.length === 0 && (
-                      <div style={{ padding: "32px 20px", textAlign: "center", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px dashed ${T.border}` }}>
-                        <div style={{ fontSize: 14, color: T.textMuted }}>No published experiences yet. Once members submit and their experiences are approved, they will appear here.</div>
-                      </div>
-                    )}
-                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                      {ownerReviews.map(rev => {
-                        const avgScore = SCORE_FIELDS.map(f => rev[`score_${f}`]).filter(v => v != null);
-                        const revAvg = avgScore.length > 0 ? avgScore.reduce((a, b) => a + b, 0) / avgScore.length : null;
-                        return (
-                          <div key={rev.id} style={{ padding: "16px", borderRadius: T.radiusSm, border: `1px solid ${T.borderLight}`, background: T.bg }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                              <div>
-                                <button onClick={() => fetchReviewerHistory(rev.user_id, rev.profiles?.display_name)} style={{ fontWeight: 600, fontSize: 14, color: T.accent, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: T.body, textDecoration: "underline", textDecorationColor: "transparent" }} onMouseEnter={e => e.target.style.textDecorationColor = T.accent} onMouseLeave={e => e.target.style.textDecorationColor = "transparent"}>{displayName(rev.profiles?.display_name, "church")}</button>
-                                <span style={{ fontSize: 12, color: T.textMuted, marginLeft: 8 }}>{rev.reviewer_role}</span>
+                  {/* ========== EXPERIENCES TAB ========== */}
+                  {dashboardTab === "experiences" && (
+                    <FadeIn>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                        {ownerReviews.length > 0 ? ownerReviews.map(rev => {
+                          const revScores = SCORE_FIELDS.map(f => rev[`score_${f}`]).filter(v => v != null);
+                          const revAvg = revScores.length > 0 ? revScores.reduce((a, b) => a + b, 0) / revScores.length : null;
+                          return (
+                            <div key={rev.id} style={{ borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}`, overflow: "hidden" }}>
+                              {/* Collapsed Header */}
+                              <div onClick={() => setExpandedReview(expandedReview === rev.id ? null : rev.id)} style={{
+                                padding: "16px 20px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
+                                background: expandedReview === rev.id ? T.surfaceAlt : T.surface, transition: "background 0.15s",
+                              }}>
+                                <div>
+                                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4 }}>{displayName(rev.profiles?.display_name, "church")}</div>
+                                  <div style={{ fontSize: 12, color: T.textMuted }}>{rev.reviewer_role} &middot; {new Date(rev.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</div>
+                                </div>
+                                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                                  {rev.status && rev.status !== "published" && (
+                                    <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 9999, fontWeight: 600, fontFamily: T.heading, background: rev.status === "pending" ? T.amberSoft : rev.status === "flagged" ? T.redSoft : T.surfaceAlt, color: rev.status === "pending" ? T.amber : rev.status === "flagged" ? T.red : T.textMuted, border: `1px solid ${rev.status === "pending" ? T.amberBorder : rev.status === "flagged" ? T.redBorder : T.border}` }}>{rev.status.charAt(0).toUpperCase() + rev.status.slice(1)}</span>
+                                  )}
+                                  {revAvg && (
+                                    <div style={{ padding: "4px 12px", borderRadius: T.radiusSm, background: scoreBg(revAvg), border: `1px solid ${scoreBorder2(revAvg)}`, fontSize: 13, fontWeight: 700, color: scoreColor(revAvg) }}>{revAvg.toFixed(1)}</div>
+                                  )}
+                                  <span style={{ fontSize: 18, color: T.textMuted }}>{expandedReview === rev.id ? "\u25BC" : "\u25B6"}</span>
+                                </div>
                               </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                {revAvg && <span style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, color: scoreColor(revAvg) }}>{revAvg.toFixed(1)}</span>}
-                                {rev.status && rev.status !== "published" && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 9999, fontWeight: 600, fontFamily: T.heading, background: rev.status === "pending" ? T.amberSoft : rev.status === "hidden" ? "rgba(168,85,247,0.12)" : rev.status === "flagged" ? T.redSoft : T.surfaceAlt, color: rev.status === "pending" ? T.amber : rev.status === "hidden" ? "#a855f7" : rev.status === "flagged" ? T.red : T.textMuted, border: `1px solid ${rev.status === "pending" ? T.amberBorder : rev.status === "hidden" ? "rgba(168,85,247,0.3)" : rev.status === "flagged" ? T.redBorder : T.border}` }}>{rev.status.charAt(0).toUpperCase() + rev.status.slice(1)}</span>}
-                                <span style={{ fontSize: 11, color: T.textMuted }}>{new Date(rev.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
-                              </div>
-                            </div>
-                            {rev.text && <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 10px", lineHeight: 1.6 }}>{rev.text}</p>}
-                            {/* Category Score Bars */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
-                              {SCORE_FIELDS.map(f => {
-                                const s = rev[`score_${f}`];
-                                if (s == null) return null;
-                                const cat = CATEGORIES.find(c => c.id === f);
-                                const pct = ((s - 1) / 4) * 100;
-                                return (
-                                  <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 500, width: 90, flexShrink: 0 }}>{cat?.label.split("&")[0].split("/")[0].trim()}</div>
-                                    <div style={{ flex: 1, height: 6, borderRadius: 3, background: T.surfaceAlt, overflow: "hidden", position: "relative" }}>
-                                      <div style={{ height: "100%", borderRadius: 3, width: `${pct}%`, background: `linear-gradient(90deg, ${scoreColor(s)}, ${scoreColor(s)})`, transition: "width 0.3s ease" }} />
+
+                              {/* Expanded Content */}
+                              {expandedReview === rev.id && (
+                                <div style={{ padding: "20px", borderTop: `1.5px solid ${T.border}` }}>
+                                  {rev.text && <div style={{ marginBottom: 20, fontSize: 13, color: T.text, lineHeight: 1.6 }}>{rev.text}</div>}
+                                  {/* Score Breakdown */}
+                                  <div style={{ marginBottom: 20 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, marginBottom: 10, textTransform: "uppercase" }}>Category Scores</div>
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                                      {SCORE_FIELDS.map(f => {
+                                        const s = rev[`score_${f}`];
+                                        if (s == null) return null;
+                                        const cat = CATEGORIES.find(c => c.id === f);
+                                        return (
+                                          <span key={f} style={{ fontSize: 11, padding: "4px 10px", borderRadius: T.radiusSm, background: scoreBg(s), border: `1px solid ${scoreBorder2(s)}`, color: scoreColor(s), fontWeight: 700 }}>
+                                            {cat?.label.split("&")[0].split("/")[0].trim()} {s}
+                                          </span>
+                                        );
+                                      })}
                                     </div>
-                                    <div style={{ fontSize: 11, fontWeight: 700, fontFamily: T.heading, color: scoreColor(s), minWidth: 24, textAlign: "right" }}>{s}</div>
                                   </div>
-                                );
-                              })}
-                            </div>
-                            {/* Response actions */}
-                            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                              {respondingTo === rev.id ? (
-                                <div style={{ width: "100%" }}>
-                                  <textarea value={responseText} onChange={e => setResponseText(e.target.value)} rows={3} placeholder="Write your response as the church..." style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.accentBorder}`, background: T.bg, color: T.text, fontFamily: T.body, resize: "vertical", outline: "none" }} />
-                                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                                    <button onClick={() => submitChurchResponse(rev.id, oc.id)} disabled={responseSubmitting || !responseText.trim()} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", opacity: responseSubmitting || !responseText.trim() ? 0.5 : 1 }}>{responseSubmitting ? "Posting..." : "Post Response"}</button>
-                                    <button onClick={() => { setRespondingTo(null); setResponseText(""); }} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: "transparent", color: T.textMuted, border: `1px solid ${T.border}` }}>Cancel</button>
+                                  {/* Response Section */}
+                                  <div style={{ borderTop: `1.5px solid ${T.border}`, paddingTop: 16 }}>
+                                    {respondingTo === rev.id ? (
+                                      <div>
+                                        <textarea value={responseText} onChange={e => setResponseText(e.target.value)} placeholder="Respond to this experience..." rows={4} style={{ width: "100%", padding: "12px 14px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical" }} />
+                                        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                          <button onClick={() => submitChurchResponse(rev.id, oc.id)} disabled={!responseText.trim() || responseSubmitting} style={{ padding: "8px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!responseText.trim() || responseSubmitting) ? 0.5 : 1 }}>{responseSubmitting ? "Sending..." : "Send Response"}</button>
+                                          <button onClick={() => { setRespondingTo(null); setResponseText(""); }} style={{ padding: "8px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <button onClick={() => { setRespondingTo(rev.id); setResponseText(""); }} style={{ padding: "8px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.accentSoft || "rgba(59,130,246,0.08)", color: T.accent, border: `1px solid ${T.accentBorder || T.border}`, cursor: "pointer", fontFamily: T.body }}>Respond</button>
+                                    )}
                                   </div>
                                 </div>
-                              ) : (
-                                <button onClick={() => { setRespondingTo(rev.id); setResponseText(""); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}` }}>Respond</button>
                               )}
                             </div>
+                          );
+                        }) : (
+                          <div style={{ padding: "40px", textAlign: "center", background: T.surface, borderRadius: T.radius, border: `1.5px dashed ${T.border}` }}>
+                            <div style={{ fontSize: 14, color: T.textMuted }}>No reviews yet. When congregants share their experiences, they'll appear here.</div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                        )}
+                      </div>
+                    </FadeIn>
+                  )}
+
+                  {/* ========== DEMOGRAPHICS TAB ========== */}
+                  {dashboardTab === "demographics" && (
+                    <FadeIn>
+                      <div className="btf-grid-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20 }}>
+                        {/* Reviewer Type */}
+                        <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
+                          <h4 style={{ fontSize: 14, fontFamily: T.heading, fontWeight: 700, marginBottom: 16, color: T.text }}>Reviewer Type</h4>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {Object.entries(ownerDemographics?.roleCounts || {}).sort((a, b) => b[1] - a[1]).map(([role, count]) => {
+                              const pct = ownerReviews.length > 0 ? ((count / ownerReviews.length) * 100).toFixed(0) : 0;
+                              return (
+                                <div key={role}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                                    <span style={{ fontWeight: 600, color: T.text }}>{role}</span>
+                                    <span style={{ color: T.textMuted }}>{pct}%</span>
+                                  </div>
+                                  <div style={{ height: 6, borderRadius: 3, background: T.surfaceAlt }}>
+                                    <div style={{ height: "100%", borderRadius: 3, width: `${pct}%`, background: T.accent }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {Object.keys(ownerDemographics?.roleCounts || {}).length === 0 && <div style={{ fontSize: 13, color: T.textMuted }}>No data yet</div>}
+                          </div>
+                        </div>
+
+                        {/* Highest Rated Categories */}
+                        <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
+                          <h4 style={{ fontSize: 14, fontFamily: T.heading, fontWeight: 700, marginBottom: 16, color: T.text }}>Highest Rated Categories</h4>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {CATEGORIES
+                              .map(cat => ({ ...cat, avgScore: ownerDemographics?.scoreAvgs?.[cat.id] || 0 }))
+                              .filter(cat => cat.avgScore > 0)
+                              .sort((a, b) => b.avgScore - a.avgScore)
+                              .slice(0, 5)
+                              .map(cat => (
+                                <div key={cat.id}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                                    <span style={{ fontWeight: 600, color: T.text }}>{cat.label}</span>
+                                    <span style={{ fontWeight: 700, color: scoreColor(cat.avgScore) }}>{cat.avgScore.toFixed(1)}</span>
+                                  </div>
+                                  <div style={{ height: 4, borderRadius: 2, background: T.surfaceAlt }}>
+                                    <div style={{ height: "100%", borderRadius: 2, width: `${(cat.avgScore / 5) * 100}%`, background: scoreColor(cat.avgScore) }} />
+                                  </div>
+                                </div>
+                              ))}
+                            {CATEGORIES.filter(cat => (ownerDemographics?.scoreAvgs?.[cat.id] || 0) > 0).length === 0 && <div style={{ fontSize: 13, color: T.textMuted }}>No scores yet</div>}
+                          </div>
+                        </div>
+
+                        {/* Age Range */}
+                        <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
+                          <h4 style={{ fontSize: 14, fontFamily: T.heading, fontWeight: 700, marginBottom: 16, color: T.text }}>Age Range</h4>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {Object.entries(ownerDemographics?.ageCounts || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => {
+                              const pct = ownerReviews.length > 0 ? ((v / ownerReviews.length) * 100).toFixed(0) : 0;
+                              return (
+                                <div key={k}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                                    <span style={{ fontWeight: 600, color: T.text }}>{k}</span>
+                                    <span style={{ color: T.textMuted }}>{pct}%</span>
+                                  </div>
+                                  <div style={{ height: 6, borderRadius: 3, background: T.surfaceAlt }}>
+                                    <div style={{ height: "100%", borderRadius: 3, width: `${pct}%`, background: T.accent }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {Object.keys(ownerDemographics?.ageCounts || {}).length === 0 && <div style={{ fontSize: 13, color: T.textMuted }}>No data yet</div>}
+                          </div>
+                        </div>
+
+                        {/* All Category Averages (full width) */}
+                        <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
+                          <h4 style={{ fontSize: 14, fontFamily: T.heading, fontWeight: 700, marginBottom: 16, color: T.text }}>Gender</h4>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {Object.entries(ownerDemographics?.genderCounts || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => {
+                              const pct = ownerReviews.length > 0 ? ((v / ownerReviews.length) * 100).toFixed(0) : 0;
+                              return (
+                                <div key={k}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                                    <span style={{ fontWeight: 600, color: T.text }}>{k}</span>
+                                    <span style={{ color: T.textMuted }}>{pct}%</span>
+                                  </div>
+                                  <div style={{ height: 6, borderRadius: 3, background: T.surfaceAlt }}>
+                                    <div style={{ height: "100%", borderRadius: 3, width: `${pct}%`, background: T.accent }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {Object.keys(ownerDemographics?.genderCounts || {}).length === 0 && <div style={{ fontSize: 13, color: T.textMuted }}>No data yet</div>}
+                          </div>
+                        </div>
+
+                        {/* All Category Averages - full width */}
+                        <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}`, gridColumn: "1 / -1" }}>
+                          <h4 style={{ fontSize: 14, fontFamily: T.heading, fontWeight: 700, marginBottom: 16, color: T.text }}>All Category Averages</h4>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+                            {CATEGORIES.map(cat => {
+                              const catAvg = ownerDemographics?.scoreAvgs?.[cat.id] || 0;
+                              return (
+                                <div key={cat.id}>
+                                  <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, marginBottom: 6 }}>{cat.label}</div>
+                                  <div style={{ height: 20, borderRadius: T.radiusSm, background: T.surfaceAlt, display: "flex", alignItems: "center", padding: "0 6px" }}>
+                                    <div style={{ height: 18, borderRadius: T.radiusSm, background: catAvg > 0 ? scoreColor(catAvg) : T.surfaceAlt, width: `${(catAvg / 5) * 100}%`, display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 4 }}>
+                                      {catAvg > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{catAvg.toFixed(1)}</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </FadeIn>
+                  )}
                 </div>
               );
             })()}
