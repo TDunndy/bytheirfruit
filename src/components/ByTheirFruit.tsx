@@ -1970,7 +1970,7 @@ export default function ByTheirFruit() {
                 <input value={discoverSearchQuery} onChange={e => { setDiscoverSearchQuery(e.target.value); setCurrentPage(1); if (nearMeActive) { setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); } }} placeholder="Search church name..." style={{ width: "100%", padding: "11px 16px", borderRadius: T.radiusFull, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} />
                 <button onClick={handleNearMe} disabled={nearMeLoading} style={{ padding: "11px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: nearMeLoading ? "wait" : "pointer", background: nearMeActive ? T.accent : T.surface, color: nearMeActive ? "#fff" : T.textSoft, border: `1.5px solid ${nearMeActive ? T.accent : T.border}`, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s", opacity: nearMeLoading ? 0.6 : 1 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4m10-10h-4M6 12H2"/></svg>
-                  {nearMeLoading ? "Locating..." : nearMeActive ? "Near Me ✓" : "Near Me"}
+                  {nearMeLoading ? "Locating..." : "Near Me"}
                 </button>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -3430,7 +3430,7 @@ export default function ByTheirFruit() {
             <div style={{ minWidth: 120 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Explore</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[{ label: "Discover", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "How It Works", page: "about" }, { label: "For Churches", page: "for-churches" }].map(link => (
+                {[{ label: "Find a Church", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "How It Works", page: "about" }, { label: "For Churches", page: "for-churches" }].map(link => (
                   <button key={link.page} onClick={() => { if (link.page === "rate") startRateFlow(); else navigate(link.page); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: T.textSoft, fontFamily: T.body, textAlign: "left" }} onMouseEnter={e => e.currentTarget.style.color = T.accent} onMouseLeave={e => e.currentTarget.style.color = T.textSoft}>{link.label}</button>
                 ))}
               </div>
