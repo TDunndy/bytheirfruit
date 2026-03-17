@@ -2508,12 +2508,16 @@ export default function ByTheirFruit() {
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "36px 24px" }}>
           <FadeIn>
             <div style={{ display: "flex", gap: 3, marginBottom: 32 }}>
-              {["Find Church", "Rate", "Your Story", "Done"].map((s, i) => (
+              {["Find Church", "Share", "Done"].map((s, i) => {
+                const stepMap = [0, 1, 3];
+                const active = rateStep >= stepMap[i];
+                return (
                 <div key={i} style={{ flex: 1 }}>
-                  <div style={{ height: 3, borderRadius: 2, marginBottom: 5, background: i <= rateStep ? T.accent : T.surfaceAlt, transition: "background 0.3s" }} />
-                  <span style={{ fontSize: 10, fontFamily: T.heading, fontWeight: 600, letterSpacing: "0.04em", color: i <= rateStep ? T.accent : T.textMuted, textTransform: "uppercase" }}>{s}</span>
+                  <div style={{ height: 3, borderRadius: 2, marginBottom: 5, background: active ? T.accent : T.surfaceAlt, transition: "background 0.3s" }} />
+                  <span style={{ fontSize: 10, fontFamily: T.heading, fontWeight: 600, letterSpacing: "0.04em", color: active ? T.accent : T.textMuted, textTransform: "uppercase" }}>{s}</span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </FadeIn>
 
