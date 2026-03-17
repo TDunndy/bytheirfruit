@@ -1074,7 +1074,7 @@ export default function ByTheirFruit() {
       .from("reviews")
       .select("*, profiles(display_name, avatar_url), church_responses(id, text, created_at, profiles(display_name)), review_likes(user_id)")
       .eq("church_id", churchId)
-      .eq("status", "published")
+      .in("status", ["published", "pending", "hidden", "flagged"])
       .order("created_at", { ascending: false });
     if (!error && data) {
       const reviews = data.map(r => {
@@ -2790,7 +2790,7 @@ export default function ByTheirFruit() {
         <div style={{ maxWidth: 900, margin: "0 auto", padding: "36px 24px" }}>
           <FadeIn>
             <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Church Dashboard</h1>
-            <p style={{ fontSize: 14, color: T.textMuted, margin: "0 0 28px" }}>Your church insights and reviews</p>
+            <p style={{ fontSize: 14, color: T.textMuted, margin: "0 0 28px" }}>Your church insights and experiences</p>
 
             {myChurchesLoading && (
               <div style={{ textAlign: "center", padding: "60px 24px" }}>
@@ -2813,7 +2813,7 @@ export default function ByTheirFruit() {
                         <div style={{ fontSize: 13, color: T.textSoft }}>{oc.denomination} &middot; {oc.city}, {oc.state}</div>
                       </div>
                       <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 36, fontFamily: T.heading, fontWeight: 800, color: scoreColor(oc.scoreOverall || 0) }}>{oc.scoreOverall ? oc.scoreOverall.toFixed(1) : "—"}</div>
+                        <div style={{ fontSize: 36, fontFamily: T.heading, fontWeight: 800, color: oc.scoreOverall ? scoreColor(oc.scoreOverall) : T.textMuted }}>{oc.scoreOverall ? oc.scoreOverall.toFixed(1) : "—"}</div>
                         <div style={{ fontSize: 11, color: T.textMuted }}>{oc.totalReviews} experience{oc.totalReviews !== 1 ? "s" : ""}</div>
                       </div>
                     </div>
@@ -2920,7 +2920,7 @@ export default function ByTheirFruit() {
                     <h3 style={{ fontSize: 16, fontFamily: T.heading, fontWeight: 700, margin: "0 0 16px", letterSpacing: "-0.02em" }}>Experiences ({ownerReviews.length})</h3>
                     {ownerReviews.length === 0 && (
                       <div style={{ padding: "32px 20px", textAlign: "center", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px dashed ${T.border}` }}>
-                        <div style={{ fontSize: 14, color: T.textMuted }}>No experiences yet. Share your church profile to get started.</div>
+                        <div style={{ fontSize: 14, color: T.textMuted }}>No published experiences yet. Once members submit and their experiences are approved, they will appear here.</div>
                       </div>
                     )}
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -2936,6 +2936,7 @@ export default function ByTheirFruit() {
                               </div>
                               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                 {revAvg && <span style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, color: scoreColor(revAvg) }}>{revAvg.toFixed(1)}</span>}
+                                {rev.status && rev.status !== "published" && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 9999, fontWeight: 600, fontFamily: T.heading, background: rev.status === "pending" ? T.amberSoft : rev.status === "hidden" ? "rgba(168,85,247,0.12)" : rev.status === "flagged" ? T.redSoft : T.surfaceAlt, color: rev.status === "pending" ? T.amber : rev.status === "hidden" ? "#a855f7" : rev.status === "flagged" ? T.red : T.textMuted, border: `1px solid ${rev.status === "pending" ? T.amberBorder : rev.status === "hidden" ? "rgba(168,85,247,0.3)" : rev.status === "flagged" ? T.redBorder : T.border}` }}>{rev.status.charAt(0).toUpperCase() + rev.status.slice(1)}</span>}
                                 <span style={{ fontSize: 11, color: T.textMuted }}>{new Date(rev.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
                               </div>
                             </div>
