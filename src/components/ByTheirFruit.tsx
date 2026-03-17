@@ -569,7 +569,7 @@ function ProfileCompleteModal({ userId, onClose }) {
   );
 }
 
-function UserMenu({ user, onSignOut, onNavigate }) {
+function UserMenu({ user, onSignOut, onNavigate, onSaved }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ position: "relative" }}>
@@ -581,6 +581,7 @@ function UserMenu({ user, onSignOut, onNavigate }) {
         <div style={{ padding: "8px 12px", fontSize: 12, color: T.textMuted }}>{user.email}</div>
         <div style={{ height: 1, background: T.border, margin: "4px 0" }} />
         <button onClick={() => { onNavigate("myprofile"); setOpen(false); }} style={{ width: "100%", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 500, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: T.text, fontFamily: T.body }}>My Profile</button>
+        <button onClick={() => { if (onSaved) onSaved(); setOpen(false); }} style={{ width: "100%", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 500, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: T.text, fontFamily: T.body }}>Saved Churches</button>
         <div style={{ height: 1, background: T.border, margin: "4px 0" }} />
         <button onClick={() => { onSignOut(); setOpen(false); }} style={{ width: "100%", padding: "8px 12px", borderRadius: 6, fontSize: 13, fontWeight: 500, background: "transparent", border: "none", cursor: "pointer", textAlign: "left", color: T.red, fontFamily: T.body }}>Sign Out</button>
       </div>}
@@ -1263,7 +1264,7 @@ export default function ByTheirFruit() {
       .single();
 
     if (profile?.review_suspended) {
-      showToast("Your reviewing ability has been temporarily paused while we verify your recent reviews. We'll have this resolved soon!", "warning");
+      showToast("Your sharing ability has been temporarily paused while we verify your recent experiences. We'll have this resolved soon!", "warning");
       return false;
     }
 
@@ -1320,7 +1321,7 @@ export default function ByTheirFruit() {
 
     if (result.error) {
       console.error("Review submit error:", result.error);
-      showToast("Failed to submit review: " + result.error.message, "error");
+      showToast("Failed to submit experience: " + result.error.message, "error");
       return false;
     }
 
@@ -1352,7 +1353,7 @@ export default function ByTheirFruit() {
                 })
                 .eq("id", userId);
 
-              showToast("Thanks for your review! We noticed activity across several states — we'll verify your reviews within 24-48 hours.", "info");
+              showToast("Thanks for your experience! We noticed activity across several states — we'll verify your experiences within 24-48 hours.", "info");
             }
           }
         }
@@ -1583,6 +1584,8 @@ export default function ByTheirFruit() {
     setUserFavorites(new Set());
     setHasClaimed(false);
     navigate("home");
+    // Force page reload to fully clear session state
+    setTimeout(() => window.location.reload(), 100);
   };
 
   /* --- RATE FLOW --- */
@@ -1700,6 +1703,10 @@ export default function ByTheirFruit() {
   };
 
   const filteredChurches = churches;
+  const [currentPage, setCurrentPage] = useState(1);
+  const CHURCHES_PER_PAGE = 20;
+  const totalPages = Math.ceil(filteredChurches.length / CHURCHES_PER_PAGE);
+  const paginatedChurches = filteredChurches.slice((currentPage - 1) * CHURCHES_PER_PAGE, currentPage * CHURCHES_PER_PAGE);
   const denoms = ["All", "AME", "Apostolic", "Assemblies of God", "Baptist", "Calvary Chapel", "Catholic", "Church of Christ", "Church of God", "Church of God in Christ", "Church of the Nazarene", "Eastern Orthodox", "Episcopal", "Lutheran", "Methodist", "Non-Denominational", "Pentecostal", "Presbyterian", "United Church of Christ", "United Methodist", "Vineyard"];
   const currentChurch = selectedChurch ? (churches.find(c => c.id === selectedChurch.id) || selectedChurch) : null;
 
@@ -1729,26 +1736,23 @@ export default function ByTheirFruit() {
 
         {/* Desktop nav */}
         <div className="btf-desktop-nav" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <button onClick={() => navigate("discover")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "discover" ? T.text : "transparent", color: page === "discover" ? T.bg : T.textSoft, border: `1px solid ${page === "discover" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Find a Church</button>
           <button onClick={() => startRateFlow()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "rate" ? T.accent : T.accentSoft, color: page === "rate" ? "#fff" : T.accent, border: `1px solid ${page === "rate" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Share Your Experience</button>
-          {["discover", "about"].map(id => (
-            <button key={id} onClick={() => navigate(id)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.text : "transparent", color: page === id ? T.bg : T.textSoft, border: `1px solid ${page === id ? T.text : "transparent"}`, transition: "all 0.15s" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
-          ))}
-          {user && (
-            <button onClick={() => { navigate("saved"); fetchSavedChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "saved" ? T.text : "transparent", color: page === "saved" ? T.bg : T.textSoft, border: `1px solid ${page === "saved" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Saved</button>
-          )}
+          <button onClick={() => navigate("about")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "about" ? T.text : "transparent", color: page === "about" ? T.bg : T.textSoft, border: `1px solid ${page === "about" ? T.text : "transparent"}`, transition: "all 0.15s" }}>About</button>
+          
           {hasClaimed && (
             <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accent : T.accentSoft, color: page === "dashboard" ? "#fff" : T.accent, border: `1px solid ${page === "dashboard" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Church Dashboard</button>
           )}
           {/* Theme toggle */}
           <button onClick={() => setTheme(isDark ? "light" : "dark")} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={{ padding: "5px 8px", borderRadius: T.radiusFull, fontSize: 15, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1, transition: "all 0.15s" }}>{isDark ? "☀️" : "🌙"}</button>
           <div style={{ width: 1, height: 20, background: T.border, margin: "0 2px" }} />
-          {user ? <UserMenu user={user} onSignOut={handleSignOut} onNavigate={navigate} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
+          {user ? <UserMenu user={user} onSignOut={handleSignOut} onNavigate={navigate} onSaved={() => { navigate("saved"); fetchSavedChurches(user.id); }} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
         </div>
 
         {/* Mobile nav: hamburger + user */}
         <div className="btf-mobile-nav" style={{ display: "none", alignItems: "center", gap: 8 }}>
           <button onClick={() => setTheme(isDark ? "light" : "dark")} style={{ padding: "4px 7px", borderRadius: T.radiusFull, fontSize: 14, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1 }}>{isDark ? "☀️" : "🌙"}</button>
-          {user ? <UserMenu user={user} onSignOut={handleSignOut} onNavigate={navigate} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "5px 12px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
+          {user ? <UserMenu user={user} onSignOut={handleSignOut} onNavigate={navigate} onSaved={() => { navigate("saved"); fetchSavedChurches(user.id); }} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "5px 12px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} style={{ padding: "4px 6px", background: "transparent", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2" strokeLinecap="round">{mobileMenuOpen ? <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></> : <><line x1="3" y1="7" x2="21" y2="7" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="17" x2="21" y2="17" /></>}</svg>
           </button>
@@ -1758,13 +1762,10 @@ export default function ByTheirFruit() {
       {/* Mobile menu dropdown */}
       {mobileMenuOpen && (
         <div className="btf-mobile-menu" style={{ position: "sticky", top: 49, zIndex: 99, background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <button onClick={() => { navigate("discover"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "discover" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "discover" ? T.border : "transparent"}`, textAlign: "left" }}>Find a Church</button>
           <button onClick={() => { startRateFlow(); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", textAlign: "left" }}>Share Your Experience</button>
-          {["discover", "about"].map(id => (
-            <button key={id} onClick={() => navigate(id)} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === id ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === id ? T.border : "transparent"}`, textAlign: "left" }}>{id.charAt(0).toUpperCase() + id.slice(1)}</button>
-          ))}
-          {user && (
-            <button onClick={() => { navigate("saved"); fetchSavedChurches(user.id); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "saved" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "saved" ? T.border : "transparent"}`, textAlign: "left" }}>Saved</button>
-          )}
+          <button onClick={() => { navigate("about"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "about" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "about" ? T.border : "transparent"}`, textAlign: "left" }}>About</button>
+          
           {hasClaimed && (
             <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accentSoft : "transparent", color: T.accent, border: `1px solid ${page === "dashboard" ? T.accentBorder : "transparent"}`, textAlign: "left" }}>Church Dashboard</button>
           )}
@@ -1806,8 +1807,8 @@ export default function ByTheirFruit() {
               <h1 className="btf-hero-title" style={{ fontSize: 54, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.06, margin: "0 0 20px", letterSpacing: "-0.045em" }}>You will recognize<br />them by their fruit.</h1>
               <p style={{ fontSize: 17, color: T.textSoft, lineHeight: 1.65, maxWidth: 480, margin: "0 auto 36px" }}>Churches tell you who they are. Their people show you. Real experiences from real congregants — honest, structured, and built to help churches grow.</p>
               <div className="btf-hero-buttons" style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                <button onClick={() => startRateFlow()} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, boxShadow: "0 2px 12px rgba(37,99,235,0.2)" }}>Share Your Experience</button>
-                <button onClick={() => navigate("discover")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Find a Church</button>
+                <button onClick={() => navigate("discover")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, boxShadow: "0 2px 12px rgba(37,99,235,0.2)" }}>Find a Church</button>
+                <button onClick={() => startRateFlow()} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Share Your Experience</button>
                 <button onClick={() => navigate("about")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: "transparent", color: T.text, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>How It Works</button>
               </div>
             </div>
@@ -1893,18 +1894,18 @@ export default function ByTheirFruit() {
           </FadeIn>
           <FadeIn delay={80}>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-              <input value={discoverSearchQuery} onChange={e => setDiscoverSearchQuery(e.target.value)} placeholder="Search church name..." style={{ width: "100%", padding: "11px 16px", borderRadius: T.radiusFull, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} />
+              <input value={discoverSearchQuery} onChange={e => { setDiscoverSearchQuery(e.target.value); setCurrentPage(1); }} placeholder="Search church name..." style={{ width: "100%", padding: "11px 16px", borderRadius: T.radiusFull, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} />
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <select value={filterState} onChange={e => { setFilterState(e.target.value); setFilterCity(""); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 120 }}>
+                <select value={filterState} onChange={e => { setFilterState(e.target.value); setFilterCity(""); setCurrentPage(1); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 120 }}>
                   {US_STATES.map(s => <option key={s} value={s}>{s === "All" ? "All States" : `${s} — ${STATE_NAMES[s] || s}`}</option>)}
                 </select>
-                <input value={filterCity} onChange={e => setFilterCity(e.target.value)} placeholder="City" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 130 }} />
-                <input value={filterZip} onChange={e => setFilterZip(e.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="Zip code" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 90 }} />
-                <select value={filterDenom} onChange={e => setFilterDenom(e.target.value)} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 160 }}>
+                <input value={filterCity} onChange={e => { setFilterCity(e.target.value); setCurrentPage(1); }} placeholder="City" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 130 }} />
+                <input value={filterZip} onChange={e => { setFilterZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setCurrentPage(1); }} placeholder="Zip code" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 90 }} />
+                <select value={filterDenom} onChange={e => { setFilterDenom(e.target.value); setCurrentPage(1); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 160 }}>
                   {denoms.map(d => <option key={d} value={d}>{d === "All" ? "All Denominations" : d}</option>)}
                 </select>
                 {(filterState !== "All" || filterCity || filterZip || filterDenom !== "All" || discoverSearchQuery) && (
-                  <button onClick={() => { setFilterState("All"); setFilterCity(""); setFilterZip(""); setFilterDenom("All"); setDiscoverSearchQuery(""); }} style={{ padding: "8px 14px", borderRadius: T.radiusSm, fontSize: 12, fontWeight: 600, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.textSoft, cursor: "pointer", fontFamily: T.body }}>Clear filters</button>
+                  <button onClick={() => { setFilterState("All"); setFilterCity(""); setFilterZip(""); setFilterDenom("All"); setDiscoverSearchQuery(""); setCurrentPage(1); }} style={{ padding: "8px 14px", borderRadius: T.radiusSm, fontSize: 12, fontWeight: 600, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.textSoft, cursor: "pointer", fontFamily: T.body }}>Clear filters</button>
                 )}
               </div>
             </div>
@@ -1930,7 +1931,7 @@ export default function ByTheirFruit() {
                 <div style={{ fontSize: 13, color: T.textMuted }}>Searching...</div>
               </div>
             )}
-            {filteredChurches.map((church, i) => {
+            {paginatedChurches.map((church, i) => {
               const overall = avg(church.scores);
               const rated = hasScores(church);
               return (
@@ -1972,7 +1973,15 @@ export default function ByTheirFruit() {
               );
             })}
           </div>
-          <div style={{ marginTop: 20, padding: "18px 20px", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", transition: "all 0.15s" }} onClick={() => startRateFlow()} onMouseEnter={e => e.currentTarget.style.borderColor = T.accent} onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
+          {/* Pagination */}
+            {totalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginTop: 20, padding: "12px 0" }}>
+                <button onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }} disabled={currentPage === 1} style={{ padding: "8px 16px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: currentPage === 1 ? "not-allowed" : "pointer", background: currentPage === 1 ? T.surfaceAlt : T.surface, color: currentPage === 1 ? T.textMuted : T.text, border: `1.5px solid ${T.border}`, opacity: currentPage === 1 ? 0.5 : 1 }}>Previous</button>
+                <span style={{ fontSize: 13, color: T.textSoft, fontWeight: 500 }}>Page {currentPage} of {totalPages}</span>
+                <button onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }} disabled={currentPage === totalPages} style={{ padding: "8px 16px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: currentPage === totalPages ? "not-allowed" : "pointer", background: currentPage === totalPages ? T.surfaceAlt : T.surface, color: currentPage === totalPages ? T.textMuted : T.text, border: `1.5px solid ${T.border}`, opacity: currentPage === totalPages ? 0.5 : 1 }}>Next</button>
+              </div>
+            )}
+            <div style={{ marginTop: 20, padding: "18px 20px", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", transition: "all 0.15s" }} onClick={() => startRateFlow()} onMouseEnter={e => e.currentTarget.style.borderColor = T.accent} onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
             <div><div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Don't see your church?</div><div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>Share an experience or add a new church to our directory.</div></div>
             <div style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.accentSoft, color: T.accent, border: `1px solid ${T.accentBorder}`, flexShrink: 0 }}>Add Church</div>
           </div>
@@ -2108,7 +2117,7 @@ export default function ByTheirFruit() {
                   )}
                 </div>
                 {!c.phone && !c.website && !c.email && (
-                  <div style={{ fontSize: 12, color: T.textMuted, fontStyle: "italic" }}>Contact information not yet available. If you attend this church, help us out by writing a review!</div>
+                  <div style={{ fontSize: 12, color: T.textMuted, fontStyle: "italic" }}>Contact information not yet available. If you attend this church, help us out by sharing your experience!</div>
                 )}
                 {mapUrl && (
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.borderLight}` }}>
@@ -2125,7 +2134,7 @@ export default function ByTheirFruit() {
                 <div style={{ marginTop: 16, padding: "16px 24px", borderRadius: T.radius, background: T.amberSoft, border: `1.5px solid ${T.amberBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Are you part of this church's leadership?</div>
-                    <div style={{ fontSize: 12, color: T.textSoft, marginTop: 2 }}>Claim this church to respond to reviews, access insights, and get a verified badge.</div>
+                    <div style={{ fontSize: 12, color: T.textSoft, marginTop: 2 }}>Claim this church to respond to experiences, access insights, and get a verified badge.</div>
                   </div>
                   {claimStatus === "pending" ? (
                     <span style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.amberSoft, color: T.amber, border: `1.5px solid ${T.amberBorder}` }}>Claim Pending Review</span>
@@ -2357,7 +2366,7 @@ export default function ByTheirFruit() {
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: T.textMuted, marginBottom: 14 }}>Congregation Assessment</div>
                   {rated ? CATEGORIES.map(cat => <ScoreBar key={cat.id} label={cat.label} score={c.scores[cat.id] || 0} />) : (
                     <div style={{ padding: "20px 0", textAlign: "center" }}>
-                      <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 8 }}>Scores appear after {MIN_REVIEWS_FOR_SCORE} reviews</div>
+                      <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 8 }}>Scores appear after {MIN_REVIEWS_FOR_SCORE} experiences</div>
                       <div style={{ width: "100%", height: 4, borderRadius: 2, background: T.surfaceAlt, overflow: "hidden" }}>
                         <div style={{ height: "100%", borderRadius: 2, width: `${(c.totalReviews / MIN_REVIEWS_FOR_SCORE) * 100}%`, background: T.accent, opacity: 0.5, transition: "width 0.5s" }} />
                       </div>
@@ -2370,7 +2379,7 @@ export default function ByTheirFruit() {
               <div>
                 <FadeIn delay={180}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                    <h3 style={{ fontSize: 17, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>Reviews</h3>
+                    <h3 style={{ fontSize: 17, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>Experiences</h3>
                     {(() => {
                       const existing = user && userReviews[c.id];
                       const canEdit = existing && (Date.now() - existing.postedAt >= 7 * 24 * 60 * 60 * 1000);
@@ -2378,10 +2387,10 @@ export default function ByTheirFruit() {
                       return existing ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {!canEdit && <span style={{ fontSize: 11, color: T.textMuted }}>Edit in {daysLeft}d</span>}
-                          <button onClick={() => startRateFlow(c)} disabled={!canEdit} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: canEdit ? T.accent : T.surfaceAlt, color: canEdit ? "#fff" : T.textMuted, border: "none", cursor: canEdit ? "pointer" : "not-allowed", fontFamily: T.body }}>Edit Your Review</button>
+                          <button onClick={() => startRateFlow(c)} disabled={!canEdit} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: canEdit ? T.accent : T.surfaceAlt, color: canEdit ? "#fff" : T.textMuted, border: "none", cursor: canEdit ? "pointer" : "not-allowed", fontFamily: T.body }}>Edit Your Experience</button>
                         </div>
                       ) : (
-                        <button onClick={() => startRateFlow(c)} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Write a Review</button>
+                        <button onClick={() => startRateFlow(c)} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Share Your Experience</button>
                       );
                     })()}
                   </div>
@@ -2457,7 +2466,7 @@ export default function ByTheirFruit() {
                 {rateSearch.length === 0 && <div style={{ padding: "32px", textAlign: "center" }}><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={T.border} strokeWidth="1.5" style={{ margin: "0 auto 10px", display: "block" }}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg><div style={{ fontSize: 13, color: T.textMuted }}>Type a church name or city to get started</div></div>}
               </div>
               <div style={{ marginTop: 24, padding: "18px 20px", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", transition: "all 0.15s" }} onClick={() => { setShowAddChurch(true); setAddData(p => ({ ...p, name: rateSearch })); }} onMouseEnter={e => e.currentTarget.style.borderColor = T.accent} onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
-                <div><div style={{ fontSize: 14, fontWeight: 600 }}>Don't see your church?</div><div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>Add it to By Their Fruit so others can find and review it too.</div></div>
+                <div><div style={{ fontSize: 14, fontWeight: 600 }}>Don't see your church?</div><div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>Add it to By Their Fruit so others can find and share their experience too.</div></div>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: T.accent, fontWeight: 300, flexShrink: 0 }}>+</div>
               </div>
             </FadeIn>
@@ -2508,7 +2517,7 @@ export default function ByTheirFruit() {
                   <li>Focus on your experience, not doctrinal debates (e.g., Calvinism vs. Arminianism disagreements will not be published)</li>
                   <li>No naming specific individuals in a negative context</li>
                   <li>No personal attacks, threats, or inflammatory language</li>
-                  <li>Coordinated review campaigns will be detected and removed</li>
+                  <li>Coordinated experience campaigns will be detected and removed</li>
                   <li>Constructive criticism is welcome — help churches grow, don't tear them down</li>
                 </ul>
               </div>
@@ -2632,7 +2641,7 @@ export default function ByTheirFruit() {
             <div style={{ fontSize: 15, color: T.textSoft, lineHeight: 1.75 }}>
               <p>Every church in America has a website that says the same things. <em>Welcoming community. Bible-based teaching. A place to belong.</em> But how do you know if it's true?</p>
               <p><strong style={{ color: T.text }}>By Their Fruit</strong> exists because we believe the body of Christ — the actual people in the pews — are the most honest witnesses to what a church really is.</p>
-              <p>Our platform gathers structured, thoughtful reviews from congregants and visitors across ten categories rooted in what scripture says a healthy church should look like. Reviews post immediately. scores update in real time as reviews are approved — giving a trustworthy, always-current picture.</p>
+              <p>Our platform gathers structured, thoughtful experiences from congregants and visitors across ten categories rooted in what scripture says a healthy church should look like. Experiences post immediately. Scores update in real time as experiences are approved — giving a trustworthy, always-current picture.</p>
               <p>This isn't about tearing churches down. It's about building them up through honest feedback.</p>
               <div style={{ padding: "28px", borderRadius: T.radius, background: T === DARK ? T.surfaceAlt : T.text, color: T === DARK ? T.text : T.bg, margin: "28px 0", textAlign: "center" }}>
                 <p style={{ fontSize: 17, fontStyle: "italic", lineHeight: 1.6, margin: "0 0 8px", opacity: 0.85 }}>"Beware of false prophets, who come to you in sheep's clothing but inwardly are ravenous wolves. You will recognize them by their fruits."</p>
@@ -2935,7 +2944,7 @@ export default function ByTheirFruit() {
               <p>You represent and warrant that: (a) you are the original author of the User Content; (b) the User Content is based on your genuine firsthand experience; (c) the User Content does not contain false, defamatory, or misleading statements; (d) the User Content does not violate any applicable law, regulation, or third-party right; and (e) the User Content does not contain personal attacks, threats, hate speech, or harassment.</p>
 
               <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>4. Review Guidelines and Moderation</h2>
-              <p>All reviews are subject to automated and manual moderation. We reserve the right to remove, edit, or flag any content that violates these Terms, our community guidelines, or applicable law. Reviews must reflect genuine personal experience with the church being reviewed. You may submit one review per church. You may submit up to three reviews per day across the platform.</p>
+              <p>All experiences are subject to automated and manual moderation. We reserve the right to remove, edit, or flag any content that violates these Terms, our community guidelines, or applicable law. Experiences must reflect genuine personal experience with the church being reviewed. You may submit one experience per church. You may submit up to three experiences per day across the platform.</p>
               <p>Prohibited content includes but is not limited to: spam or duplicate reviews, reviews submitted for a church you have not attended, content that is primarily doctrinal argument rather than experiential feedback, coordinated review campaigns, and content that contains personally identifiable information about third parties without their consent.</p>
 
               <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>5. Church Claiming and Paid Subscriptions</h2>
