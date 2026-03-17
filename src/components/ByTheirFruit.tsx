@@ -840,6 +840,8 @@ export default function ByTheirFruit() {
         setPage("privacy");
       } else if (hash === "#/myprofile") {
         setPage("myprofile");
+      } else if (hash === "#/for-churches") {
+        setPage("for-churches");
       }
     };
     handleHash();
@@ -3024,7 +3026,92 @@ export default function ByTheirFruit() {
         </div>
       )}
 
-      {/* TERMS OF SERVICE */}
+      {/* FOR CHURCHES - BENEFITS & SUBSCRIBE */}
+      {!loading && page === "for-churches" && (
+        <div style={{ maxWidth: 800, margin: "0 auto", padding: "56px 24px" }}>
+          <FadeIn>
+            <div style={{ textAlign: "center", marginBottom: 48 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>For Church Leaders</div>
+              <h1 style={{ fontSize: 34, fontFamily: T.heading, fontWeight: 800, margin: "0 0 12px", letterSpacing: "-0.03em" }}>Understand Your Congregation Like Never Before</h1>
+              <p style={{ fontSize: 16, color: T.textSoft, maxWidth: 560, margin: "0 auto", lineHeight: 1.7 }}>By Their Fruit gives church leaders real, anonymous feedback from the people who attend — so you can grow with clarity and confidence.</p>
+            </div>
+          </FadeIn>
+
+          <FadeIn delay={80}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 40 }}>
+              {[
+                { icon: "\u2705", title: "Verified Owner Badge", desc: "Show visitors your church is actively engaged and listening to its congregation." },
+                { icon: "\uD83D\uDCAC", title: "Respond to Experiences", desc: "Publicly respond to feedback, thank members, and address concerns directly." },
+                { icon: "\uD83D\uDCCA", title: "Insights Dashboard", desc: "See score breakdowns across 10 categories — teaching, worship, community, and more." },
+                { icon: "\uD83D\uDC65", title: "Reviewer Demographics", desc: "Understand who is sharing feedback: age ranges, gender, roles, and income brackets." },
+                { icon: "\uD83D\uDD14", title: "New Experience Alerts", desc: "Get notified when someone shares a new experience about your church." },
+                { icon: "\u2B50", title: "Priority Listing", desc: "Verified churches appear first in search results, making it easier for visitors to find you." }
+              ].map((b, i) => (
+                <div key={i} style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                  <div style={{ fontSize: 24, marginBottom: 10 }}>{b.icon}</div>
+                  <div style={{ fontSize: 15, fontFamily: T.heading, fontWeight: 700, marginBottom: 4, letterSpacing: "-0.01em" }}>{b.title}</div>
+                  <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6 }}>{b.desc}</div>
+                </div>
+              ))}
+            </div>
+          </FadeIn>
+
+          <FadeIn delay={160}>
+            <div style={{ padding: "32px", borderRadius: T.radius + 4, background: T.surface, border: `2px solid ${T.accentBorder}`, textAlign: "center", marginBottom: 40 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Church Subscription</div>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4, marginBottom: 4 }}>
+                <span style={{ fontSize: 48, fontFamily: T.heading, fontWeight: 800, letterSpacing: "-0.03em" }}>$39</span>
+                <span style={{ fontSize: 16, color: T.textMuted }}>/month</span>
+              </div>
+              <p style={{ fontSize: 14, color: T.textSoft, marginBottom: 24, maxWidth: 400, margin: "0 auto 24px" }}>Everything you need to listen, respond, and grow your church with real feedback from real people.</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 340, margin: "0 auto 24px", textAlign: "left" }}>
+                {["Verified Owner badge on your profile", "Respond publicly to all experiences", "Full insights dashboard with score breakdowns", "Demographic analytics (age, gender, role, income)", "Priority placement in search results", "Email alerts for new experiences", "Cancel anytime — no contracts"].map((item, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span style={{ color: T.green, fontSize: 14, lineHeight: 1.6 }}>\u2713</span>
+                    <span style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6 }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => { window.open("https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00", "_blank"); }} style={{ padding: "14px 36px", borderRadius: T.radiusFull, fontSize: 15, fontWeight: 700, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", boxShadow: "0 2px 16px rgba(37,99,235,0.25)", transition: "all 0.2s" }}>Subscribe Now</button>
+              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 12 }}>Secure payment via Stripe. Cancel anytime.</div>
+            </div>
+          </FadeIn>
+
+          <FadeIn delay={240}>
+            <div style={{ padding: "28px", borderRadius: T.radius, background: T.surfaceAlt, border: `1px solid ${T.border}`, marginBottom: 32 }}>
+              <h3 style={{ fontSize: 18, fontFamily: T.heading, fontWeight: 700, margin: "0 0 12px", letterSpacing: "-0.02em" }}>How It Works for Churches</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {[
+                  { step: "1", title: "Claim Your Church", desc: "Search for your church in our directory and submit a claim request with your church email." },
+                  { step: "2", title: "Get Verified", desc: "Our team reviews your claim and verifies your ownership — typically within 24–48 hours." },
+                  { step: "3", title: "Subscribe", desc: "Activate your subscription to unlock the full dashboard, response tools, and analytics." },
+                  { step: "4", title: "Engage & Grow", desc: "Read experiences, respond to feedback, and use insights to strengthen your ministry." }
+                ].map((s, i) => (
+                  <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 14, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, fontFamily: T.heading, color: T.accent, flexShrink: 0 }}>{s.step}</div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 2 }}>{s.title}</div>
+                      <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6 }}>{s.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </FadeIn>
+
+          <FadeIn delay={320}>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontSize: 14, color: T.textSoft, marginBottom: 16 }}>Already claimed your church? Go to your dashboard to manage your profile and subscription.</p>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+                <button onClick={() => navigate("dashboard")} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.surfaceAlt, color: T.text, border: `1px solid ${T.border}` }}>Go to Dashboard</button>
+                <button onClick={() => navigate("discover")} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: "transparent", color: T.accent, border: `1px solid ${T.accentBorder}` }}>Find Your Church</button>
+              </div>
+            </div>
+          </FadeIn>
+        </div>
+      )}
+
+            {/* TERMS OF SERVICE */}
       {!loading && page === "terms" && (
         <div style={{ maxWidth: 700, margin: "0 auto", padding: "56px 24px" }}>
           <FadeIn>
@@ -3339,7 +3426,7 @@ export default function ByTheirFruit() {
             <div style={{ minWidth: 120 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Explore</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[{ label: "Discover", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "How It Works", page: "about" }].map(link => (
+                {[{ label: "Discover", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "How It Works", page: "about" }, { label: "For Churches", page: "for-churches" }].map(link => (
                   <button key={link.page} onClick={() => { if (link.page === "rate") startRateFlow(); else navigate(link.page); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: T.textSoft, fontFamily: T.body, textAlign: "left" }} onMouseEnter={e => e.currentTarget.style.color = T.accent} onMouseLeave={e => e.currentTarget.style.color = T.textSoft}>{link.label}</button>
                 ))}
               </div>
