@@ -3776,7 +3776,7 @@ export default function ByTheirFruit() {
 
                           return (
                             <div key={rev.id} style={{ padding: "16px", borderRadius: T.radiusSm, background: T.surface, border: `1.5px solid ${T.border}`, transition: "border-color 0.15s", cursor: "pointer" }}
-                              onClick={() => { const c = churches.find(ch => ch.id === rev.church_id); if (c) { selectChurch(c); } }}
+                              onClick={() => { const c = churches.find(ch => ch.id === rev.church_id) || (rev.churches ? dbChurchToLocal({ ...rev.churches, total_reviews: 0 }) : null); if (c) { selectChurch(c); } }}
                               onMouseEnter={e => e.currentTarget.style.borderColor = T.accent}
                               onMouseLeave={e => e.currentTarget.style.borderColor = T.border}
                             >
@@ -3799,8 +3799,8 @@ export default function ByTheirFruit() {
                                   <span style={{ padding: "2px 8px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 500, background: T.surfaceAlt, color: T.textMuted, border: `1px solid ${T.borderLight}` }}>{rev.reviewer_role || "Visitor"}</span>
                                   <span style={{ fontSize: 11, color: T.textMuted }}>{dateStr}</span>
                                 </div>
-                                <button onClick={(e) => { e.stopPropagation(); const c = churches.find(ch => ch.id === rev.church_id); if (c) selectChurchToRate(c); }}
-                                  style={{ fontSize: 11, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, padding: 0 }}>Edit</button>
+                                <button onClick={(e) => { e.stopPropagation(); const c = churches.find(ch => ch.id === rev.church_id) || (rev.churches ? dbChurchToLocal({ ...rev.churches, total_reviews: 0 }) : null); if (c) selectChurchToRate(c); }}
+                                  style={{ fontSize: 12, fontWeight: 600, color: T.accent, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, borderRadius: T.radiusFull, cursor: "pointer", fontFamily: T.body, padding: "4px 12px" }}>Edit</button>
                               </div>
                             </div>
                           );
