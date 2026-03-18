@@ -1349,14 +1349,20 @@ export default function ByTheirFruit() {
 
   /* --- SUBMIT REVIEW TO DB --- */
   const submitReviewToDB = async (reviewData, userId) => {
+    try {
     const { churchId, scores, comments, text, role, lastVisited, isEdit, reviewerLat, reviewerLng } = reviewData;
 
     // --- CHECK: Is user suspended from reviewing? ---
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("review_suspended")
       .eq("id", userId)
       .single();
+
+    if (profileError) {
+      console.error("Profile check error:", profileError);
+      // Don't block submission if profile check fails
+    }
 
     if (profile?.review_suspended) {
       showToast("Your sharing ability has been temporarily paused while we verify your recent experiences. We'll have this resolved soon!", "warning");
@@ -1483,6 +1489,12 @@ export default function ByTheirFruit() {
     await fetchReviewsForChurch(churchId);
     await fetchUserReviews(userId);
     return true;
+
+    } catch (err) {
+      console.error("submitReviewToDB unexpected error:", err);
+      showToast("Something went wrong. Please try again.", "error");
+      return false;
+    }
   };
 
   /* --- CLAIM CHURCH --- */
@@ -1769,9 +1781,15 @@ export default function ByTheirFruit() {
     }
 
     setSubmitting(true);
-    const success = await submitReviewToDB(reviewData, user.id);
-    setSubmitting(false);
-    if (success) setRateStep(3);
+    try {
+      const success = await submitReviewToDB(reviewData, user.id);
+      if (success) setRateStep(3);
+    } catch (err) {
+      console.error("Submit error:", err);
+      showToast("Something went wrong submitting your experience. Please try again.", "error");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const addManualChurch = async () => {
@@ -3676,6 +3694,91 @@ export default function ByTheirFruit() {
                   <div>Member since <strong style={{ color: T.text }}>{profileData?.created_at ? new Date(profileData.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "—"}</strong></div>
                 </div>
               </div>
+
+              {/* My Shared Experiences */}
+              {(() => {
+                const [myReviews, setMyReviews] = useState([]);
+                const [loadingReviews, setLoadingReviews] = useState(true);
+
+                useEffect(() => {
+                  async function loadMyReviews() {
+                    setLoadingReviews(true);
+                    const { data, error } = await supabase
+                      .from("reviews")
+                      .select("*, churches(id, name, city, state)")
+                      .eq("user_id", user.id)
+                      .order("created_at", { ascending: false });
+                    if (!error && data) {
+                      setMyReviews(data);
+                    }
+                    setLoadingReviews(false);
+                  }
+                  loadMyReviews();
+                }, []);
+
+                return (
+                  <div style={{ marginTop: 32 }}>
+                    <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 6px", letterSpacing: "-0.03em" }}>My Shared Experiences</h2>
+                    <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 20px" }}>Reviews you've shared with the community</p>
+
+                    {loadingReviews ? (
+                      <div style={{ textAlign: "center", padding: "32px 0" }}>
+                        <div style={{ display: "inline-block", width: 20, height: 20, border: `2px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+                      </div>
+                    ) : myReviews.length === 0 ? (
+                      <div style={{ padding: "32px 16px", textAlign: "center", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                        <div style={{ fontSize: 28, marginBottom: 8 }}>📝</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 4 }}>No experiences shared yet</div>
+                        <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Share your church experience to help others find the right community.</div>
+                        <button onClick={() => startRateFlow()} style={{ padding: "8px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Share Your Experience</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {myReviews.map(rev => {
+                          const churchName = rev.churches?.name || "Unknown Church";
+                          const churchCity = rev.churches?.city || "";
+                          const churchState = rev.churches?.state || "";
+                          const location = [churchCity, churchState].filter(Boolean).join(", ");
+                          const dateStr = new Date(rev.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                          const scoredFields = SCORE_FIELDS.filter(f => rev[`score_${f}`] != null);
+                          const avgScore = scoredFields.length > 0 ? scoredFields.reduce((sum, f) => sum + rev[`score_${f}`], 0) / scoredFields.length : null;
+
+                          return (
+                            <div key={rev.id} style={{ padding: "16px", borderRadius: T.radiusSm, background: T.surface, border: `1.5px solid ${T.border}`, transition: "border-color 0.15s", cursor: "pointer" }}
+                              onClick={() => { const c = churches.find(ch => ch.id === rev.church_id); if (c) { selectChurch(c); } }}
+                              onMouseEnter={e => e.currentTarget.style.borderColor = T.accent}
+                              onMouseLeave={e => e.currentTarget.style.borderColor = T.border}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                                <div>
+                                  <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, color: T.text, letterSpacing: "-0.02em" }}>{churchName}</div>
+                                  {location && <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{location}</div>}
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  {avgScore !== null && (
+                                    <div style={{ padding: "3px 10px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 700, fontFamily: T.heading, background: scoreBg(avgScore), color: scoreColor(avgScore), border: `1px solid ${scoreBorder2(avgScore)}` }}>{avgScore.toFixed(1)}</div>
+                                  )}
+                                </div>
+                              </div>
+                              {rev.text && (
+                                <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.5, marginBottom: 8, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{rev.text}</div>
+                              )}
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                  <span style={{ padding: "2px 8px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 500, background: T.surfaceAlt, color: T.textMuted, border: `1px solid ${T.borderLight}` }}>{rev.reviewer_role || "Visitor"}</span>
+                                  <span style={{ fontSize: 11, color: T.textMuted }}>{dateStr}</span>
+                                </div>
+                                <button onClick={(e) => { e.stopPropagation(); const c = churches.find(ch => ch.id === rev.church_id); if (c) selectChurchToRate(c); }}
+                                  style={{ fontSize: 11, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, padding: 0 }}>Edit</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
         }
