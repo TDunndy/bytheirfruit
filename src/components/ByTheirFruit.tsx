@@ -948,7 +948,7 @@ export default function ByTheirFruit() {
     }
   }, []);
 
-  const searchChurchesDB = useCallback(async (query, denomination, state, city, zip) => {
+  const searchChurchesDB = useCallback(async (query, denomination, state, city, zip, _retried) => {
     if (!query && (!denomination || denomination === "All") && (!state || state === "All") && !city && !zip) {
       setChurches([]);
       return;
@@ -973,12 +973,26 @@ export default function ByTheirFruit() {
       }
       q = q.order("total_reviews", { ascending: false }).limit(50);
       const { data, error } = await q;
-      if (error) console.error("Search error:", error);
+      if (error) {
+        console.error("Search error:", error);
+        // On auth/connection error, refresh session and retry once
+        if (!_retried) {
+          await supabase.auth.getSession();
+          return searchChurchesDB(query, denomination, state, city, zip, true);
+        }
+        showToast("Search failed. Please refresh the page and try again.", "error");
+      }
       if (!error && data) {
         setChurches(data.map(dbChurchToLocal));
       }
     } catch (err) {
       console.error("Search exception:", err);
+      // On network/connection error, refresh session and retry once
+      if (!_retried) {
+        try { await supabase.auth.getSession(); } catch {}
+        return searchChurchesDB(query, denomination, state, city, zip, true);
+      }
+      showToast("Connection issue. Please check your internet and try again.", "error");
     } finally {
       setSearchLoading(false);
     }
@@ -1346,6 +1360,26 @@ export default function ByTheirFruit() {
   useEffect(() => {
     if (mounted) fetchChurches();
   }, [mounted, fetchChurches]);
+
+  /* --- KEEP SUPABASE ALIVE: refresh session when tab regains focus --- */
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === "visible") {
+        try {
+          // Refresh the auth session to keep the connection alive
+          await supabase.auth.getSession();
+          // If user was searching, re-run the search to recover from stale connections
+          if (page === "discover" && (discoverSearchQuery || filterDenom !== "All" || filterState !== "All")) {
+            searchChurchesDB(discoverSearchQuery, filterDenom, filterState, filterCity, filterZip);
+          }
+        } catch (err) {
+          console.error("Session refresh error:", err);
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [page, discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, searchChurchesDB]);
 
   /* --- SUBMIT REVIEW TO DB --- */
   const submitReviewToDB = async (reviewData, userId) => {
