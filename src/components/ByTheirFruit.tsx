@@ -3555,6 +3555,8 @@ export default function ByTheirFruit() {
           const [gender, setGender] = useState("");
           const [ageRange, setAgeRange] = useState("");
           const [incomeBracket, setIncomeBracket] = useState("");
+          const [myReviews, setMyReviews] = useState([]);
+          const [loadingReviews, setLoadingReviews] = useState(true);
           const [saving, setSaving] = useState(false);
           const [saved, setSaved] = useState(false);
           const [emailSent, setEmailSent] = useState(false);
@@ -3576,6 +3578,22 @@ export default function ByTheirFruit() {
               setLoadingProfile(false);
             }
             loadProfile();
+          }, []);
+
+          useEffect(() => {
+            async function loadMyReviews() {
+              setLoadingReviews(true);
+              const { data, error } = await supabase
+                .from("reviews")
+                .select("*, churches(id, name, city, state)")
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: false });
+              if (!error && data) {
+                setMyReviews(data);
+              }
+              setLoadingReviews(false);
+            }
+            loadMyReviews();
           }, []);
 
           const selectStyle = (selected) => ({
@@ -3730,28 +3748,7 @@ export default function ByTheirFruit() {
               </div>
 
               {/* My Shared Experiences */}
-              {(() => {
-                const [myReviews, setMyReviews] = useState([]);
-                const [loadingReviews, setLoadingReviews] = useState(true);
-
-                useEffect(() => {
-                  async function loadMyReviews() {
-                    setLoadingReviews(true);
-                    const { data, error } = await supabase
-                      .from("reviews")
-                      .select("*, churches(id, name, city, state)")
-                      .eq("user_id", user.id)
-                      .order("created_at", { ascending: false });
-                    if (!error && data) {
-                      setMyReviews(data);
-                    }
-                    setLoadingReviews(false);
-                  }
-                  loadMyReviews();
-                }, []);
-
-                return (
-                  <div style={{ marginTop: 32 }}>
+              <div style={{ marginTop: 32 }}>
                     <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 6px", letterSpacing: "-0.03em" }}>My Shared Experiences</h2>
                     <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 20px" }}>Reviews you've shared with the community</p>
 
@@ -3810,9 +3807,7 @@ export default function ByTheirFruit() {
                         })}
                       </div>
                     )}
-                  </div>
-                );
-              })()}
+              </div>
             </div>
           );
         }
