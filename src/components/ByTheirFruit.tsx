@@ -958,7 +958,7 @@ export default function ByTheirFruit() {
     try {
       let q = supabase.from("churches").select("*");
       if (query) {
-        q = q.or(`name.ilike.%${query}%,city.ilike.%${query}%,denomination.ilike.%${query}%`);
+        q = q.ilike("name", `%${query}%`);
       }
       if (denomination && denomination !== "All") {
         q = q.eq("denomination", denomination);
@@ -2730,8 +2730,15 @@ export default function ByTheirFruit() {
               <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px" }}>Your honest experience helps families find the right church and helps churches grow.</p>
               <div style={{ marginBottom: 16 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 7 }}>Your relationship</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{["First-time Visitor", "Repeat Visitor", "Member (< 1 yr)", "Member (1\u20133 yrs)", "Member (3+ yrs)", "Former Member"].map(r => <Chip key={r} active={rateRole === r} onClick={() => setRateRole(r)}>{r}</Chip>)}</div></div>
               <div style={{ marginBottom: 16 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 7 }}>Last visited</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{["This week", "This month", "1\u20133 months ago", "3\u20136 months ago", "6\u201312 months ago", "Over a year ago"].map(v => <Chip key={v} active={rateLastVisited === v} onClick={() => setRateLastVisited(v)}>{v}</Chip>)}</div></div>
-              <div style={{ marginBottom: 20 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your experience</label><textarea value={rateText} onChange={e => setRateText(e.target.value)} placeholder="Share your experience — what stood out, what could improve, what should a visitor know?" rows={5} maxLength={2000} style={{ width: "100%", padding: "12px 16px", borderRadius: T.radius, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", resize: "vertical", lineHeight: 1.65, fontFamily: T.body }} /></div>
-              <div style={{ fontSize: 11, color: rateText.length >= 2000 ? T.red : rateText.length > 1800 ? T.amber : T.textMuted, marginBottom: 20 }}>{rateText.length}/2,000 characters</div>
+              <div style={{ marginBottom: 8 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your experience <span style={{ fontWeight: 400, color: T.textMuted }}>(minimum 20 characters)</span></label><textarea value={rateText} onChange={e => setRateText(e.target.value)} placeholder="Share your experience — what stood out, what could improve, what should a visitor know?" rows={5} maxLength={2000} style={{ width: "100%", padding: "12px 16px", borderRadius: T.radius, fontSize: 14, border: `1.5px solid ${rateText.length > 0 && rateText.trim().length < 20 ? T.amber : T.border}`, background: T.surface, color: T.text, outline: "none", resize: "vertical", lineHeight: 1.65, fontFamily: T.body, boxSizing: "border-box" }} /></div>
+              {rateText.length > 0 && rateText.trim().length < 20 ? (
+                <div style={{ fontSize: 12, color: T.amber, fontWeight: 600, marginBottom: 20, display: "flex", alignItems: "center", gap: 6 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {20 - rateText.trim().length} more characters needed (minimum 20)
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: rateText.length >= 2000 ? T.red : rateText.length > 1800 ? T.amber : T.textMuted, marginBottom: 20 }}>{rateText.length}/2,000 characters</div>
+              )}
               {/* Location verification */}
               <div style={{ padding: "14px 16px", borderRadius: T.radius, background: T.surfaceAlt, border: `1px solid ${T.border}`, marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -2768,7 +2775,7 @@ export default function ByTheirFruit() {
                 <button onClick={() => setRateStep(1)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {!user && <span style={{ fontSize: 12, color: T.textMuted }}>Sign in required</span>}
-                  <button onClick={handleRateSubmit} disabled={!rateRole || !rateLastVisited || !rateText.trim() || submitting} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!rateRole || !rateLastVisited || !rateText.trim() || submitting) ? 0.3 : 1, boxShadow: "0 2px 8px rgba(37,99,235,0.2)" }}>{submitting ? "Submitting..." : !user ? "Sign In & Submit" : isEditing ? "Update Experience" : "Submit Experience"}</button>
+                  <button onClick={handleRateSubmit} disabled={!rateRole || !rateLastVisited || rateText.trim().length < 20 || submitting} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!rateRole || !rateLastVisited || rateText.trim().length < 20 || submitting) ? 0.3 : 1, boxShadow: "0 2px 8px rgba(37,99,235,0.2)" }}>{submitting ? "Submitting..." : !user ? "Sign In & Submit" : isEditing ? "Update Experience" : "Submit Experience"}</button>
                 </div>
               </div>
             </FadeIn>
