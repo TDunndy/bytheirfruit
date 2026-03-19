@@ -157,6 +157,7 @@ function dbChurchToLocal(c) {
     claimedAt: c.claimed_at || null,
     latitude: c.latitude || null,
     longitude: c.longitude || null,
+    status: c.status || "approved",
   };
 }
 
@@ -1846,6 +1847,7 @@ export default function ByTheirFruit() {
     const newChurch = dbChurchToLocal(data);
     setChurches(prev => [...prev, newChurch]);
     setShowAddChurch(false);
+    showToast("Church submitted! It will appear in search results after admin approval.", "success");
     selectChurchToRate(newChurch);
   };
 
