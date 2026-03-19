@@ -2777,9 +2777,9 @@ export default function ByTheirFruit() {
             <FadeIn>
               <div style={{ textAlign: "center", padding: "60px 0" }}>
                 <div style={{ width: 64, height: 64, borderRadius: 32, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 20px" }}>✔</div>
-                <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 8px", letterSpacing: "-0.03em" }}>{isEditing ? "Experience updated" : "Experience submitted"}</h2>
-                <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 4px" }}>Your experience with <strong>{rateChurch?.name}</strong> has been submitted and is now under review.</p>
-                <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 32px" }}>Our team reviews every submission within 6-48 hours to ensure it meets our community guidelines. You'll see it published once approved.</p>
+                <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 8px", letterSpacing: "-0.03em" }}>{isEditing ? "Experience updated" : "Experience submitted!"}</h2>
+                <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 4px" }}>Your experience with <strong>{rateChurch?.name}</strong> has been submitted and will be visible after admin approval.</p>
+                <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 32px" }}>Our team reviews every submission to ensure quality and authenticity. This usually takes less than 24 hours.</p>
                 <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                   <button onClick={() => { const c = churches.find(ch => ch.id === rateChurch?.id); if (c) viewChurch(c); }} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>View Church Profile</button>
                   <button onClick={() => startRateFlow()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Share Another Experience</button>
