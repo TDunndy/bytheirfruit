@@ -27,7 +27,7 @@ const DARK = {
   ...SHARED,
   bg: "#0a0a0b", surface: "#18181b", surfaceAlt: "#1e1e22",
   border: "#2e2e33", borderLight: "#252529",
-  text: "#f4f4f5", textSoft: "#a1a1aa", textMuted: "#636369",
+  text: "#fafafa", textSoft: "#c4c4cc", textMuted: "#8b8b95",
   accentSoft: "#172554", accentBorder: "#1e3a5f",
   greenSoft: "#052e16", greenBorder: "#14532d",
   amberSoft: "#451a03", amberBorder: "#78350f",
@@ -2371,11 +2371,11 @@ export default function ByTheirFruit() {
                     {/* Church Size */}
                     <div>
                       <h3 style={{ fontSize: 13, fontFamily: T.heading, fontWeight: 700, margin: "0 0 12px", color: T.text }}>Church Size</h3>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        <input type="number" value={claimData.avgAttendance} onChange={e => setClaimData(p => ({ ...p, avgAttendance: e.target.value }))} placeholder="Average Sunday attendance" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
-                        <input type="number" value={claimData.staffCount} onChange={e => setClaimData(p => ({ ...p, staffCount: e.target.value }))} placeholder="Staff count" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
-                        <input type="number" value={claimData.volunteerCount} onChange={e => setClaimData(p => ({ ...p, volunteerCount: e.target.value }))} placeholder="Volunteer count" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
-                        <input type="number" value={claimData.campusCount} onChange={e => setClaimData(p => ({ ...p, campusCount: e.target.value }))} placeholder="Number of campuses" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body }} />
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 4 }}>Average Sunday Attendance</label><input type="number" min="0" value={claimData.avgAttendance} onChange={e => setClaimData(p => ({ ...p, avgAttendance: Math.max(0, parseInt(e.target.value) || 0).toString() }))} placeholder="e.g. 250 people" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 4 }}>Paid Staff Members</label><input type="number" min="0" value={claimData.staffCount} onChange={e => setClaimData(p => ({ ...p, staffCount: Math.max(0, parseInt(e.target.value) || 0).toString() }))} placeholder="e.g. 5 staff" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 4 }}>Active Volunteers</label><input type="number" min="0" value={claimData.volunteerCount} onChange={e => setClaimData(p => ({ ...p, volunteerCount: Math.max(0, parseInt(e.target.value) || 0).toString() }))} placeholder="e.g. 40 volunteers" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} /></div>
+                        <div><label style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 4 }}>Number of Campuses</label><input type="number" min="1" value={claimData.campusCount} onChange={e => setClaimData(p => ({ ...p, campusCount: Math.max(1, parseInt(e.target.value) || 1).toString() }))} placeholder="e.g. 1" style={{ width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} /></div>
                       </div>
                     </div>
 

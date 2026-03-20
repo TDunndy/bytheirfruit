@@ -347,21 +347,31 @@ export default function AdminDashboard() {
 
   /* --- ACTIONS --- */
   const updateReviewStatus = async (reviewId, status) => {
-    const { error } = await supabase.from("reviews").update({ status }).eq("id", reviewId);
+    const updateData = { status };
+    if (status === "published" && user) {
+      updateData.approved_at = new Date().toISOString();
+      updateData.approved_by = user.id;
+    }
+    const { error } = await supabase.from("reviews").update(updateData).eq("id", reviewId);
     if (!error) {
-      setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, status } : r));
-      showToast(`Review ${status === "published" ? "published" : status === "hidden" ? "hidden" : status === "removed" ? "removed" : "updated"}`);
+      setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, ...updateData } : r));
+      showToast(`Review ${status === "published" ? "approved & published" : status === "hidden" ? "hidden" : status === "removed" ? "removed" : "updated"}`);
     }
   };
 
   const bulkUpdateReviews = async (status) => {
     const count = selectedReviews.size;
-    for (const reviewId of selectedReviews) {
-      await supabase.from("reviews").update({ status }).eq("id", reviewId);
+    const updateData = { status };
+    if (status === "published" && user) {
+      updateData.approved_at = new Date().toISOString();
+      updateData.approved_by = user.id;
     }
-    setReviews(prev => prev.map(r => selectedReviews.has(r.id) ? { ...r, status } : r));
+    for (const reviewId of selectedReviews) {
+      await supabase.from("reviews").update(updateData).eq("id", reviewId);
+    }
+    setReviews(prev => prev.map(r => selectedReviews.has(r.id) ? { ...r, ...updateData } : r));
     setSelectedReviews(new Set());
-    showToast(`${count} reviews ${status === "published" ? "published" : status === "removed" ? "removed" : status === "hidden" ? "hidden" : "updated"}`);
+    showToast(`${count} reviews ${status === "published" ? "approved & published" : status === "removed" ? "removed" : status === "hidden" ? "hidden" : "updated"}`);
   };
 
   const deleteReview = async (reviewId) => {
@@ -417,11 +427,16 @@ export default function AdminDashboard() {
   };
 
   const saveChurch = async (churchId, updates) => {
+    // Track who approved if status is being changed to approved
+    if (updates.status === "approved" && user) {
+      updates.approved_at = new Date().toISOString();
+      updates.approved_by = user.id;
+    }
     const { error } = await supabase.from("churches").update(updates).eq("id", churchId);
     if (!error) {
       setChurches(prev => prev.map(c => c.id === churchId ? { ...c, ...updates } : c));
       setEditingChurch(null);
-      showToast("Church updated");
+      showToast(updates.status === "approved" ? "Church approved & published" : "Church updated");
     }
   };
 
@@ -1289,8 +1304,9 @@ export default function AdminDashboard() {
                       variant: "green",
                       onConfirm: async () => {
                         const pendingIds = reviews.filter(r => r.status === "pending").map(r => r.id);
+                        const approvalData = { status: "published", approved_at: new Date().toISOString(), approved_by: user?.id };
                         for (const id of pendingIds) {
-                          await supabase.from("reviews").update({ status: "published" }).eq("id", id);
+                          await supabase.from("reviews").update(approvalData).eq("id", id);
                         }
                         setReviews(prev => prev.map(r => r.status === "pending" ? { ...r, status: "published" } : r));
                         showToast(`${pendingIds.length} pending reviews published`);
