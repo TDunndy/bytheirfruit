@@ -761,6 +761,8 @@ export default function ByTheirFruit() {
   const [nearMeLocation, setNearMeLocation] = useState(null);
   const [nearMeLoading, setNearMeLoading] = useState(false);
   const [nearMeDistances, setNearMeDistances] = useState({});
+  const [userGeoLocation, setUserGeoLocation] = useState(null);
+  const [geoRequested, setGeoRequested] = useState(false);
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileComplete, setShowProfileComplete] = useState(false);
@@ -1065,6 +1067,22 @@ export default function ByTheirFruit() {
     );
   }, [nearMeActive, searchNearMe]);
 
+  // Auto-trigger Near Me when navigating to Discover page with location available
+  const [autoNearMeTriggered, setAutoNearMeTriggered] = useState(false);
+  useEffect(() => {
+    if (page === "discover" && userGeoLocation && !autoNearMeTriggered && !nearMeActive && !discoverSearchQuery && filterState === "All" && !filterCity && !filterZip && filterDenom === "All") {
+      setAutoNearMeTriggered(true);
+      setNearMeLocation(userGeoLocation);
+      setNearMeActive(true);
+      searchNearMe(userGeoLocation.lat, userGeoLocation.lng);
+    }
+  }, [page, userGeoLocation, autoNearMeTriggered, nearMeActive, discoverSearchQuery, filterState, filterCity, filterZip, filterDenom, searchNearMe]);
+
+  // Reset auto-trigger when leaving discover page
+  useEffect(() => {
+    if (page !== "discover") setAutoNearMeTriggered(false);
+  }, [page]);
+
   // Debounced search for Discover page
   useEffect(() => {
     if (page !== "discover" || nearMeActive) return;
@@ -1361,6 +1379,21 @@ export default function ByTheirFruit() {
   useEffect(() => {
     if (mounted) fetchChurches();
   }, [mounted, fetchChurches]);
+
+  /* --- REQUEST GEOLOCATION ON PAGE LOAD (silent, non-blocking) --- */
+  useEffect(() => {
+    if (!mounted || geoRequested) return;
+    setGeoRequested(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserGeoLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => { /* silently fail if denied */ },
+        { enableHighAccuracy: false, timeout: 8000 }
+      );
+    }
+  }, [mounted, geoRequested]);
 
   /* --- KEEP SUPABASE ALIVE: refresh session when tab regains focus --- */
   useEffect(() => {
@@ -1746,7 +1779,7 @@ export default function ByTheirFruit() {
     setRateSearch(""); setRateSkipped({});
     setShowAddChurch(false);
     setAddData({ name: "", address: "", city: "", state: "FL", denomination: "", size: "", serviceTimes: "" });
-    setReviewerLocation(null); setLocationStatus("idle");
+    setReviewerLocation(userGeoLocation || null); setLocationStatus(userGeoLocation ? "granted" : "idle");
 
     if (existingReview && canEdit) {
       setIsEditing(true);
