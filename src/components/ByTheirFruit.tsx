@@ -1434,6 +1434,7 @@ export default function ByTheirFruit() {
       user_id: userId,
       reviewer_role: role,
       text,
+      status: "pending",
       last_visited: lastVisited || null,
       reviewer_lat: reviewerLat || null,
       reviewer_lng: reviewerLng || null,
