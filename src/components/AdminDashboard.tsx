@@ -527,6 +527,7 @@ export default function AdminDashboard() {
     { id: "churches", label: "Churches" },
     { id: "reports", label: "Reports" },
     { id: "demographics", label: "Demographics" },
+    { id: "newsletter", label: "Newsletter" },
     { id: "settings", label: "Settings" },
   ];
 
@@ -1259,6 +1260,110 @@ export default function AdminDashboard() {
               )}
             </>
           );
+        })()}
+
+        {/* === NEWSLETTER === */}
+        {!loadingData && tab === "newsletter" && (() => {
+          function NewsletterTab() {
+            const [subscribers, setSubscribers] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [searchQuery, setSearchQuery] = useState("");
+
+            useEffect(() => {
+              async function loadSubscribers() {
+                const { data, error } = await supabase
+                  .from("newsletter_subscribers")
+                  .select("*")
+                  .order("created_at", { ascending: false });
+                if (!error && data) setSubscribers(data);
+                setLoading(false);
+              }
+              loadSubscribers();
+            }, []);
+
+            const filtered = subscribers.filter(s =>
+              !searchQuery || s.email.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+
+            const downloadCSV = () => {
+              const header = "Email,Subscribed Date\n";
+              const rows = filtered.map(s =>
+                `${s.email},${new Date(s.created_at).toLocaleDateString("en-US")}`
+              ).join("\n");
+              const blob = new Blob([header + rows], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `btf-newsletter-subscribers-${new Date().toISOString().split("T")[0]}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            };
+
+            const copyAllEmails = () => {
+              const emails = filtered.map(s => s.email).join(", ");
+              navigator.clipboard.writeText(emails).then(() => {
+                showToast(`${filtered.length} emails copied to clipboard`, "success");
+              });
+            };
+
+            if (loading) return <div style={{ textAlign: "center", padding: "60px" }}><div style={{ fontSize: 14, color: T.textMuted }}>Loading subscribers...</div></div>;
+
+            return (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div>
+                    <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Newsletter Subscribers</h2>
+                    <div style={{ fontSize: 13, color: T.textMuted }}>{subscribers.length} total subscriber{subscribers.length !== 1 ? "s" : ""}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Button onClick={copyAllEmails} variant="secondary">Copy All Emails</Button>
+                    <Button onClick={downloadCSV} variant="primary">Download CSV</Button>
+                  </div>
+                </div>
+
+                <input
+                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search subscribers..."
+                  style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, marginBottom: 16, boxSizing: "border-box" }}
+                />
+
+                {filtered.length === 0 ? (
+                  <div style={{ padding: "40px", textAlign: "center", color: T.textMuted, fontSize: 14 }}>
+                    {searchQuery ? "No subscribers match your search." : "No subscribers yet."}
+                  </div>
+                ) : (
+                  <div style={{ borderRadius: T.radiusSm, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 100px", padding: "10px 16px", background: T.surfaceAlt, borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      <div>Email</div>
+                      <div>Subscribed</div>
+                      <div>Actions</div>
+                    </div>
+                    {filtered.map((sub, i) => (
+                      <div key={sub.id || i} style={{ display: "grid", gridTemplateColumns: "1fr 160px 100px", padding: "10px 16px", borderBottom: i < filtered.length - 1 ? `1px solid ${T.borderLight}` : "none", alignItems: "center", fontSize: 13 }}>
+                        <div style={{ color: T.text, fontWeight: 500 }}>{sub.email}</div>
+                        <div style={{ color: T.textMuted, fontSize: 12 }}>{new Date(sub.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                        <button onClick={async () => {
+                          await supabase.from("newsletter_subscribers").delete().eq("id", sub.id);
+                          setSubscribers(prev => prev.filter(s => s.id !== sub.id));
+                          showToast("Subscriber removed");
+                        }} style={{ fontSize: 11, color: T.red, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, fontWeight: 600, padding: 0 }}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginTop: 24, padding: "16px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 6 }}>How to email your subscribers</div>
+                  <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.6 }}>
+                    1. Click "Download CSV" above to get the current list.<br />
+                    2. Go to <a href="https://resend.com/broadcasts" target="_blank" rel="noopener" style={{ color: T.accent }}>Resend Broadcasts</a> to compose and send an email to the list.<br />
+                    3. Or click "Copy All Emails" to paste into any email tool.
+                  </div>
+                </div>
+              </>
+            );
+          }
+          return <NewsletterTab />;
         })()}
 
         {/* === SETTINGS === */}
