@@ -1100,7 +1100,7 @@ export default function ByTheirFruit() {
       const { data } = await supabase
         .from("churches")
         .select("*")
-        .or(`name.ilike.%${rateSearch}%,city.ilike.%${rateSearch}%`)
+        .ilike("name", `%${rateSearch}%`)
         .order("total_reviews", { ascending: false })
         .limit(20);
       if (data) setRateSearchResults(data.map(dbChurchToLocal));
@@ -2104,7 +2104,7 @@ export default function ByTheirFruit() {
               <div style={{ padding: "48px 20px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={T.border} strokeWidth="1.5" style={{ margin: "0 auto 14px", display: "block" }}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                 <div style={{ fontSize: 17, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 4 }}>Search {totalChurchCount.toLocaleString()} churches</div>
-                <div style={{ fontSize: 13, color: T.textMuted }}>Type a church name, city, or denomination above to get started.</div>
+                <div style={{ fontSize: 13, color: T.textMuted }}>Search by church name above, or use the filters to browse by state, city, zip, or denomination.</div>
               </div>
             )}
             {filteredChurches.length === 0 && !searchLoading && (discoverSearchQuery || filterDenom !== "All" || filterState !== "All" || filterCity || filterZip) && (
@@ -3829,6 +3829,9 @@ export default function ByTheirFruit() {
                                   {location && <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{location}</div>}
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  {rev.status && rev.status !== "published" && (
+                                    <div style={{ padding: "3px 10px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 600, background: rev.status === "pending" ? T.amberSoft : T.redSoft, color: rev.status === "pending" ? T.amber : T.red, border: `1px solid ${rev.status === "pending" ? T.amberBorder : T.redBorder}` }}>{rev.status === "pending" ? "Pending Approval" : rev.status.charAt(0).toUpperCase() + rev.status.slice(1)}</div>
+                                  )}
                                   {avgScore !== null && (
                                     <div style={{ padding: "3px 10px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 700, fontFamily: T.heading, background: scoreBg(avgScore), color: scoreColor(avgScore), border: `1px solid ${scoreBorder2(avgScore)}` }}>{avgScore.toFixed(1)}</div>
                                   )}
