@@ -1988,11 +1988,18 @@ export default function ByTheirFruit() {
             <div style={{ textAlign: "center", marginBottom: 64 }}>
               <div style={{ display: "inline-block", padding: "5px 14px", borderRadius: T.radiusFull, background: T.surfaceAlt, border: `1px solid ${T.border}`, fontSize: 12, fontWeight: 600, color: T.textSoft, marginBottom: 24 }}>Matthew 7:16</div>
               <h1 className="btf-hero-title" style={{ fontSize: 54, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.06, margin: "0 0 20px", letterSpacing: "-0.045em" }}>You will recognize<br />them by their fruit.</h1>
-              <p style={{ fontSize: 17, color: T.textSoft, lineHeight: 1.65, maxWidth: 480, margin: "0 auto 36px" }}>Churches tell you who they are. Their people show you. Real experiences from real congregants — honest, structured, and built to help churches grow.</p>
+              <p style={{ fontSize: 17, color: T.textSoft, lineHeight: 1.65, maxWidth: 480, margin: "0 auto 24px" }}>Churches tell you who they are. Their people show you. Real experiences from real congregants — honest, structured, and built to help churches grow.</p>
+              {platformStats.churches > 0 && (
+                <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 32, display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
+                  <span><strong style={{ color: T.text, fontWeight: 700 }}>{platformStats.churches.toLocaleString()}</strong> churches</span>
+                  {platformStats.reviews > 0 && <span><strong style={{ color: T.text, fontWeight: 700 }}>{platformStats.reviews.toLocaleString()}</strong> experiences shared</span>}
+                  {platformStats.users > 0 && <span><strong style={{ color: T.text, fontWeight: 700 }}>{platformStats.users.toLocaleString()}</strong> members</span>}
+                </div>
+              )}
               <div className="btf-hero-buttons" style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                 <button onClick={() => navigate("discover")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, boxShadow: "0 2px 12px rgba(37,99,235,0.2)" }}>Find a Church</button>
                 <button onClick={() => startRateFlow()} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Share Your Experience</button>
-                <button onClick={() => navigate("about")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: "transparent", color: T.text, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>How It Works</button>
+                <button onClick={() => navigate("about")} style={{ padding: "12px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 500, background: "transparent", color: T.textSoft, border: `1px solid ${T.borderLight}`, cursor: "pointer", fontFamily: T.body }}>How It Works</button>
               </div>
             </div>
           </FadeIn>
@@ -2101,10 +2108,17 @@ export default function ByTheirFruit() {
           </FadeIn>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {filteredChurches.length === 0 && !searchLoading && !discoverSearchQuery && filterDenom === "All" && filterState === "All" && !filterCity && !filterZip && !nearMeActive && (
-              <div style={{ padding: "48px 20px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={T.border} strokeWidth="1.5" style={{ margin: "0 auto 14px", display: "block" }}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-                <div style={{ fontSize: 17, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 4 }}>Search {totalChurchCount.toLocaleString()} churches</div>
-                <div style={{ fontSize: 13, color: T.textMuted }}>Search by church name above, or use the filters to browse by state, city, zip, or denomination.</div>
+              <div style={{ padding: "32px 20px", textAlign: "center", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
+                <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 4 }}>Search {totalChurchCount.toLocaleString()} churches</div>
+                <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Search by name above, or use filters to browse by location and denomination.</div>
+                <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                  <button onClick={() => { setFilterState("FL"); }} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Florida</button>
+                  <button onClick={() => { setFilterState("TX"); }} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Texas</button>
+                  <button onClick={() => { setFilterState("CA"); }} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>California</button>
+                  <button onClick={() => { setFilterState("GA"); }} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Georgia</button>
+                  <button onClick={() => { setFilterState("AL"); }} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Alabama</button>
+                  <button onClick={handleNearMe} style={{ padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Near Me</button>
+                </div>
               </div>
             )}
             {filteredChurches.length === 0 && !searchLoading && (discoverSearchQuery || filterDenom !== "All" || filterState !== "All" || filterCity || filterZip) && (
@@ -2146,9 +2160,12 @@ export default function ByTheirFruit() {
                           <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{church.totalReviews} experiences</div>
                         </div>
                       ) : (
-                        <div style={{ padding: "10px 14px", borderRadius: T.radiusSm, textAlign: "center", background: T.surfaceAlt, border: `1.5px dashed ${T.border}`, minWidth: 58 }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, lineHeight: 1.3 }}>Not yet<br />rated</div>
-                          {church.totalReviews > 0 && <div style={{ fontSize: 10, color: T.textMuted, marginTop: 3 }}>{church.totalReviews}/{MIN_REVIEWS_FOR_SCORE} experiences</div>}
+                        <div style={{ padding: "10px 14px", borderRadius: T.radiusSm, textAlign: "center", minWidth: 44 }}>
+                          {church.totalReviews > 0 ? (
+                            <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 500 }}>{church.totalReviews} review{church.totalReviews !== 1 ? "s" : ""}</div>
+                          ) : (
+                            <div style={{ fontSize: 11, color: T.textMuted }}>New</div>
+                          )}
                         </div>
                       )}
                     </div>
