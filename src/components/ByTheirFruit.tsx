@@ -802,9 +802,13 @@ export default function ByTheirFruit() {
     if (church) {
       const slug = church.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
       window.history.pushState(null, "", `#/church/${church.id}/${slug}`);
+      document.title = `${church.name} | By Their Fruit`;
     } else if (newPage !== "home") {
+      const titles = { discover: "Find a Church", rate: "Share Your Experience", about: "How It Works", myprofile: "My Profile", saved: "Saved Churches", dashboard: "Church Dashboard", privacy: "Privacy Policy", terms: "Terms of Service", "for-churches": "For Churches" };
+      document.title = `${titles[newPage] || "By Their Fruit"} | By Their Fruit`;
       window.history.pushState(null, "", `#/${newPage}`);
     } else {
+      document.title = "By Their Fruit \u2014 Church Reviews by the Congregation";
       window.history.pushState(null, "", window.location.pathname);
     }
   }, []);
@@ -2323,7 +2327,7 @@ export default function ByTheirFruit() {
                   )}
                 </div>
                 {!c.phone && !c.website && !c.email && (
-                  <div style={{ fontSize: 12, color: T.textMuted, fontStyle: "italic" }}>Contact information not yet available. If you attend this church, help us out by sharing your experience!</div>
+                  <div style={{ fontSize: 12, color: T.textMuted }}>Contact info not yet available.</div>
                 )}
                 {mapUrl && (
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.borderLight}` }}>
@@ -3748,7 +3752,7 @@ export default function ByTheirFruit() {
               {/* Phone */}
               <div style={{ marginBottom: 24 }}>
                 <label style={labelStyle}>Phone Number <span style={{ fontWeight: 400, textTransform: "none" }}>(optional)</span></label>
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} placeholder="(555) 123-4567" />
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} placeholder="Enter your phone number" />
               </div>
 
               <div style={{ height: 1, background: T.border, margin: "8px 0 24px" }} />

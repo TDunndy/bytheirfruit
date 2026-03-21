@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   keywords: ['church reviews', 'church ratings', 'find a church', 'church near me', 'honest church reviews', 'church community', 'by their fruit', 'congregation reviews'],
   robots: { index: true, follow: true },
   alternates: { canonical: 'https://bytheirfruit.church' },
+  icons: {
+    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%2318181b'/><path d='M16 6C16 6 10 13 10 18C10 21.3 12.7 24 16 24C19.3 24 22 21.3 22 18C22 13 16 6 16 6Z' fill='%232563eb'/></svg>",
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
