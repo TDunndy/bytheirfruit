@@ -199,9 +199,9 @@ function displayName(name, level = "public") {
 /* --- HELPERS --- */
 const avg = (s) => { const v = Object.values(s); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
 const hasScores = (c) => c.totalReviews >= MIN_REVIEWS_FOR_SCORE && Object.keys(c.scores).length > 0;
-/* Smooth HSL-interpolated score colors: 1.0→red, 2.5→amber, 4.0+→green */
+/* Smooth HSL-interpolated score colors: 1.0âred, 2.5âamber, 4.0+âgreen */
 function scoreHue(s) {
-  // Clamp 1–5, then map to hue: 0 (red) → 38 (amber) → 142 (green)
+  // Clamp 1â5, then map to hue: 0 (red) â 38 (amber) â 142 (green)
   const t = Math.max(0, Math.min(1, (s - 1) / 4));
   // Use an easing curve so green starts earlier and red only appears for truly low scores
   const eased = t * t * (3 - 2 * t); // smoothstep
@@ -308,7 +308,7 @@ function RatingSlider({ label, desc, value, onChange, comment, onCommentChange, 
           {skipped && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
         </div>
         <span style={{ fontSize: 12, fontWeight: 500, color: skipped ? T.accent : T.textMuted }}>
-          Not sure — I can't speak to this yet
+          Not sure â I can't speak to this yet
         </span>
       </div>
 
@@ -316,7 +316,7 @@ function RatingSlider({ label, desc, value, onChange, comment, onCommentChange, 
         <>
           <div style={{ display: "flex", gap: 3, margin: "6px 0 8px" }}>
             {[1, 2, 3, 4, 5].map(n => (
-              <span key={n} onClick={() => onChange(n)} style={{ fontSize: 22, cursor: "pointer", color: n <= starValue ? "#f59e0b" : T.border, transition: "color 0.15s" }}>★</span>
+              <span key={n} onClick={() => onChange(n)} style={{ fontSize: 22, cursor: "pointer", color: n <= starValue ? "#f59e0b" : T.border, transition: "color 0.15s" }}>â</span>
             ))}
           </div>
           <div style={{ position: "relative", height: 28, display: "flex", alignItems: "center" }}>
@@ -958,6 +958,7 @@ export default function ByTheirFruit() {
   const searchChurchesDB = useCallback(async (query, denomination, state, city, zip, _retried) => {
     if (!query && (!denomination || denomination === "All") && (!state || state === "All") && !city && !zip) {
       setChurches([]);
+      setSearchLoading(false);
       return;
     }
     setSearchLoading(true);
@@ -1325,6 +1326,32 @@ export default function ByTheirFruit() {
         // Check if user has claimed a church
         const { data: claimedCheck } = await supabase.from("churches").select("id").eq("claimed_by", u.id).limit(1);
         if (claimedCheck && claimedCheck.length > 0) setHasClaimed(true);
+
+        // Process pending review from localStorage (for OAuth redirects on initial load)
+        const pending = localStorage.getItem("btf_pending_review");
+        if (pending) {
+          localStorage.removeItem("btf_pending_review");
+          setSubmitting(true);
+          try {
+            const parsed = JSON.parse(pending);
+            if (parsed.churchId) {
+              const cachedChurch = churches.find(c => c.id === parsed.churchId);
+              if (cachedChurch) setRateChurch(cachedChurch);
+            }
+            const success = await submitReviewToDB(parsed, u.id);
+            if (success) {
+              setRateStep(3);
+              setPage("rate");
+            } else {
+              showToast("Something went wrong submitting your experience. Please try again.", "error");
+            }
+          } catch (e) {
+            console.error("Failed to process pending review:", e);
+            showToast("Something went wrong submitting your experience. Please try again.", "error");
+          } finally {
+            setSubmitting(false);
+          }
+        }
       }
     });
 
@@ -1360,11 +1387,26 @@ export default function ByTheirFruit() {
         const pending = localStorage.getItem("btf_pending_review");
         if (pending) {
           localStorage.removeItem("btf_pending_review");
+          setSubmitting(true);
           try {
             const parsed = JSON.parse(pending);
-            await submitReviewToDB(parsed, u.id);
+            // Restore the church context so the success screen shows the right name
+            if (parsed.churchId) {
+              const cachedChurch = churches.find(c => c.id === parsed.churchId);
+              if (cachedChurch) setRateChurch(cachedChurch);
+            }
+            const success = await submitReviewToDB(parsed, u.id);
+            if (success) {
+              setRateStep(3);
+              setPage("rate");
+            } else {
+              showToast("Something went wrong submitting your experience. Please try again.", "error");
+            }
           } catch (e) {
             console.error("Failed to process pending review:", e);
+            showToast("Something went wrong submitting your experience. Please try again.", "error");
+          } finally {
+            setSubmitting(false);
           }
         }
       }
@@ -1527,7 +1569,7 @@ export default function ByTheirFruit() {
                 })
                 .eq("id", userId);
 
-              showToast("Thanks for your experience! We noticed activity across several states — we'll verify your experiences within 24-48 hours.", "info");
+              showToast("Thanks for your experience! We noticed activity across several states â we'll verify your experiences within 24-48 hours.", "info");
             }
           }
         }
@@ -1661,7 +1703,7 @@ export default function ByTheirFruit() {
       return;
     }
 
-    // Code correct — mark as verified
+    // Code correct â mark as verified
     await supabase.from("church_claims").update({
       verified: true,
       verified_at: new Date().toISOString(),
@@ -1931,14 +1973,14 @@ export default function ByTheirFruit() {
             <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accent : T.accentSoft, color: page === "dashboard" ? "#fff" : T.accent, border: `1px solid ${page === "dashboard" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Church Dashboard</button>
           )}
           {/* Theme toggle */}
-          <button onClick={() => setTheme(isDark ? "light" : "dark")} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={{ padding: "5px 8px", borderRadius: T.radiusFull, fontSize: 15, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1, transition: "all 0.15s" }}>{isDark ? "☀️" : "🌙"}</button>
+          <button onClick={() => setTheme(isDark ? "light" : "dark")} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={{ padding: "5px 8px", borderRadius: T.radiusFull, fontSize: 15, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1, transition: "all 0.15s" }}>{isDark ? "âï¸" : "ð"}</button>
           <div style={{ width: 1, height: 20, background: T.border, margin: "0 2px" }} />
           {user ? <UserMenu user={user} onSignOut={handleSignOut} onNavigate={navigate} onSaved={() => { navigate("saved"); fetchSavedChurches(user.id); }} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
         </div>
 
         {/* Mobile nav: hamburger + user */}
         <div className="btf-mobile-nav" style={{ display: "none", alignItems: "center", gap: 8 }}>
-          <button onClick={() => setTheme(isDark ? "light" : "dark")} style={{ padding: "4px 7px", borderRadius: T.radiusFull, fontSize: 14, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1 }}>{isDark ? "☀️" : "🌙"}</button>
+          <button onClick={() => setTheme(isDark ? "light" : "dark")} style={{ padding: "4px 7px", borderRadius: T.radiusFull, fontSize: 14, background: "transparent", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", lineHeight: 1 }}>{isDark ? "âï¸" : "ð"}</button>
           {user ? <UserMenu user={user} onSignOut={handleSignOut} onNavigate={navigate} onSaved={() => { navigate("saved"); fetchSavedChurches(user.id); }} /> : <button onClick={() => setShowAuthModal(true)} style={{ padding: "5px 12px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>Sign In</button>}
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} style={{ padding: "4px 6px", background: "transparent", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.text} strokeWidth="2" strokeLinecap="round">{mobileMenuOpen ? <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></> : <><line x1="3" y1="7" x2="21" y2="7" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="17" x2="21" y2="17" /></>}</svg>
@@ -1992,7 +2034,7 @@ export default function ByTheirFruit() {
             <div style={{ textAlign: "center", marginBottom: 64 }}>
               <div style={{ display: "inline-block", padding: "5px 14px", borderRadius: T.radiusFull, background: T.surfaceAlt, border: `1px solid ${T.border}`, fontSize: 12, fontWeight: 600, color: T.textSoft, marginBottom: 24 }}>Matthew 7:16</div>
               <h1 className="btf-hero-title" style={{ fontSize: 54, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.06, margin: "0 0 20px", letterSpacing: "-0.045em" }}>You will recognize<br />them by their fruit.</h1>
-              <p style={{ fontSize: 17, color: T.textSoft, lineHeight: 1.65, maxWidth: 480, margin: "0 auto 24px" }}>Churches tell you who they are. Their people show you. Real experiences from real congregants — honest, structured, and built to help churches grow.</p>
+              <p style={{ fontSize: 17, color: T.textSoft, lineHeight: 1.65, maxWidth: 480, margin: "0 auto 24px" }}>Churches tell you who they are. Their people show you. Real experiences from real congregants â honest, structured, and built to help churches grow.</p>
               {platformStats.churches > 0 && (
                 <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 32, display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
                   <span><strong style={{ color: T.text, fontWeight: 700 }}>{platformStats.churches.toLocaleString()}</strong> churches</span>
@@ -2097,7 +2139,7 @@ export default function ByTheirFruit() {
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <select value={filterState} onChange={e => { setFilterState(e.target.value); setFilterCity(""); setCurrentPage(1); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 120 }}>
-                  {US_STATES.map(s => <option key={s} value={s}>{s === "All" ? "All States" : `${s} — ${STATE_NAMES[s] || s}`}</option>)}
+                  {US_STATES.map(s => <option key={s} value={s}>{s === "All" ? "All States" : `${s} â ${STATE_NAMES[s] || s}`}</option>)}
                 </select>
                 <input value={filterCity} onChange={e => { setFilterCity(e.target.value); setCurrentPage(1); }} placeholder="City" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 130 }} />
                 <input value={filterZip} onChange={e => { setFilterZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setCurrentPage(1); }} placeholder="Zip code" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 90 }} />
@@ -2147,12 +2189,12 @@ export default function ByTheirFruit() {
                     onMouseEnter={e => { e.currentTarget.style.borderColor = T.accentBorder; e.currentTarget.style.boxShadow = "0 2px 16px rgba(37,99,235,0.05)"; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.boxShadow = "none"; }}>
                     <button onClick={(e) => { e.stopPropagation(); toggleFavorite(church.id); }} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: 4, lineHeight: 1 }} title={userFavorites.has(church.id) ? "Unsave" : "Save"}>
-                      {userFavorites.has(church.id) ? "❤️" : "🤍"}
+                      {userFavorites.has(church.id) ? "â¤ï¸" : "ð¤"}
                     </button>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                       <div style={{ flex: 1 }}>
                         <h3 style={{ fontSize: 18, fontFamily: T.heading, fontWeight: 700, margin: "0 0 3px", letterSpacing: "-0.02em" }}>{church.name}</h3>
-                        <div style={{ fontSize: 13, color: T.textMuted }}>{church.denomination} · {church.city}, {church.state}{church.size ? ` · ${church.size}` : ""}{nearMeActive && nearMeDistances[church.id] != null && <span style={{ color: T.accent, fontWeight: 600 }}> · {nearMeDistances[church.id] < 1 ? "< 1" : Math.round(nearMeDistances[church.id])} mi</span>}</div>
+                        <div style={{ fontSize: 13, color: T.textMuted }}>{church.denomination} Â· {church.city}, {church.state}{church.size ? ` Â· ${church.size}` : ""}{nearMeActive && nearMeDistances[church.id] != null && <span style={{ color: T.accent, fontWeight: 600 }}> Â· {nearMeDistances[church.id] < 1 ? "< 1" : Math.round(nearMeDistances[church.id])} mi</span>}</div>
                         {church.address && !church.address.toLowerCase().startsWith("po box") && <div style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>{church.address}</div>}
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
                           {church.tags.slice(0, 4).map((tag, j) => <span key={j} style={{ fontSize: 11, padding: "2px 9px", borderRadius: T.radiusFull, background: T.surfaceAlt, color: T.textSoft, fontWeight: 500, border: `1px solid ${T.borderLight}` }}>{tag}</span>)}
@@ -2205,7 +2247,7 @@ export default function ByTheirFruit() {
         return (
           <div style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px" }}>
             <FadeIn>
-              <button onClick={() => window.history.back()} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 24, fontFamily: T.body }}>← Back</button>
+              <button onClick={() => window.history.back()} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 24, fontFamily: T.body }}>â Back</button>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -2238,7 +2280,7 @@ export default function ByTheirFruit() {
               {/* Share Buttons */}
               {(() => {
                 const shareUrl = `https://bytheirfruit.church/#/church/${c.id}/${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "")}`;
-                const shareText = rated ? `${c.name} is rated ${overall.toFixed(1)}/5 on By Their Fruit — real experiences from real congregants.` : `Check out ${c.name} on By Their Fruit — real experiences from real congregants.`;
+                const shareText = rated ? `${c.name} is rated ${overall.toFixed(1)}/5 on By Their Fruit â real experiences from real congregants.` : `Check out ${c.name} on By Their Fruit â real experiences from real congregants.`;
                 return (
                   <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, marginRight: 4 }}>Share:</span>
@@ -2474,14 +2516,14 @@ export default function ByTheirFruit() {
                   {claimStep === "form" && (
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
                       <button onClick={() => { setShowClaimModal(false); setClaimStep("form"); }} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
-                      <button onClick={() => sendClaimVerification(currentChurch.id)} disabled={claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) ? 0.5 : 1 }}>{claimSubmitting ? "Sending..." : "Verify Email →"}</button>
+                      <button onClick={() => sendClaimVerification(currentChurch.id)} disabled={claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) ? 0.5 : 1 }}>{claimSubmitting ? "Sending..." : "Verify Email â"}</button>
                     </div>
                   )}
 
                   {claimStep === "verify" && (
                     <div style={{ marginTop: 24 }}>
                       <div style={{ padding: "20px", borderRadius: T.radius, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, textAlign: "center", marginBottom: 20 }}>
-                        <div style={{ fontSize: 28, marginBottom: 8 }}>📧</div>
+                        <div style={{ fontSize: 28, marginBottom: 8 }}>ð§</div>
                         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 4 }}>Check your email</div>
                         <div style={{ fontSize: 12, color: T.textSoft }}>We sent a 6-digit code to <strong>{claimData.workEmail}</strong></div>
                       </div>
@@ -2489,10 +2531,10 @@ export default function ByTheirFruit() {
                       <input value={verifyCodeInput} onChange={e => { setVerifyCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setVerifyError(""); }} placeholder="Enter 6-digit code" maxLength={6} style={{ width: "100%", padding: "14px 16px", borderRadius: T.radiusSm, fontSize: 20, fontWeight: 700, letterSpacing: "6px", textAlign: "center", border: `1.5px solid ${verifyError ? T.red : T.border}`, background: T.bg, color: T.text, outline: "none", fontFamily: "monospace" }} />
                       {verifyError && <div style={{ fontSize: 12, color: T.red, marginTop: 6 }}>{verifyError}</div>}
                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
-                        <button onClick={() => { setClaimStep("form"); setVerifyCodeInput(""); setVerifyError(""); }} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
+                        <button onClick={() => { setClaimStep("form"); setVerifyCodeInput(""); setVerifyError(""); }} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>â Back</button>
                         <div style={{ display: "flex", gap: 8 }}>
                           <button onClick={() => sendClaimVerification(currentChurch.id)} disabled={claimSubmitting} style={{ padding: "10px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Resend</button>
-                          <button onClick={() => verifyClaimCode(currentChurch.id)} disabled={claimSubmitting || verifyCodeInput.length !== 6} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || verifyCodeInput.length !== 6) ? 0.5 : 1 }}>{claimSubmitting ? "Verifying..." : "Verify & Continue to Payment →"}</button>
+                          <button onClick={() => verifyClaimCode(currentChurch.id)} disabled={claimSubmitting || verifyCodeInput.length !== 6} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || verifyCodeInput.length !== 6) ? 0.5 : 1 }}>{claimSubmitting ? "Verifying..." : "Verify & Continue to Payment â"}</button>
                         </div>
                       </div>
                     </div>
@@ -2500,7 +2542,7 @@ export default function ByTheirFruit() {
 
                   {claimStep === "done" && (
                     <div style={{ marginTop: 24, textAlign: "center", padding: "20px 0" }}>
-                      <div style={{ width: 56, height: 56, borderRadius: 28, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>✔</div>
+                      <div style={{ width: 56, height: 56, borderRadius: 28, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>â</div>
                       <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading }}>Email verified!</div>
                       <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4 }}>Redirecting you to set up your subscription...</div>
                     </div>
@@ -2515,7 +2557,7 @@ export default function ByTheirFruit() {
                 <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
                   {reportSubmitted ? (
                     <div style={{ textAlign: "center", padding: "12px 0" }}>
-                      <div style={{ width: 56, height: 56, borderRadius: 28, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>✔</div>
+                      <div style={{ width: 56, height: 56, borderRadius: 28, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>â</div>
                       <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.03em" }}>Report received</h2>
                       <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 20px" }}>Thank you for helping us maintain the integrity of our platform. Our team will review this report.</p>
                       <button onClick={() => setShowReportModal(false)} style={{ padding: "10px 28px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>Close</button>
@@ -2670,7 +2712,7 @@ export default function ByTheirFruit() {
                       <div key={c.id} onClick={() => selectChurchToRate(c)} style={{ padding: "14px 18px", borderRadius: T.radius, cursor: "pointer", background: T.surface, border: `1.5px solid ${T.border}`, transition: "all 0.15s", display: "flex", justifyContent: "space-between", alignItems: "center" }} onMouseEnter={e => e.currentTarget.style.borderColor = T.accentBorder} onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
                         <div>
                           <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{c.name}</div>
-                          <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{c.denomination} · {c.city}, {c.state}</div>
+                          <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{c.denomination} Â· {c.city}, {c.state}</div>
                         </div>
                         {c.totalReviews > 0 && <div style={{ padding: "3px 8px", borderRadius: T.radiusFull, fontSize: 10, background: T.surfaceAlt, color: T.textMuted, fontWeight: 600 }}>{c.totalReviews} experiences</div>}
                       </div>
@@ -2689,9 +2731,9 @@ export default function ByTheirFruit() {
           {/* ADD CHURCH */}
           {rateStep === 0 && showAddChurch && (
             <FadeIn>
-              <button onClick={() => setShowAddChurch(false)} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 16, fontFamily: T.body }}>← Back to search</button>
+              <button onClick={() => setShowAddChurch(false)} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 16, fontFamily: T.body }}>â Back to search</button>
               <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Add a church</h2>
-              <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 24px" }}>Fill in what you know — you can always update later.</p>
+              <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 24px" }}>Fill in what you know â you can always update later.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Church name *</label><input value={addData.name} onChange={e => setAddData(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Grace Community Church" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} /></div>
                 <div><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Street address</label><input value={addData.address} onChange={e => setAddData(p => ({ ...p, address: e.target.value }))} placeholder="e.g. 4210 Bayshore Blvd" style={{ width: "100%", padding: "11px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} /></div>
@@ -2703,7 +2745,7 @@ export default function ByTheirFruit() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 28 }}>
                 <button onClick={() => setShowAddChurch(false)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
-                <button onClick={addManualChurch} disabled={!addData.name.trim() || !addData.city.trim()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!addData.name.trim() || !addData.city.trim()) ? 0.3 : 1 }}>Add Church & Rate →</button>
+                <button onClick={addManualChurch} disabled={!addData.name.trim() || !addData.city.trim()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!addData.name.trim() || !addData.city.trim()) ? 0.3 : 1 }}>Add Church & Rate â</button>
               </div>
             </FadeIn>
           )}
@@ -2712,14 +2754,14 @@ export default function ByTheirFruit() {
           {rateStep === 1 && rateChurch && (
             <FadeIn>
               <div style={{ padding: "14px 18px", borderRadius: T.radius, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div><div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{rateChurch.name}</div><div style={{ fontSize: 12, color: T.textSoft }}>{rateChurch.denomination} · {rateChurch.city}, {rateChurch.state}</div></div>
+                <div><div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{rateChurch.name}</div><div style={{ fontSize: 12, color: T.textSoft }}>{rateChurch.denomination} Â· {rateChurch.city}, {rateChurch.state}</div></div>
                 <button onClick={() => setRateStep(0)} style={{ fontSize: 12, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>Change</button>
               </div>
 
               {/* Before You Share - Matthew 18 Guidance & Community Guidelines */}
               <div style={{ padding: "16px 14px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}`, marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
-                  <div style={{ fontSize: 18, marginTop: 2 }}>📖</div>
+                  <div style={{ fontSize: 18, marginTop: 2 }}>ð</div>
                   <div>
                     <h3 style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, margin: "0 0 6px", letterSpacing: "-0.01em" }}>Before You Share</h3>
                     <p style={{ fontSize: 12, color: T.textSoft, lineHeight: 1.6, margin: "0 0 10px" }}>Scripture calls us to address personal grievances directly with our brothers and sisters before bringing them to a wider audience (Matthew 18:15-17). If your concern involves a specific person or a personal conflict, we encourage you to seek resolution privately first. This platform is for sharing your overall church experience, not for settling personal disputes.</p>
@@ -2727,12 +2769,12 @@ export default function ByTheirFruit() {
                 </div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginBottom: 8, letterSpacing: "-0.01em" }}>Community Guidelines</div>
                 <ul style={{ fontSize: 11, color: T.textSoft, lineHeight: 1.7, margin: "0 0 0 16px", paddingLeft: 0 }}>
-                  <li>Share from your own firsthand experience — not secondhand stories or rumors</li>
+                  <li>Share from your own firsthand experience â not secondhand stories or rumors</li>
                   <li>Focus on your experience, not doctrinal debates (e.g., Calvinism vs. Arminianism disagreements will not be published)</li>
                   <li>No naming specific individuals in a negative context</li>
                   <li>No personal attacks, threats, or inflammatory language</li>
                   <li>Coordinated experience campaigns will be detected and removed</li>
-                  <li>Constructive criticism is welcome — help churches grow, don't tear them down</li>
+                  <li>Constructive criticism is welcome â help churches grow, don't tear them down</li>
                 </ul>
               </div>
 
@@ -2765,8 +2807,8 @@ export default function ByTheirFruit() {
                       </div>
                     )}
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <button onClick={() => setRateStep(0)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
-                      <button onClick={() => { if (canProceed) setRateStep(2); else showToast("Please add comments for all categories rated below 3.0", "warning"); }} disabled={activeScores.length === 0} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: activeScores.length === 0 ? 0.3 : canProceed ? 1 : 0.6 }}>Continue →</button>
+                      <button onClick={() => setRateStep(0)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>â Back</button>
+                      <button onClick={() => { if (canProceed) setRateStep(2); else showToast("Please add comments for all categories rated below 3.0", "warning"); }} disabled={activeScores.length === 0} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: activeScores.length === 0 ? 0.3 : canProceed ? 1 : 0.6 }}>Continue â</button>
                     </div>
                   </div>
                 );
@@ -2778,14 +2820,14 @@ export default function ByTheirFruit() {
           {rateStep === 2 && rateChurch && (
             <FadeIn>
               <div style={{ padding: "14px 18px", borderRadius: T.radius, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div><div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{rateChurch.name}</div><div style={{ fontSize: 12, color: T.textSoft }}>{Object.keys(rateScores).filter(k => !rateSkipped[k]).length} rated · {Object.keys(rateSkipped).filter(k => rateSkipped[k]).length} skipped · Avg {(() => { const vals = Object.entries(rateScores).filter(([k]) => !rateSkipped[k]).map(([,v]) => v); return vals.length ? (vals.reduce((a,b) => a+b, 0) / vals.length).toFixed(1) : "\u2014"; })()}</div></div>
+                <div><div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{rateChurch.name}</div><div style={{ fontSize: 12, color: T.textSoft }}>{Object.keys(rateScores).filter(k => !rateSkipped[k]).length} rated Â· {Object.keys(rateSkipped).filter(k => rateSkipped[k]).length} skipped Â· Avg {(() => { const vals = Object.entries(rateScores).filter(([k]) => !rateSkipped[k]).map(([,v]) => v); return vals.length ? (vals.reduce((a,b) => a+b, 0) / vals.length).toFixed(1) : "\u2014"; })()}</div></div>
                 <button onClick={() => setRateStep(1)} style={{ fontSize: 12, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>Edit Ratings</button>
               </div>
               <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Share your experience</h2>
               <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px" }}>Your honest experience helps families find the right church and helps churches grow.</p>
               <div style={{ marginBottom: 16 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 7 }}>Your relationship</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{["First-time Visitor", "Repeat Visitor", "Member (< 1 yr)", "Member (1\u20133 yrs)", "Member (3+ yrs)", "Former Member"].map(r => <Chip key={r} active={rateRole === r} onClick={() => setRateRole(r)}>{r}</Chip>)}</div></div>
               <div style={{ marginBottom: 16 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 7 }}>Last visited</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{["This week", "This month", "1\u20133 months ago", "3\u20136 months ago", "6\u201312 months ago", "Over a year ago"].map(v => <Chip key={v} active={rateLastVisited === v} onClick={() => setRateLastVisited(v)}>{v}</Chip>)}</div></div>
-              <div style={{ marginBottom: 8 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your experience <span style={{ fontWeight: 400, color: T.textMuted }}>(minimum 20 characters)</span></label><textarea value={rateText} onChange={e => setRateText(e.target.value)} placeholder="Share your experience — what stood out, what could improve, what should a visitor know?" rows={5} maxLength={2000} style={{ width: "100%", padding: "12px 16px", borderRadius: T.radius, fontSize: 14, border: `1.5px solid ${rateText.length > 0 && rateText.trim().length < 20 ? T.amber : T.border}`, background: T.surface, color: T.text, outline: "none", resize: "vertical", lineHeight: 1.65, fontFamily: T.body, boxSizing: "border-box" }} /></div>
+              <div style={{ marginBottom: 8 }}><label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 5 }}>Your experience <span style={{ fontWeight: 400, color: T.textMuted }}>(minimum 20 characters)</span></label><textarea value={rateText} onChange={e => setRateText(e.target.value)} placeholder="Share your experience â what stood out, what could improve, what should a visitor know?" rows={5} maxLength={2000} style={{ width: "100%", padding: "12px 16px", borderRadius: T.radius, fontSize: 14, border: `1.5px solid ${rateText.length > 0 && rateText.trim().length < 20 ? T.amber : T.border}`, background: T.surface, color: T.text, outline: "none", resize: "vertical", lineHeight: 1.65, fontFamily: T.body, boxSizing: "border-box" }} /></div>
               {rateText.length > 0 && rateText.trim().length < 20 ? (
                 <div style={{ fontSize: 12, color: T.amber, fontWeight: 600, marginBottom: 20, display: "flex", alignItems: "center", gap: 6 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -2798,8 +2840,8 @@ export default function ByTheirFruit() {
               <div style={{ padding: "14px 16px", borderRadius: T.radius, background: T.surfaceAlt, border: `1px solid ${T.border}`, marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, fontFamily: T.heading, marginBottom: 2 }}>📍 Verify your location</div>
-                    <div style={{ fontSize: 11, color: T.textMuted }}>Optional — helps confirm you're near this church</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, fontFamily: T.heading, marginBottom: 2 }}>ð Verify your location</div>
+                    <div style={{ fontSize: 11, color: T.textMuted }}>Optional â helps confirm you're near this church</div>
                   </div>
                   {locationStatus === "idle" && (
                     <button onClick={() => {
@@ -2808,12 +2850,12 @@ export default function ByTheirFruit() {
                       navigator.geolocation.getCurrentPosition(
                         (pos) => { setReviewerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocationStatus("granted"); },
                         () => { setLocationStatus("denied"); },
-                        { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+                        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
                       );
                     }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Share Location</button>
                   )}
                   {locationStatus === "requesting" && <span style={{ fontSize: 11, color: T.textMuted }}>Requesting...</span>}
-                  {locationStatus === "granted" && <span style={{ fontSize: 11, color: T.green, fontWeight: 600 }}>✓ Location shared</span>}
+                  {locationStatus === "granted" && <span style={{ fontSize: 11, color: T.green, fontWeight: 600 }}>â Location shared</span>}
                   {locationStatus === "denied" && <span style={{ fontSize: 11, color: T.textMuted }}>Location declined</span>}
                   {locationStatus === "unavailable" && <span style={{ fontSize: 11, color: T.textMuted }}>Not available</span>}
                 </div>
@@ -2827,7 +2869,7 @@ export default function ByTheirFruit() {
                 )}
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <button onClick={() => setRateStep(1)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
+                <button onClick={() => setRateStep(1)} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>â Back</button>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {!user && <span style={{ fontSize: 12, color: T.textMuted }}>Sign in required</span>}
                   <button onClick={handleRateSubmit} disabled={!rateRole || !rateLastVisited || rateText.trim().length < 20 || submitting} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (!rateRole || !rateLastVisited || rateText.trim().length < 20 || submitting) ? 0.3 : 1, boxShadow: "0 2px 8px rgba(37,99,235,0.2)" }}>{submitting ? "Submitting..." : !user ? "Sign In & Submit" : isEditing ? "Update Experience" : "Submit Experience"}</button>
@@ -2840,7 +2882,7 @@ export default function ByTheirFruit() {
           {rateStep === 3 && (
             <FadeIn>
               <div style={{ textAlign: "center", padding: "60px 0" }}>
-                <div style={{ width: 64, height: 64, borderRadius: 32, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 20px" }}>✔</div>
+                <div style={{ width: 64, height: 64, borderRadius: 32, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 20px" }}>â</div>
                 <h2 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 8px", letterSpacing: "-0.03em" }}>{isEditing ? "Experience updated" : "Experience submitted!"}</h2>
                 <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 4px" }}>Your experience with <strong>{rateChurch?.name}</strong> has been submitted and will be visible after admin approval.</p>
                 <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 32px" }}>Our team reviews every submission to ensure quality and authenticity. This usually takes less than 24 hours.</p>
@@ -2866,12 +2908,12 @@ export default function ByTheirFruit() {
               <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 10px", letterSpacing: "-0.03em", color: T.text }}>2. Read real experiences</h3>
               <p>See structured, honest feedback from actual congregants and visitors across ten categories rooted in what scripture says a healthy church should look like.</p>
               <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 10px", letterSpacing: "-0.03em", color: T.text }}>3. Share your own</h3>
-              <p>Rate your church across ten biblical categories. Add comments to explain your ratings. Your experience helps others find the right church — and helps churches grow.</p>
+              <p>Rate your church across ten biblical categories. Add comments to explain your ratings. Your experience helps others find the right church â and helps churches grow.</p>
               <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 10px", letterSpacing: "-0.03em", color: T.text }}>4. Churches can respond</h3>
               <p>Verified church owners can claim their profile, respond to experiences publicly, and access insights about their congregation. They cannot delete, edit, or pay to suppress feedback.</p>
               <div style={{ padding: "28px", borderRadius: T.radius, background: T === DARK ? T.surfaceAlt : T.text, color: T === DARK ? T.text : T.bg, margin: "28px 0", textAlign: "center" }}>
                 <p style={{ fontSize: 17, fontStyle: "italic", lineHeight: 1.6, margin: "0 0 8px", opacity: 0.85 }}>"Beware of false prophets, who come to you in sheep's clothing but inwardly are ravenous wolves. You will recognize them by their fruits."</p>
-                <div style={{ fontSize: 12, opacity: 0.4, fontWeight: 600 }}>Matthew 7:15–16 ESV</div>
+                <div style={{ fontSize: 12, opacity: 0.4, fontWeight: 600 }}>Matthew 7:15â16 ESV</div>
               </div>
               <h3 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "36px 0 14px", letterSpacing: "-0.03em" }}>The 10 Church Experiences</h3>
               {CATEGORY_GROUPS.map(group => (
@@ -2918,7 +2960,7 @@ export default function ByTheirFruit() {
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {savedChurches.map(ch => (
                   <div key={ch.id} onClick={() => viewChurch(ch)} style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, cursor: "pointer", transition: "border-color 0.15s", position: "relative" }} onMouseEnter={e => e.currentTarget.style.borderColor = T.accent} onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(ch.id); }} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: 4, lineHeight: 1 }}>❤️</button>
+                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(ch.id); }} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: 4, lineHeight: 1 }}>â¤ï¸</button>
                     <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 2 }}>{ch.name}</div>
                     <div style={{ fontSize: 13, color: T.textMuted }}>{ch.denomination} &middot; {ch.city}, {ch.state}</div>
                     {ch.scoreOverall && <div style={{ marginTop: 8, display: "inline-block", padding: "4px 10px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 700, fontFamily: T.heading, color: scoreColor(ch.scoreOverall), background: scoreBg(ch.scoreOverall), border: `1px solid ${scoreBorder2(ch.scoreOverall)}` }}>{ch.scoreOverall.toFixed(1)} &middot; {ch.totalReviews} experience{ch.totalReviews !== 1 ? "s" : ""}</div>}
@@ -3377,7 +3419,7 @@ export default function ByTheirFruit() {
                       <h3 style={{ fontSize: 18, fontFamily: T.heading, fontWeight: 800, margin: "0 0 2px", letterSpacing: "-0.02em" }}>All experiences by {reviewerHistory.name}</h3>
                       <div style={{ fontSize: 12, color: T.textMuted }}>{reviewerHistory.reviews.length} experience{reviewerHistory.reviews.length !== 1 ? "s" : ""} across all churches</div>
                     </div>
-                    <button onClick={() => setReviewerHistory(null)} style={{ fontSize: 18, background: "none", border: "none", color: T.textMuted, cursor: "pointer" }}>✕</button>
+                    <button onClick={() => setReviewerHistory(null)} style={{ fontSize: 18, background: "none", border: "none", color: T.textMuted, cursor: "pointer" }}>â</button>
                   </div>
                   {reviewerHistoryLoading && <div style={{ textAlign: "center", padding: "30px 0", color: T.textMuted }}>Loading...</div>}
                   {!reviewerHistoryLoading && reviewerHistory.reviews.map(r => {
@@ -3395,7 +3437,7 @@ export default function ByTheirFruit() {
                             <span style={{ fontSize: 11, color: T.textMuted }}>{new Date(r.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
                           </div>
                         </div>
-                        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 4 }}>{r.reviewer_role}{r.last_visited ? ` · Last visited: ${r.last_visited}` : ""}</div>
+                        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 4 }}>{r.reviewer_role}{r.last_visited ? ` Â· Last visited: ${r.last_visited}` : ""}</div>
                         {r.text && <p style={{ fontSize: 13, color: T.textSoft, margin: "4px 0 0", lineHeight: 1.6 }}>{r.text}</p>}
                       </div>
                     );
@@ -3417,7 +3459,7 @@ export default function ByTheirFruit() {
             <div style={{ textAlign: "center", marginBottom: 48 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>For Church Leaders</div>
               <h1 style={{ fontSize: 34, fontFamily: T.heading, fontWeight: 800, margin: "0 0 12px", letterSpacing: "-0.03em" }}>Understand Your Congregation Like Never Before</h1>
-              <p style={{ fontSize: 16, color: T.textSoft, maxWidth: 560, margin: "0 auto", lineHeight: 1.7 }}>By Their Fruit gives church leaders real, anonymous feedback from the people who attend — so you can grow with clarity and confidence.</p>
+              <p style={{ fontSize: 16, color: T.textSoft, maxWidth: 560, margin: "0 auto", lineHeight: 1.7 }}>By Their Fruit gives church leaders real, anonymous feedback from the people who attend â so you can grow with clarity and confidence.</p>
             </div>
           </FadeIn>
 
@@ -3426,7 +3468,7 @@ export default function ByTheirFruit() {
               {[
                 { icon: "\u2705", title: "Verified Owner Badge", desc: "Show visitors your church is actively engaged and listening to its congregation." },
                 { icon: "\uD83D\uDCAC", title: "Respond to Experiences", desc: "Publicly respond to feedback, thank members, and address concerns directly." },
-                { icon: "\uD83D\uDCCA", title: "Insights Dashboard", desc: "See score breakdowns across 10 categories — teaching, worship, community, and more." },
+                { icon: "\uD83D\uDCCA", title: "Insights Dashboard", desc: "See score breakdowns across 10 categories â teaching, worship, community, and more." },
                 { icon: "\uD83D\uDC65", title: "Reviewer Demographics", desc: "Understand who is sharing feedback: age ranges, gender, roles, and income brackets." },
                 { icon: "\uD83D\uDD14", title: "New Experience Alerts", desc: "Get notified when someone shares a new experience about your church." },
                 { icon: "\u2B50", title: "Priority Listing", desc: "Verified churches appear first in search results, making it easier for visitors to find you." }
@@ -3449,7 +3491,7 @@ export default function ByTheirFruit() {
               </div>
               <p style={{ fontSize: 14, color: T.textSoft, marginBottom: 24, maxWidth: 400, margin: "0 auto 24px" }}>Everything you need to listen, respond, and grow your church with real feedback from real people.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 340, margin: "0 auto 24px", textAlign: "left" }}>
-                {["Verified Owner badge on your profile", "Respond publicly to all experiences", "Full insights dashboard with score breakdowns", "Demographic analytics (age, gender, role, income)", "Priority placement in search results", "Email alerts for new experiences", "Cancel anytime — no contracts"].map((item, i) => (
+                {["Verified Owner badge on your profile", "Respond publicly to all experiences", "Full insights dashboard with score breakdowns", "Demographic analytics (age, gender, role, income)", "Priority placement in search results", "Email alerts for new experiences", "Cancel anytime â no contracts"].map((item, i) => (
                   <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                     <span style={{ color: T.green, fontSize: 14, lineHeight: 1.6 }}>\u2713</span>
                     <span style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6 }}>{item}</span>
@@ -3467,7 +3509,7 @@ export default function ByTheirFruit() {
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {[
                   { step: "1", title: "Claim Your Church", desc: "Search for your church in our directory and submit a claim request with your church email." },
-                  { step: "2", title: "Get Verified", desc: "Our team reviews your claim and verifies your ownership — typically within 24–48 hours." },
+                  { step: "2", title: "Get Verified", desc: "Our team reviews your claim and verifies your ownership â typically within 24â48 hours." },
                   { step: "3", title: "Subscribe", desc: "Activate your subscription to unlock the full dashboard, response tools, and analytics." },
                   { step: "4", title: "Engage & Grow", desc: "Read experiences, respond to feedback, and use insights to strengthen your ministry." }
                 ].map((s, i) => (
@@ -3807,7 +3849,7 @@ export default function ByTheirFruit() {
                 <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Account Info</div>
                 <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.8 }}>
                   <div>Signed in via <strong style={{ color: T.text }}>{profileData?.provider || "email"}</strong></div>
-                  <div>Member since <strong style={{ color: T.text }}>{profileData?.created_at ? new Date(profileData.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "—"}</strong></div>
+                  <div>Member since <strong style={{ color: T.text }}>{profileData?.created_at ? new Date(profileData.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "â"}</strong></div>
                 </div>
               </div>
 
@@ -3822,7 +3864,7 @@ export default function ByTheirFruit() {
                       </div>
                     ) : myReviews.length === 0 ? (
                       <div style={{ padding: "32px 16px", textAlign: "center", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
-                        <div style={{ fontSize: 28, marginBottom: 8 }}>📝</div>
+                        <div style={{ fontSize: 28, marginBottom: 8 }}>ð</div>
                         <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 4 }}>No experiences shared yet</div>
                         <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 16 }}>Share your church experience to help others find the right community.</div>
                         <button onClick={() => startRateFlow()} style={{ padding: "8px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Share Your Experience</button>
@@ -3887,7 +3929,7 @@ export default function ByTheirFruit() {
             {/* Brand column */}
             <div style={{ minWidth: 180 }}>
               <div style={{ marginBottom: 8 }}><Logo size={14} color={T.text} /></div>
-              <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.5, maxWidth: 260 }}>Real experiences from real congregants — honest, structured, and built to help churches grow.</div>
+              <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.5, maxWidth: 260 }}>Real experiences from real congregants â honest, structured, and built to help churches grow.</div>
             </div>
             {/* Navigation column */}
             <div style={{ minWidth: 120 }}>
@@ -3902,7 +3944,7 @@ export default function ByTheirFruit() {
             <div style={{ minWidth: 160 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Contact Us</div>
               <a href="mailto:info@bytheirfruit.church" style={{ fontSize: 13, color: T.accent, textDecoration: "none", fontFamily: T.body }} onMouseEnter={e => e.currentTarget.style.textDecoration = "underline"} onMouseLeave={e => e.currentTarget.style.textDecoration = "none"}>info@bytheirfruit.church</a>
-              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 6, lineHeight: 1.5 }}>Questions, feedback, or partnership inquiries — we'd love to hear from you.</div>
+              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 6, lineHeight: 1.5 }}>Questions, feedback, or partnership inquiries â we'd love to hear from you.</div>
             </div>
           </div>
           {/* Bottom bar */}
@@ -3933,7 +3975,7 @@ export default function ByTheirFruit() {
           <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: T.surface, borderRadius: 16, padding: "32px 28px", maxHeight: "90vh", overflow: "auto", boxShadow: "0 24px 48px rgba(0,0,0,0.15)", animation: "modalIn 0.25s ease" }}>
             {abuseSubmitted ? (
               <div style={{ textAlign: "center", padding: "20px 0" }}>
-                <div style={{ width: 56, height: 56, borderRadius: 28, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>✓</div>
+                <div style={{ width: 56, height: 56, borderRadius: 28, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>â</div>
                 <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.03em" }}>Report received</h2>
                 <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 8px" }}>Your report has been securely submitted. No identifying information was stored.</p>
                 <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 24px" }}>If you provided a way to contact you, we may reach out. Otherwise, we will investigate this matter privately.</p>
@@ -3993,7 +4035,7 @@ export default function ByTheirFruit() {
                 {/* Description */}
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>What happened? <span style={{ color: T.red }}>*</span></label>
-                  <textarea value={abuseData.description} onChange={e => setAbuseData(p => ({ ...p, description: e.target.value }))} placeholder="Please describe what you experienced or witnessed. Include as much detail as you're comfortable sharing — dates, names, patterns of behavior. Everything here is anonymous." rows={5} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical", lineHeight: 1.6, boxSizing: "border-box" }} />
+                  <textarea value={abuseData.description} onChange={e => setAbuseData(p => ({ ...p, description: e.target.value }))} placeholder="Please describe what you experienced or witnessed. Include as much detail as you're comfortable sharing â dates, names, patterns of behavior. Everything here is anonymous." rows={5} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.text, outline: "none", fontFamily: T.body, resize: "vertical", lineHeight: 1.6, boxSizing: "border-box" }} />
                   {abuseData.description.length > 0 && abuseData.description.length < 20 && (
                     <div style={{ fontSize: 11, color: T.amber, marginTop: 4 }}>Please provide at least 20 characters ({20 - abuseData.description.length} more needed)</div>
                   )}
