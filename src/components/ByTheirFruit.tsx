@@ -117,6 +117,22 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/* --- GEOCODE ZIP CODE TO COORDINATES (OpenStreetMap Nominatim, free, no key) --- */
+async function geocodeZip(zip) {
+  try {
+    const resp = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${zip}&country=US&format=json&limit=1`, {
+      headers: { "User-Agent": "ByTheirFruit/1.0" }
+    });
+    const data = await resp.json();
+    if (data && data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+  } catch (e) {
+    console.error("Geocode zip error:", e);
+  }
+  return null;
+}
+
 /* --- DB MAPPERS --- */
 function dbChurchToLocal(c) {
   const scores = {};
@@ -963,6 +979,39 @@ export default function ByTheirFruit() {
     }
     setSearchLoading(true);
     try {
+      // If a full 5-digit zip is entered, geocode it and do proximity search
+      if (zip && zip.length === 5 && !query && !city) {
+        const coords = await geocodeZip(zip);
+        if (coords) {
+          // Fetch churches with coordinates, apply denomination/state filters
+          let q = supabase.from("churches").select("*")
+            .not("latitude", "is", null)
+            .not("longitude", "is", null);
+          if (denomination && denomination !== "All") q = q.eq("denomination", denomination);
+          if (state && state !== "All") q = q.eq("state", state);
+          q = q.limit(500);
+          const { data, error } = await q;
+          if (error) {
+            console.error("Zip proximity error:", error);
+            if (!_retried) { await supabase.auth.getSession(); return searchChurchesDB(query, denomination, state, city, zip, true); }
+          }
+          if (!error && data) {
+            const withDist = data.map(c => ({
+              ...c,
+              _dist: haversineDistance(coords.lat, coords.lng, c.latitude, c.longitude)
+            })).sort((a, b) => a._dist - b._dist).slice(0, 50);
+            const distMap = {};
+            withDist.forEach(c => { distMap[c.id] = c._dist; });
+            setNearMeDistances(distMap);
+            setNearMeLocation(coords);
+            setChurches(withDist.map(dbChurchToLocal));
+          }
+          setSearchLoading(false);
+          return;
+        }
+        // If geocoding fails, fall through to normal zip prefix search
+      }
+
       let q = supabase.from("churches").select("*");
       if (query) {
         q = q.ilike("name", `%${query}%`);
@@ -991,6 +1040,8 @@ export default function ByTheirFruit() {
         showToast("Search failed. Please refresh the page and try again.", "error");
       }
       if (!error && data) {
+        // Clear distance data when not doing proximity search
+        setNearMeDistances({});
         setChurches(data.map(dbChurchToLocal));
       }
     } catch (err) {
@@ -2142,7 +2193,7 @@ export default function ByTheirFruit() {
                   {US_STATES.map(s => <option key={s} value={s}>{s === "All" ? "All States" : `${s} — ${STATE_NAMES[s] || s}`}</option>)}
                 </select>
                 <input value={filterCity} onChange={e => { setFilterCity(e.target.value); setCurrentPage(1); }} placeholder="City" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 130 }} />
-                <input value={filterZip} onChange={e => { setFilterZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setCurrentPage(1); }} placeholder="Zip code" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 90 }} />
+                <input value={filterZip} onChange={e => { setFilterZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setCurrentPage(1); }} placeholder="Zip code" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 100 }} />
                 <select value={filterDenom} onChange={e => { setFilterDenom(e.target.value); setCurrentPage(1); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 160 }}>
                   {denoms.map(d => <option key={d} value={d}>{d === "All" ? "All Denominations" : d}</option>)}
                 </select>
@@ -2194,7 +2245,7 @@ export default function ByTheirFruit() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                       <div style={{ flex: 1 }}>
                         <h3 style={{ fontSize: 18, fontFamily: T.heading, fontWeight: 700, margin: "0 0 3px", letterSpacing: "-0.02em" }}>{church.name}</h3>
-                        <div style={{ fontSize: 13, color: T.textMuted }}>{church.denomination} · {church.city}, {church.state}{church.size ? ` · ${church.size}` : ""}{nearMeActive && nearMeDistances[church.id] != null && <span style={{ color: T.accent, fontWeight: 600 }}> · {nearMeDistances[church.id] < 1 ? "< 1" : Math.round(nearMeDistances[church.id])} mi</span>}</div>
+                        <div style={{ fontSize: 13, color: T.textMuted }}>{church.denomination} · {church.city}, {church.state}{church.size ? ` · ${church.size}` : ""}{nearMeDistances[church.id] != null && <span style={{ color: T.accent, fontWeight: 600 }}> · {nearMeDistances[church.id] < 1 ? "< 1" : Math.round(nearMeDistances[church.id])} mi</span>}</div>
                         {church.address && !church.address.toLowerCase().startsWith("po box") && <div style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>{church.address}</div>}
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
                           {church.tags.slice(0, 4).map((tag, j) => <span key={j} style={{ fontSize: 11, padding: "2px 9px", borderRadius: T.radiusFull, background: T.surfaceAlt, color: T.textSoft, fontWeight: 500, border: `1px solid ${T.borderLight}` }}>{tag}</span>)}
