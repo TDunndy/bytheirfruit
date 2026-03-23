@@ -26,8 +26,8 @@ const SCORE_LABELS = { teaching: "Teaching", welcome: "Welcome", community: "Com
 function scoreHue(s) { const t = Math.max(0, Math.min(1, (s - 1) / 4)); const eased = t * t * (3 - 2 * t); return eased * 142; }
 const scoreColor = (s) => `hsl(${scoreHue(s)}, 72%, 45%)`;
 const scoreBg = (s) => `hsl(${scoreHue(s)}, 50%, 12%)`;
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "â";
-const formatDateTime = (d) => d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "â";
+const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
+const formatDateTime = (d) => d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "—";
 
 function Stat({ label, value, sub, color, icon }) {
   return (
@@ -95,7 +95,7 @@ function Modal({ isOpen, onClose, title, children, wide = false }) {
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700, fontFamily: T.heading, margin: 0 }}>{title}</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.textMuted }}>â</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.textMuted }}>✕</button>
         </div>
         {children}
       </div>
@@ -629,13 +629,13 @@ export default function AdminDashboard() {
             <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 20px", letterSpacing: "-0.03em" }}>Dashboard</h1>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
-              <Stat label="Total Users" value={users.length} sub={`${activeUsers} active`} color={T.accent} icon="ð¥" />
-              <Stat label="Churches" value={totalChurchCount.toLocaleString()} icon="âª" />
-              <Stat label="Total Reviews" value={reviews.length} sub={`${publishedReviews} published`} color={T.green} icon="ð" />
-              <Stat label="Pending" value={pendingReviews} sub="Awaiting moderation" color={T.accent} icon="â³" />
-              <Stat label="Flagged" value={flaggedReviews} sub="Needs attention" color={T.amber} icon="â ï¸" />
-              <Stat label="Hidden" value={hiddenReviews} sub="Temporarily hidden" color={T.purple} icon="ðï¸" />
-              <Stat label="Removed" value={removedReviews} sub="Permanently removed" color={T.red} icon="ðï¸" />
+              <Stat label="Total Users" value={users.length} sub={`${activeUsers} active`} color={T.accent} icon="👥" />
+              <Stat label="Churches" value={totalChurchCount.toLocaleString()} icon="⛪" />
+              <Stat label="Total Reviews" value={reviews.length} sub={`${publishedReviews} published`} color={T.green} icon="📝" />
+              <Stat label="Pending" value={pendingReviews} sub="Awaiting moderation" color={T.accent} icon="⏳" />
+              <Stat label="Flagged" value={flaggedReviews} sub="Needs attention" color={T.amber} icon="⚠️" />
+              <Stat label="Hidden" value={hiddenReviews} sub="Temporarily hidden" color={T.purple} icon="👁️" />
+              <Stat label="Removed" value={removedReviews} sub="Permanently removed" color={T.red} icon="🗑️" />
             </div>
 
             {/* Review Status Breakdown */}
@@ -708,7 +708,7 @@ export default function AdminDashboard() {
                   {reviews.filter(r => r.status === "flagged" || r.status === "pending").slice(0, 6).map(r => (
                     <div key={r.id} style={{ padding: "12px", borderRadius: T.radiusSm, background: r.status === "flagged" ? T.amberSoft : T.accentSoft, border: `1px solid ${r.status === "flagged" ? "rgba(245,158,11,0.2)" : T.accentBorder}` }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: r.status === "flagged" ? T.amber : T.accent }}>{r.profiles?.display_name} â {r.churches?.name}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: r.status === "flagged" ? T.amber : T.accent }}>{r.profiles?.display_name} → {r.churches?.name}</div>
                         <Badge status={r.status} />
                       </div>
                       <div style={{ fontSize: 11, color: T.textSoft, lineHeight: 1.5, marginBottom: 8 }}>{r.text?.slice(0, 80)}...</div>
@@ -734,7 +734,7 @@ export default function AdminDashboard() {
                       <div style={{ fontWeight: 600, fontSize: 12 }}>{u.display_name}</div>
                       <Badge status={u.role} />
                     </div>
-                    <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{u.provider || "email"} Â· Joined {formatDate(u.created_at)}</div>
+                    <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{u.provider || "email"} · Joined {formatDate(u.created_at)}</div>
                   </div>
                 ))}
               </div>
@@ -808,7 +808,7 @@ export default function AdminDashboard() {
                             <div>
                               <span style={{ fontSize: 13, fontWeight: 700 }}>{r.profiles?.display_name || "Anonymous"}</span>
                               <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 8 }}>{r.reviewer_role}</span>
-                              <a href={`/#/church/${r.church_id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, marginLeft: 8, textDecoration: "none", fontWeight: 600 }}>â {r.churches?.name || "Unknown"}</a>
+                              <a href={`/#/church/${r.church_id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, marginLeft: 8, textDecoration: "none", fontWeight: 600 }}>→ {r.churches?.name || "Unknown"}</a>
                             </div>
                           </div>
                         </div>
@@ -927,7 +927,7 @@ export default function AdminDashboard() {
                           <a key={r.id} href={`/#/church/${r.church_id}`} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", color: "inherit", cursor: "pointer" }}>
                             <div>
                               <div style={{ fontWeight: 600, color: T.accent }}>{r.churches?.name}</div>
-                              <div style={{ fontSize: 11, color: T.textMuted }}>{r.churches?.city}, {r.churches?.state} Â· {formatDate(r.created_at)}</div>
+                              <div style={{ fontSize: 11, color: T.textMuted }}>{r.churches?.city}, {r.churches?.state} · {formatDate(r.created_at)}</div>
                             </div>
                             <Badge status={r.status} />
                           </a>
@@ -1003,8 +1003,8 @@ export default function AdminDashboard() {
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading, letterSpacing: "-0.02em" }}>{c.name}</div>
                         <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4, lineHeight: 1.6 }}>
-                          {c.denomination} Â· {c.city}, {c.state} {c.zip || ""} Â· {c.address || "No address"}<br />
-                          Phone: {c.phone || "â"} Â· Website: {c.website ? "Yes" : "â"} Â· Source: {c.source}
+                          {c.denomination} · {c.city}, {c.state} {c.zip || ""} · {c.address || "No address"}<br />
+                          Phone: {c.phone || "—"} · Website: {c.website ? "Yes" : "—"} · Source: {c.source}
                         </div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
@@ -1028,7 +1028,7 @@ export default function AdminDashboard() {
                                   width: "100%", padding: "8px 12px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
                                   color: T.text, fontFamily: T.body, fontSize: 12,
                                 }}>
-                                  <option value="">â</option>
+                                  <option value="">—</option>
                                   {["Contemporary", "Traditional", "Blended", "Charismatic", "Liturgical"].map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                               ) : field === "denomination" ? (
@@ -1036,7 +1036,7 @@ export default function AdminDashboard() {
                                   width: "100%", padding: "8px 12px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
                                   color: T.text, fontFamily: T.body, fontSize: 12,
                                 }}>
-                                  <option value="">â</option>
+                                  <option value="">—</option>
                                   {denominations.map(d => <option key={d} value={d}>{d}</option>)}
                                 </select>
                               ) : (
@@ -1076,7 +1076,7 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                           <div style={{ fontSize: 11, color: T.textMuted, paddingTop: 8, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between" }}>
-                            <span>Lat: {c.latitude?.toFixed(4)} Â· Lng: {c.longitude?.toFixed(4)} Â· Updated: {formatDate(c.scores_updated_at)}</span>
+                            <span>Lat: {c.latitude?.toFixed(4)} · Lng: {c.longitude?.toFixed(4)} · Updated: {formatDate(c.scores_updated_at)}</span>
                           </div>
                           <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
                             <Button onClick={() => resetChurchReviews(c.id, c.name)} variant="amber">Reset Reviews</Button>
@@ -1202,7 +1202,7 @@ export default function AdminDashboard() {
 
               {filtered.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "60px 20px", color: T.textMuted }}>
-                  <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>ð³ï¸</div>
+                  <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>🏳️</div>
                   <div style={{ fontSize: 14 }}>No {reportFilter === "all" ? "" : reportFilter} reports</div>
                 </div>
               ) : (
@@ -1385,7 +1385,7 @@ export default function AdminDashboard() {
                   <div>
                     <Button onClick={() => setConfirmDialog({
                       title: "Remove All Flagged Reviews",
-                      message: "This will change the status of all flagged reviews to 'removed'. This is reversible â you can restore individual reviews later.",
+                      message: "This will change the status of all flagged reviews to 'removed'. This is reversible — you can restore individual reviews later.",
                       confirmLabel: "Remove All Flagged",
                       variant: "amber",
                       onConfirm: async () => {
