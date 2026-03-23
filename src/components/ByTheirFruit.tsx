@@ -10,7 +10,7 @@ const SHARED = {
   heading: "'Sora', sans-serif", body: "'Plus Jakarta Sans', sans-serif",
   radius: 12, radiusSm: 8, radiusFull: 9999,
   accent: "#2563eb", accentSoft: "#eff4ff", accentBorder: "#bfdbfe",
-  green: "#16a34a", greenSoft: "#f0fdf4", greenBorder: "#bbf7d0",
+  green: "#16a34a", greenSoft: "#f0fdf4", grheenBorder: "#bbf7d0",
   amber: "#d97706", amberSoft: "#fffbeb", amberBorder: "#fde68a",
   red: "#dc2626", redSoft: "#fef2f2", redBorder: "#fecaca",
 };
@@ -27,7 +27,7 @@ const DARK = {
   ...SHARED,
   bg: "#0a0a0b", surface: "#18181b", surfaceAlt: "#1e1e22",
   border: "#2e2e33", borderLight: "#252529",
-  text: "#fafafa", textSoft: "#c4c4cc", textMuted: "#8b8b95",
+  text: "#fafafa", textSoft: "#e4e4ea", textMuted: "#b0b0bb",
   accentSoft: "#172554", accentBorder: "#1e3a5f",
   greenSoft: "#052e16", greenBorder: "#14532d",
   amberSoft: "#451a03", amberBorder: "#78350f",
@@ -115,6 +115,22 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
   const dLng = toRad(lng2 - lng1);
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/* --- GEOCODE ZIP CODE TO COORDINATES (OpenStreetMap Nominatim, free, no key) --- */
+async function geocodeZip(zip) {
+  try {
+    const resp = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${zip}&country=US&format=json&limit=1`, {
+      headers: { "User-Agent": "ByTheirFruit/1.0" }
+    });
+    const data = await resp.json();
+    if (data && data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+  } catch (e) {
+    console.error("Geocode zip error:", e);
+  }
+  return null;
 }
 
 /* --- DB MAPPERS --- */
@@ -906,6 +922,7 @@ export default function ByTheirFruit() {
   const [reviewerHistoryLoading, setReviewerHistoryLoading] = useState(false);
   // Church report modal
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
   const [reportData, setReportData] = useState({ reason: "", description: "" });
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
@@ -958,10 +975,44 @@ export default function ByTheirFruit() {
   const searchChurchesDB = useCallback(async (query, denomination, state, city, zip, _retried) => {
     if (!query && (!denomination || denomination === "All") && (!state || state === "All") && !city && !zip) {
       setChurches([]);
+      setSearchLoading(false);
       return;
     }
     setSearchLoading(true);
     try {
+      // If a full 5-digit zip is entered, geocode it and do proximity search
+      if (zip && zip.length === 5 && !query && !city) {
+        const coords = await geocodeZip(zip);
+        if (coords) {
+          // Fetch churches with coordinates, apply denomination/state filters
+          let q = supabase.from("churches").select("*")
+            .not("latitude", "is", null)
+            .not("longitude", "is", null);
+          if (denomination && denomination !== "All") q = q.eq("denomination", denomination);
+          if (state && state !== "All") q = q.eq("state", state);
+          q = q.limit(500);
+          const { data, error } = await q;
+          if (error) {
+            console.error("Zip proximity error:", error);
+            if (!_retried) { await supabase.auth.getSession(); return searchChurchesDB(query, denomination, state, city, zip, true); }
+          }
+          if (!error && data) {
+            const withDist = data.map(c => ({
+              ...c,
+              _dist: haversineDistance(coords.lat, coords.lng, c.latitude, c.longitude)
+            })).sort((a, b) => a._dist - b._dist).slice(0, 50);
+            const distMap = {};
+            withDist.forEach(c => { distMap[c.id] = c._dist; });
+            setNearMeDistances(distMap);
+            setNearMeLocation(coords);
+            setChurches(withDist.map(dbChurchToLocal));
+          }
+          setSearchLoading(false);
+          return;
+        }
+        // If geocoding fails, fall through to normal zip prefix search
+      }
+
       let q = supabase.from("churches").select("*");
       if (query) {
         q = q.ilike("name", `%${query}%`);
@@ -990,6 +1041,8 @@ export default function ByTheirFruit() {
         showToast("Search failed. Please refresh the page and try again.", "error");
       }
       if (!error && data) {
+        // Clear distance data when not doing proximity search
+        setNearMeDistances({});
         setChurches(data.map(dbChurchToLocal));
       }
     } catch (err) {
@@ -1067,7 +1120,7 @@ export default function ByTheirFruit() {
         if (err.code === 1) alert("Location access was denied. Please allow location access in your browser settings to use this feature.");
         else alert("Could not determine your location. Please try again.");
       },
-      { enableHighAccuracy: false, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   }, [nearMeActive, searchNearMe]);
 
@@ -1326,6 +1379,32 @@ export default function ByTheirFruit() {
         // Check if user has claimed a church
         const { data: claimedCheck } = await supabase.from("churches").select("id").eq("claimed_by", u.id).limit(1);
         if (claimedCheck && claimedCheck.length > 0) setHasClaimed(true);
+
+        // Process pending review from localStorage (for OAuth redirects on initial load)
+        const pending = localStorage.getItem("btf_pending_review");
+        if (pending) {
+          localStorage.removeItem("btf_pending_review");
+          setSubmitting(true);
+          try {
+            const parsed = JSON.parse(pending);
+            if (parsed.churchId) {
+              const cachedChurch = churches.find(c => c.id === parsed.churchId);
+              if (cachedChurch) setRateChurch(cachedChurch);
+            }
+            const success = await submitReviewToDB(parsed, u.id);
+            if (success) {
+              setRateStep(3);
+              setPage("rate");
+            } else {
+              showToast("Something went wrong submitting your experience. Please try again.", "error");
+            }
+          } catch (e) {
+            console.error("Failed to process pending review:", e);
+            showToast("Something went wrong submitting your experience. Please try again.", "error");
+          } finally {
+            setSubmitting(false);
+          }
+        }
       }
     });
 
@@ -1361,11 +1440,26 @@ export default function ByTheirFruit() {
         const pending = localStorage.getItem("btf_pending_review");
         if (pending) {
           localStorage.removeItem("btf_pending_review");
+          setSubmitting(true);
           try {
             const parsed = JSON.parse(pending);
-            await submitReviewToDB(parsed, u.id);
+            // Restore the church context so the success screen shows the right name
+            if (parsed.churchId) {
+              const cachedChurch = churches.find(c => c.id === parsed.churchId);
+              if (cachedChurch) setRateChurch(cachedChurch);
+            }
+            const success = await submitReviewToDB(parsed, u.id);
+            if (success) {
+              setRateStep(3);
+              setPage("rate");
+            } else {
+              showToast("Something went wrong submitting your experience. Please try again.", "error");
+            }
           } catch (e) {
             console.error("Failed to process pending review:", e);
+            showToast("Something went wrong submitting your experience. Please try again.", "error");
+          } finally {
+            setSubmitting(false);
           }
         }
       }
@@ -1395,7 +1489,7 @@ export default function ByTheirFruit() {
           setUserGeoLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
         () => { /* silently fail if denied */ },
-        { enableHighAccuracy: false, timeout: 8000 }
+        { enableHighAccuracy: true, timeout: 8000 }
       );
     }
   }, [mounted, geoRequested]);
@@ -2101,7 +2195,7 @@ export default function ByTheirFruit() {
                   {US_STATES.map(s => <option key={s} value={s}>{s === "All" ? "All States" : `${s} — ${STATE_NAMES[s] || s}`}</option>)}
                 </select>
                 <input value={filterCity} onChange={e => { setFilterCity(e.target.value); setCurrentPage(1); if (e.target.value) { setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); } }} placeholder="City" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 130 }} />
-                <input value={filterZip} onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 5); setFilterZip(v); setCurrentPage(1); if (v) { setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); } }} placeholder="Zip code" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 90 }} />
+                <input value={filterZip} onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 5); setFilterZip(v); setCurrentPage(1); if (v) { setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); } }} placeholder="Zip code" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 100 }} />
                 <select value={filterDenom} onChange={e => { setFilterDenom(e.target.value); setCurrentPage(1); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 160 }}>
                   {denoms.map(d => <option key={d} value={d}>{d === "All" ? "All Denominations" : d}</option>)}
                 </select>
@@ -2153,7 +2247,7 @@ export default function ByTheirFruit() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                       <div style={{ flex: 1 }}>
                         <h3 style={{ fontSize: 18, fontFamily: T.heading, fontWeight: 700, margin: "0 0 3px", letterSpacing: "-0.02em" }}>{church.name}</h3>
-                        <div style={{ fontSize: 13, color: T.textMuted }}>{church.denomination} · {church.city}, {church.state}{church.size ? ` · ${church.size}` : ""}{nearMeActive && nearMeDistances[church.id] != null && <span style={{ color: T.accent, fontWeight: 600 }}> · {nearMeDistances[church.id] < 1 ? "< 1" : Math.round(nearMeDistances[church.id])} mi</span>}</div>
+                        <div style={{ fontSize: 13, color: T.textMuted }}>{church.denomination} · {church.city}, {church.state}{church.size ? ` · ${church.size}` : ""}{nearMeDistances[church.id] != null && <span style={{ color: T.accent, fontWeight: 600 }}> · {nearMeDistances[church.id] < 1 ? "< 1" : Math.round(nearMeDistances[church.id])} mi</span>}</div>
                         {church.address && !church.address.toLowerCase().startsWith("po box") && <div style={{ fontSize: 12, color: T.textMuted, marginTop: 1 }}>{church.address}</div>}
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
                           {church.tags.slice(0, 4).map((tag, j) => <span key={j} style={{ fontSize: 11, padding: "2px 9px", borderRadius: T.radiusFull, background: T.surfaceAlt, color: T.textSoft, fontWeight: 500, border: `1px solid ${T.borderLight}` }}>{tag}</span>)}
@@ -2236,40 +2330,49 @@ export default function ByTheirFruit() {
                 )}
               </div>
 
-              {/* Share Buttons */}
+              {/* Share & Report Row */}
               {(() => {
                 const shareUrl = `https://bytheirfruit.church/#/church/${c.id}/${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "")}`;
                 const shareText = rated ? `${c.name} is rated ${overall.toFixed(1)}/5 on By Their Fruit — real experiences from real congregants.` : `Check out ${c.name} on By Their Fruit — real experiences from real congregants.`;
                 return (
-                  <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: T.textMuted, marginRight: 4 }}>Share:</span>
-                    {/* Copy Link */}
-                    <button onClick={() => { navigator.clipboard.writeText(shareUrl); showToast("Link copied to clipboard!", "success"); }} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body, transition: "all 0.15s" }} onMouseEnter={e => { e.currentTarget.style.background = T.accent; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = T.accent; }} onMouseLeave={e => { e.currentTarget.style.background = T.surfaceAlt; e.currentTarget.style.color = T.textSoft; e.currentTarget.style.borderColor = T.border; }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
-                      Copy Link
-                    </button>
-                    {/* Text/SMS */}
-                    <a href={`sms:?body=${encodeURIComponent(shareText + " " + shareUrl)}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.greenSoft, color: T.green, border: `1px solid ${T.greenBorder}`, cursor: "pointer", fontFamily: T.body, textDecoration: "none", transition: "all 0.15s" }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-                      Text
-                    </a>
-                    {/* Facebook */}
-                    <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: "#e8f0fe", color: "#1877f2", border: "1px solid #b6d4fe", cursor: "pointer", fontFamily: T.body, textDecoration: "none" }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                      Facebook
-                    </a>
-                    {/* X / Twitter */}
-                    <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.text, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body, textDecoration: "none" }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                      Post
-                    </a>
-                    {/* Email */}
-                    <a href={`mailto:?subject=${encodeURIComponent("Check out " + c.name + " on By Their Fruit")}&body=${encodeURIComponent(shareText + "\n\n" + shareUrl)}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body, textDecoration: "none" }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                      Email
-                    </a>
+                  <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
+                    {/* Share Dropdown */}
+                    <div style={{ position: "relative" }}>
+                      <button onClick={() => setShowShareMenu(prev => !prev)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surfaceAlt, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body, transition: "all 0.15s" }} onMouseEnter={e => { e.currentTarget.style.background = T.accent; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = T.accent; }} onMouseLeave={e => { e.currentTarget.style.background = T.surfaceAlt; e.currentTarget.style.color = T.textSoft; e.currentTarget.style.borderColor = T.border; }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                        Share
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                      </button>
+                      {showShareMenu && (
+                        <>
+                          <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setShowShareMenu(false)} />
+                          <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 100, minWidth: 180, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: T.radius, boxShadow: "0 8px 24px rgba(0,0,0,0.25)", padding: "6px 0", fontFamily: T.body }}>
+                            <button onClick={() => { navigator.clipboard.writeText(shareUrl); showToast("Link copied!", "success"); setShowShareMenu(false); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", background: "none", border: "none", color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: T.body, textAlign: "left" }} onMouseEnter={e => e.currentTarget.style.background = T.surfaceAlt} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                              Copy Link
+                            </button>
+                            <a href={`sms:?body=${encodeURIComponent(shareText + " " + shareUrl)}`} onClick={() => setShowShareMenu(false)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", background: "none", border: "none", color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: T.body, textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.background = T.surfaceAlt} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                              Text Message
+                            </a>
+                            <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" onClick={() => setShowShareMenu(false)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", background: "none", border: "none", color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: T.body, textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.background = T.surfaceAlt} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="#1877f2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                              Facebook
+                            </a>
+                            <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer" onClick={() => setShowShareMenu(false)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", background: "none", border: "none", color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: T.body, textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.background = T.surfaceAlt} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                              Post on X
+                            </a>
+                            <a href={`mailto:?subject=${encodeURIComponent("Check out " + c.name + " on By Their Fruit")}&body=${encodeURIComponent(shareText + "\n\n" + shareUrl)}`} onClick={() => setShowShareMenu(false)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", background: "none", border: "none", color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: T.body, textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.background = T.surfaceAlt} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                              Email
+                            </a>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     {/* Report Church */}
-                    <button onClick={() => { setShowReportModal(true); setReportSubmitted(false); setReportData({ reason: "", description: "" }); }} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: "none", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body, transition: "all 0.15s" }} onMouseEnter={e => { e.currentTarget.style.color = T.red; e.currentTarget.style.borderColor = T.red; }} onMouseLeave={e => { e.currentTarget.style.color = T.textMuted; e.currentTarget.style.borderColor = T.border; }}>
+                    <button onClick={() => { setShowReportModal(true); setReportSubmitted(false); setReportData({ reason: "", description: "" }); }} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: "none", color: T.textMuted, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body, transition: "all 0.15s" }} onMouseEnter={e => { e.currentTarget.style.color = T.red; e.currentTarget.style.borderColor = T.red; }} onMouseLeave={e => { e.currentTarget.style.color = T.textMuted; e.currentTarget.style.borderColor = T.border; }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
                       Report
                     </button>
@@ -2342,15 +2445,15 @@ export default function ByTheirFruit() {
 
               {/* Claim This Church CTA */}
               {!c.claimedBy && (
-                <div style={{ marginTop: 16, padding: "16px 24px", borderRadius: T.radius, background: T.amberSoft, border: `1.5px solid ${T.amberBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                <div style={{ marginTop: 16, padding: "16px 24px", borderRadius: T.radius, background: T.accentSoft, border: `1.5px solid ${T.accentBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Are you part of this church's leadership?</div>
                     <div style={{ fontSize: 12, color: T.textSoft, marginTop: 2 }}>Claim this church to respond to experiences, access insights, and get a verified badge.</div>
                   </div>
                   {claimStatus === "pending" ? (
-                    <span style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.amberSoft, color: T.amber, border: `1.5px solid ${T.amberBorder}` }}>Claim Pending Review</span>
+                    <span style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.accentSoft, color: T.accent, border: `1.5px solid ${T.accentBorder}` }}>Claim Pending Review</span>
                   ) : (
-                    <button onClick={() => { if (!user) { setShowAuthModal(true); } else { setShowClaimModal(true); } }} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, whiteSpace: "nowrap" }}>Claim This Church</button>
+                    <button onClick={() => { if (!user) { setShowAuthModal(true); } else { setShowClaimModal(true); } }} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, whiteSpace: "nowrap" }}>Claim This Church</button>
                   )}
                 </div>
               )}
@@ -2809,7 +2912,7 @@ export default function ByTheirFruit() {
                       navigator.geolocation.getCurrentPosition(
                         (pos) => { setReviewerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocationStatus("granted"); },
                         () => { setLocationStatus("denied"); },
-                        { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+                        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
                       );
                     }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Share Location</button>
                   )}
