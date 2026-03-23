@@ -10,7 +10,7 @@ const SHARED = {
   heading: "'Sora', sans-serif", body: "'Plus Jakarta Sans', sans-serif",
   radius: 12, radiusSm: 8, radiusFull: 9999,
   accent: "#2563eb", accentSoft: "#eff4ff", accentBorder: "#bfdbfe",
-  green: "#16a34a", greenSoft: "#f0fdf4", greenBorder: "#bbf7d0",
+  green: "#16a34a", greenSoft: "#f0fdf4", grheenBorder: "#bbf7d0",
   amber: "#d97706", amberSoft: "#fffbeb", amberBorder: "#fde68a",
   red: "#dc2626", redSoft: "#fef2f2", redBorder: "#fecaca",
 };
@@ -1068,7 +1068,7 @@ export default function ByTheirFruit() {
         if (err.code === 1) alert("Location access was denied. Please allow location access in your browser settings to use this feature.");
         else alert("Could not determine your location. Please try again.");
       },
-      { enableHighAccuracy: false, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   }, [nearMeActive, searchNearMe]);
 
@@ -1436,7 +1436,7 @@ export default function ByTheirFruit() {
           setUserGeoLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
         () => { /* silently fail if denied */ },
-        { enableHighAccuracy: false, timeout: 8000 }
+        { enableHighAccuracy: true, timeout: 8000 }
       );
     }
   }, [mounted, geoRequested]);
