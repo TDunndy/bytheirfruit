@@ -607,12 +607,23 @@ function UserMenu({ user, onSignOut, onNavigate, onSaved }) {
 }
 
 /* --- REVIEW CARD WITH FLAG + CATEGORY COMMENTS --- */
-function ReviewCard({ rev, delay = 0, userId, nameLevel = "public" }) {
+function ReviewCard({ rev, delay = 0, userId, nameLevel = "public", onDelete }) {
   const [flagged, setFlagged] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [likeCount, setLikeCount] = useState(rev.likeCount || 0);
   const [liked, setLiked] = useState(rev.userLiked || false);
   const [liking, setLiking] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const isOwnReview = userId && rev._reviewerId === userId;
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    const { error } = await supabase.rpc("soft_delete_review", { p_review_id: rev.id });
+    if (!error && onDelete) onDelete(rev.id);
+    setDeleting(false);
+    setShowDeleteConfirm(false);
+  };
   const hasComments = rev.comments && Object.keys(rev.comments).length > 0;
 
   const handleLike = async () => {
@@ -743,17 +754,35 @@ function ReviewCard({ rev, delay = 0, userId, nameLevel = "public" }) {
               Helpful{likeCount > 0 ? ` (${likeCount})` : ""}
             </button>
           </div>
-          <div>
-            {flagged ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {isOwnReview && (
+              <button onClick={() => setShowDeleteConfirm(true)} style={{ fontSize: 11, color: T.textMuted, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, padding: 0, transition: "color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.color = T.red} onMouseLeave={e => e.currentTarget.style.color = T.textMuted}>
+                Delete
+              </button>
+            )}
+            {!isOwnReview && (flagged ? (
               <span style={{ fontSize: 11, color: T.textMuted, fontStyle: "italic" }}>Flagged for review</span>
             ) : (
               <button onClick={handleFlag} style={{ fontSize: 11, color: T.textMuted, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, padding: 0, transition: "color 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.color = T.red} onMouseLeave={e => e.currentTarget.style.color = T.textMuted}>
                 Flag as inappropriate
               </button>
-            )}
+            ))}
           </div>
         </div>
+
+        {/* Delete Confirmation */}
+        {showDeleteConfirm && (
+          <div style={{ marginTop: 12, padding: "14px 16px", borderRadius: T.radiusSm, background: T.redSoft, border: `1px solid ${T.redBorder}` }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.red, marginBottom: 6 }}>Delete this review?</div>
+            <div style={{ fontSize: 12, color: T.textSoft, marginBottom: 12, lineHeight: 1.5 }}>This will permanently remove your review from the church page. This action cannot be undone.</div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setShowDeleteConfirm(false)} disabled={deleting} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
+              <button onClick={handleDelete} disabled={deleting} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.red, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: deleting ? 0.5 : 1 }}>{deleting ? "Deleting..." : "Yes, Delete"}</button>
+            </div>
+          </div>
+        )}
       </div>
     </FadeIn>
   );
@@ -2731,7 +2760,11 @@ export default function ByTheirFruit() {
                     _onResponseChange: (val) => setResponseText(val),
                     _onSubmitResponse: () => submitChurchResponse(rev.id, c.id),
                   } : rev;
-                  return <ReviewCard key={rev.id || i} rev={enrichedRev} delay={240 + i * 70} userId={user?.id} nameLevel={isOwner ? "church" : "public"} />;
+                  return <ReviewCard key={rev.id || i} rev={enrichedRev} delay={240 + i * 70} userId={user?.id} nameLevel={isOwner ? "church" : "public"} onDelete={(deletedId) => {
+                    setChurches(prev => prev.map(ch => ch.id === c.id ? { ...ch, recentReviews: ch.recentReviews.filter(r => r.id !== deletedId) } : ch));
+                    setUserReviews(prev => { const next = { ...prev }; delete next[c.id]; return next; });
+                    showToast("Your review has been deleted", "info");
+                  }} />;
                 })}
               </div>
             </div>
