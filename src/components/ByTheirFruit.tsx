@@ -792,6 +792,16 @@ function ReviewCard({ rev, delay = 0, userId, nameLevel = "public", onDelete }) 
         </div>
         <p style={{ fontSize: 13.5, color: T.textSoft, lineHeight: 1.7, margin: "0 0 12px" }}>{rev.text}</p>
 
+        {rev.photos && rev.photos.length > 0 && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+            {rev.photos.map(photo => (
+              <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer" style={{ display: "block", width: 100, height: 100, borderRadius: T.radiusSm, overflow: "hidden", border: `1.5px solid ${T.border}`, flexShrink: 0 }}>
+                <img src={photo.url} alt={photo.caption || "Review photo"} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </a>
+            ))}
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
           {Object.entries(rev.scores).map(([key, val]) => {
             const cat = CATEGORIES.find(c => c.id === key);
@@ -1033,6 +1043,10 @@ export default function ByTheirFruit() {
   const [showAddChurch, setShowAddChurch] = useState(false);
   const [addData, setAddData] = useState({ name: "", address: "", city: "", state: "FL", denomination: "", size: "", serviceTimes: "" });
   const [submitting, setSubmitting] = useState(false);
+
+  // Photo upload for reviews
+  const [ratePhotos, setRatePhotos] = useState([]); // Array of { file, preview, uploading }
+  const MAX_REVIEW_PHOTOS = 3;
 
   // Geolocation for review submissions
   const [reviewerLocation, setReviewerLocation] = useState(null); // { lat, lng }
@@ -1318,7 +1332,7 @@ export default function ByTheirFruit() {
   const fetchReviewsForChurch = useCallback(async (churchId) => {
     const { data, error } = await supabase
       .from("reviews")
-      .select("*, profiles!reviews_user_id_fkey(display_name, avatar_url), church_responses(id, text, created_at, profiles!church_responses_responder_id_fkey(display_name)), review_likes(user_id)")
+      .select("*, profiles!reviews_user_id_fkey(display_name, avatar_url), church_responses(id, text, created_at, profiles!church_responses_responder_id_fkey(display_name)), review_likes(user_id), review_photos(id, storage_path, caption, sort_order)")
       .eq("church_id", churchId)
       .in("status", ["published", "pending", "hidden", "flagged"])
       .order("created_at", { ascending: false });
@@ -1328,6 +1342,14 @@ export default function ByTheirFruit() {
         const likes = r.review_likes || [];
         review.likeCount = likes.length;
         review.userLiked = user ? likes.some(l => l.user_id === user.id) : false;
+        // Attach photos
+        if (r.review_photos && r.review_photos.length > 0) {
+          review.photos = r.review_photos.sort((a, b) => a.sort_order - b.sort_order).map(p => ({
+            id: p.id,
+            url: supabase.storage.from("review-photos").getPublicUrl(p.storage_path).data.publicUrl,
+            caption: p.caption,
+          }));
+        }
         return review;
       });
       setChurches(prev => {
@@ -1737,15 +1759,41 @@ export default function ByTheirFruit() {
       // Update existing review (upsert on unique constraint)
       result = await supabase
         .from("reviews")
-        .upsert(row, { onConflict: "church_id,user_id" });
+        .upsert(row, { onConflict: "church_id,user_id" })
+        .select("id")
+        .single();
     } else {
-      result = await supabase.from("reviews").insert(row);
+      result = await supabase.from("reviews").insert(row).select("id").single();
     }
 
     if (result.error) {
       console.error("Review submit error:", result.error);
       showToast("Failed to submit experience: " + result.error.message, "error");
       return false;
+    }
+
+    // Upload photos if any
+    const reviewId = result.data?.id;
+    if (reviewId && reviewData.photos && reviewData.photos.length > 0) {
+      for (let i = 0; i < reviewData.photos.length; i++) {
+        const photo = reviewData.photos[i];
+        const ext = photo.file.name.split(".").pop()?.toLowerCase() || "jpg";
+        const storagePath = `${userId}/${reviewId}/${Date.now()}_${i}.${ext}`;
+        const { error: uploadErr } = await supabase.storage
+          .from("review-photos")
+          .upload(storagePath, photo.file, { contentType: photo.file.type });
+        if (!uploadErr) {
+          await supabase.from("review_photos").insert({
+            review_id: reviewId,
+            user_id: userId,
+            storage_path: storagePath,
+            file_name: photo.file.name,
+            file_size: photo.file.size,
+            mime_type: photo.file.type,
+            sort_order: i,
+          });
+        }
+      }
     }
 
     // --- GEO-FLAG CHECK: After successful new review, check for suspicious multi-state activity ---
@@ -2029,7 +2077,7 @@ export default function ByTheirFruit() {
     }
 
     navigate("rate"); setRateStep(preselect ? 1 : 0); setRateChurch(preselect || null);
-    setRateSearch(""); setRateSkipped({});
+    setRateSearch(""); setRateSkipped({}); setRatePhotos([]);
     setShowAddChurch(false);
     setAddData({ name: "", address: "", city: "", state: "FL", denomination: "", size: "", serviceTimes: "" });
     setReviewerLocation(userGeoLocation || null); setLocationStatus(userGeoLocation ? "granted" : "idle");
@@ -2092,6 +2140,7 @@ export default function ByTheirFruit() {
       isEdit: isEditing,
       reviewerLat: reviewerLocation?.lat || null,
       reviewerLng: reviewerLocation?.lng || null,
+      photos: ratePhotos,
     };
 
     if (!user) {
@@ -3129,6 +3178,44 @@ export default function ByTheirFruit() {
               ) : (
                 <div style={{ fontSize: 11, color: rateText.length >= 2000 ? T.red : rateText.length > 1800 ? T.amber : T.textMuted, marginBottom: 20 }}>{rateText.length}/2,000 characters</div>
               )}
+              {/* Photo upload */}
+              <div style={{ padding: "14px 16px", borderRadius: T.radius, background: T.surfaceAlt, border: `1px solid ${T.border}`, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ratePhotos.length > 0 ? 12 : 0 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, fontFamily: T.heading, marginBottom: 2 }}>📸 Add photos</div>
+                    <div style={{ fontSize: 11, color: T.textMuted }}>Optional — up to {MAX_REVIEW_PHOTOS} photos (5MB each, JPG/PNG/WebP)</div>
+                  </div>
+                  {ratePhotos.length < MAX_REVIEW_PHOTOS && (
+                    <label style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 600, background: T.accent, color: "#fff", cursor: "pointer", fontFamily: T.body, display: "inline-block" }}>
+                      Add Photo
+                      <input type="file" accept="image/jpeg,image/png,image/webp" multiple style={{ display: "none" }} onChange={e => {
+                        const files = Array.from(e.target.files || []);
+                        const remaining = MAX_REVIEW_PHOTOS - ratePhotos.length;
+                        const toAdd = files.slice(0, remaining);
+                        const valid = toAdd.filter(f => {
+                          if (f.size > 5 * 1024 * 1024) { showToast(`${f.name} exceeds 5MB limit`, "error"); return false; }
+                          if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) { showToast(`${f.name} is not a supported format`, "error"); return false; }
+                          return true;
+                        });
+                        if (valid.length > 0) {
+                          setRatePhotos(prev => [...prev, ...valid.map(f => ({ file: f, preview: URL.createObjectURL(f) }))]);
+                        }
+                        e.target.value = "";
+                      }} />
+                    </label>
+                  )}
+                </div>
+                {ratePhotos.length > 0 && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {ratePhotos.map((photo, i) => (
+                      <div key={i} style={{ position: "relative", width: 80, height: 80, borderRadius: T.radiusSm, overflow: "hidden", border: `1.5px solid ${T.border}` }}>
+                        <img src={photo.preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <button onClick={() => { URL.revokeObjectURL(photo.preview); setRatePhotos(prev => prev.filter((_, j) => j !== i)); }} style={{ position: "absolute", top: 2, right: 2, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,0.7)", color: "#fff", border: "none", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, padding: 0 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               {/* Location verification */}
               <div style={{ padding: "14px 16px", borderRadius: T.radius, background: T.surfaceAlt, border: `1px solid ${T.border}`, marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
