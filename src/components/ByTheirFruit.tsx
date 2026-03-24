@@ -2287,6 +2287,77 @@ export default function ByTheirFruit() {
             </FadeIn>
           )}
 
+          {/* Featured Churches */}
+          <FadeIn delay={270}>
+            <div style={{ marginTop: 32 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Spotlight</div>
+                  <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>Featured Churches</h2>
+                </div>
+                <button onClick={() => navigate("discover")} style={{ fontSize: 12, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>Browse all →</button>
+              </div>
+              {(() => {
+                const reviewed = churches.filter(c => c.totalReviews > 0 && hasScores(c)).sort((a, b) => avg(b.scores) - avg(a.scores)).slice(0, 3);
+                if (reviewed.length > 0) return (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+                    {reviewed.map((church, i) => {
+                      const overall = avg(church.scores);
+                      return (
+                        <div key={church.id} onClick={() => viewChurch(church)} style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}`, cursor: "pointer", transition: "all 0.2s" }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(37,99,235,0.08)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: T.accent, padding: "2px 8px", borderRadius: T.radiusFull, background: T.accentSoft, border: `1px solid ${T.accentBorder}` }}>#{i + 1} Rated</div>
+                            <div style={{ fontSize: 22, fontWeight: 800, fontFamily: T.heading, color: scoreColor(overall) }}>{overall.toFixed(1)}</div>
+                          </div>
+                          <h3 style={{ fontSize: 15, fontFamily: T.heading, fontWeight: 700, margin: "0 0 3px", letterSpacing: "-0.01em" }}>{church.name}</h3>
+                          <div style={{ fontSize: 12, color: T.textMuted }}>{church.city}, {church.state}</div>
+                          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>{church.totalReviews} review{church.totalReviews !== 1 ? "s" : ""} · {church.denomination}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+                return (
+                  <div style={{ padding: "32px 24px", borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}`, textAlign: "center" }}>
+                    <div style={{ fontSize: 28, marginBottom: 12 }}>🌱</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading, color: T.text, marginBottom: 4 }}>Be the first to share</div>
+                    <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 16px", maxWidth: 380, marginLeft: "auto", marginRight: "auto", lineHeight: 1.6 }}>No churches have been reviewed yet. Your honest experience could be the first — and it could help the next person walking through those doors.</p>
+                    <button onClick={() => startRateFlow()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Write the First Review</button>
+                  </div>
+                );
+              })()}
+            </div>
+          </FadeIn>
+
+          {/* From the Blog */}
+          <FadeIn delay={285}>
+            <div style={{ marginTop: 32 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Resources</div>
+                  <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>From the Blog</h2>
+                </div>
+                <button onClick={() => navigate("blog")} style={{ fontSize: 12, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>View all →</button>
+              </div>
+              <div className="btf-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                {[
+                  { id: "how-to-find-the-right-church", title: "How to Find the Right Church for You", emoji: "🔍" },
+                  { id: "questions-to-ask-before-joining-a-church", title: "15 Questions to Ask Before Joining", emoji: "❓" },
+                  { id: "church-for-young-adults", title: "Finding a Church as a Young Adult", emoji: "🌱" },
+                ].map((post, i) => (
+                  <div key={post.id} onClick={() => { navigate("blog"); setTimeout(() => window.history.pushState(null, "", `#/blog/${post.id}`), 50); }} style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, cursor: "pointer", transition: "all 0.2s" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = "translateY(0)"; }}>
+                    <div style={{ fontSize: 22, marginBottom: 10 }}>{post.emoji}</div>
+                    <h3 style={{ fontSize: 14, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.01em", lineHeight: 1.35 }}>{post.title}</h3>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </FadeIn>
+
           <FadeIn delay={300}>
             <div style={{ marginTop: 24, padding: "36px 32px", borderRadius: 14, background: T === DARK ? T.surfaceAlt : T.text, color: T === DARK ? T.text : T.bg }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.35, marginBottom: 6 }}>Framework</div>
