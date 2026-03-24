@@ -872,6 +872,8 @@ export default function ByTheirFruit() {
             const church = dbChurchToLocal(data);
             setPage("profile");
             setSelectedChurch(church);
+            // Ensure church is in the churches array so fetchReviewsForChurch can update it
+            setChurches(prev => prev.some(c => c.id === church.id) ? prev : [...prev, church]);
             fetchReviewsForChurch(churchId);
             if (user) checkClaimStatus(churchId, user.id);
           }
