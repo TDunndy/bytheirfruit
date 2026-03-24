@@ -814,6 +814,7 @@ export default function AdminDashboard() {
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                           <Badge status={r.status} />
+                          {r.deleted_at && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: T.radiusFull, background: T.amberSoft, color: T.amber, fontWeight: 600, border: `1px solid ${T.amberBorder}` }}>User deleted {formatDate(r.deleted_at)}</span>}
                           {r.flag_count > 0 && <span style={{ fontSize: 10, color: T.red, fontWeight: 600 }}>{r.flag_count} flags</span>}
                           <span style={{ fontSize: 11, color: T.textMuted }}>{formatDate(r.created_at)}</span>
                         </div>
