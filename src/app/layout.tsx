@@ -15,9 +15,10 @@ export const metadata: Metadata = {
     title: 'By Their Fruit — Church Reviews by the Congregation',
     description: 'Real church reviews from the people who attend. Honest, structured, and built to help churches grow. Matthew 7:16.',
   },
-  keywords: ['church reviews', 'church ratings', 'find a church', 'church near me', 'honest church reviews', 'church community', 'by their fruit', 'congregation reviews'],
+  keywords: ['church reviews', 'church ratings', 'find a church', 'church near me', 'honest church reviews', 'church community', 'by their fruit', 'congregation reviews', 'best churches near me', 'church recommendations', 'rate my church', 'church feedback', 'church search', 'church directory', 'church comparison'],
   robots: { index: true, follow: true },
   alternates: { canonical: 'https://bytheirfruit.church' },
+  verification: {},
   icons: {
     icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%2318181b'/><path d='M16 6C16 6 10 13 10 18C10 21.3 12.7 24 16 24C19.3 24 22 21.3 22 18C22 13 16 6 16 6Z' fill='%232563eb'/></svg>",
   },
@@ -27,6 +28,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "name": "By Their Fruit",
+          "url": "https://bytheirfruit.church",
+          "description": "Real church reviews from real congregants. Honest, structured feedback across 10 categories to help churches grow and help families find home.",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://bytheirfruit.church/#/discover?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        }) }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
