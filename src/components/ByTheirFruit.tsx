@@ -275,6 +275,7 @@ function updateSEOForPage(pageName) {
     discover: { title: "Find a Church Near You | By Their Fruit", desc: "Search and discover churches by location, denomination, and ratings. Read honest reviews from real congregants across 10 categories." },
     rate: { title: "Share Your Church Experience | By Their Fruit", desc: "Rate and review your church across 10 meaningful categories. Help others find a church they can trust." },
     about: { title: "How It Works | By Their Fruit", desc: "Learn how By Their Fruit helps church-goers share honest reviews and helps churches grow through constructive feedback." },
+    blog: { title: "Church Life Blog | By Their Fruit", desc: "Guides, tips, and insights on finding the right church, understanding church culture, and making the most of your church experience." },
   };
   const p = pages[pageName] || pages.home;
   document.title = p.title;
@@ -1010,6 +1011,8 @@ export default function ByTheirFruit() {
         setPage("myprofile");
       } else if (hash === "#/for-churches") {
         setPage("for-churches");
+      } else if (hash.startsWith("#/blog")) {
+        setPage("blog");
       }
     };
     handleHash();
@@ -2172,7 +2175,8 @@ export default function ByTheirFruit() {
           <button onClick={() => navigate("discover")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "discover" ? T.text : "transparent", color: page === "discover" ? T.bg : T.textSoft, border: `1px solid ${page === "discover" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Find a Church</button>
           <button onClick={() => startRateFlow()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "rate" ? T.text : "transparent", color: page === "rate" ? T.bg : T.textSoft, border: `1px solid ${page === "rate" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Share Your Experience</button>
           <button onClick={() => navigate("about")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "about" ? T.text : "transparent", color: page === "about" ? T.bg : T.textSoft, border: `1px solid ${page === "about" ? T.text : "transparent"}`, transition: "all 0.15s" }}>How It Works</button>
-          
+          <button onClick={() => navigate("blog")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "blog" ? T.text : "transparent", color: page === "blog" ? T.bg : T.textSoft, border: `1px solid ${page === "blog" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Blog</button>
+
           {hasClaimed && (
             <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accent : T.accentSoft, color: page === "dashboard" ? "#fff" : T.accent, border: `1px solid ${page === "dashboard" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Church Dashboard</button>
           )}
@@ -2198,7 +2202,8 @@ export default function ByTheirFruit() {
           <button onClick={() => { navigate("discover"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "discover" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "discover" ? T.border : "transparent"}`, textAlign: "left" }}>Find a Church</button>
           <button onClick={() => { startRateFlow(); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", textAlign: "left" }}>Share Your Experience</button>
           <button onClick={() => { navigate("about"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "about" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "about" ? T.border : "transparent"}`, textAlign: "left" }}>How It Works</button>
-          
+          <button onClick={() => { navigate("blog"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "blog" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "blog" ? T.border : "transparent"}`, textAlign: "left" }}>Blog</button>
+
           {hasClaimed && (
             <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accentSoft : "transparent", color: T.accent, border: `1px solid ${page === "dashboard" ? T.accentBorder : "transparent"}`, textAlign: "left" }}>Church Dashboard</button>
           )}
@@ -4140,6 +4145,105 @@ export default function ByTheirFruit() {
         return <FadeIn><MyProfilePage /></FadeIn>;
       })()}
 
+      {/* BLOG */}
+      {!loading && page === "blog" && (() => {
+        const articles = [
+          {
+            id: "how-to-find-the-right-church",
+            title: "How to Find the Right Church for You and Your Family",
+            date: "March 2026",
+            readTime: "5 min read",
+            intro: "Finding a church that feels like home can be one of the most meaningful \u2014 and overwhelming \u2014 decisions you make. Whether you\u2019re new to an area, returning to faith, or simply looking for a better fit, here are practical steps to guide your search.",
+            sections: [
+              { heading: "Know What Matters Most to You", body: "Before you start visiting churches, take a moment to think about what you\u2019re actually looking for. Is it strong Biblical teaching? A welcoming community for your kids? Vibrant worship? Financial transparency? Everyone\u2019s priorities are different, and that\u2019s okay. On By Their Fruit, churches are rated across 10 categories \u2014 from teaching and worship to youth programs and leadership \u2014 so you can find churches that align with what matters to you." },
+              { heading: "Visit More Than Once", body: "A single visit rarely gives you the full picture. Your first Sunday might land on a guest speaker, a holiday service, or an off week. Try to visit at least 2\u20133 times before making a judgment. Pay attention to how you\u2019re greeted, how the message resonates, and whether you can see yourself building relationships there." },
+              { heading: "Read What Others Say", body: "Just like you\u2019d read reviews before choosing a restaurant or a doctor, reading church reviews can save you a lot of time. Platforms like By Their Fruit let you see honest, structured feedback from people who actually attend \u2014 not just surface-level Google reviews, but detailed ratings on the things that matter." },
+              { heading: "Talk to Members", body: "Don\u2019t be afraid to strike up a conversation after service. Ask people how long they\u2019ve been attending, what they love about the church, and what they wish were different. Most churchgoers are happy to share \u2014 and their honesty can be incredibly revealing." },
+              { heading: "Trust Your Instincts", body: "At the end of the day, finding the right church is personal. If a church checks every box on paper but doesn\u2019t feel right, that\u2019s okay. Keep looking. The right fit is out there, and it\u2019s worth the search." },
+            ],
+          },
+          {
+            id: "what-makes-a-healthy-church",
+            title: "10 Signs of a Healthy Church (And 5 Red Flags to Watch For)",
+            date: "March 2026",
+            readTime: "6 min read",
+            intro: "Not all churches are created equal. Here are the hallmarks of a church that\u2019s truly thriving \u2014 and some warning signs that something might be off.",
+            sections: [
+              { heading: "Signs of a Healthy Church", body: "Strong, Bible-centered teaching that challenges and encourages. A genuine culture of welcome \u2014 not just a friendly greeting team, but real community. Transparency around finances and decision-making. Active investment in kids, youth, and the next generation. Leaders who serve rather than command. A congregation that cares for each other beyond Sunday mornings. Willingness to receive feedback and grow. Outward focus \u2014 serving the local community, not just themselves. Worship that\u2019s authentic, not performative. Diversity of thought and respectful dialogue." },
+              { heading: "Red Flags to Watch For", body: "A culture of secrecy around finances or leadership decisions. Pressure to give beyond your means or to commit before you\u2019re ready. Leaders who are unapproachable or resistant to accountability. An \u201Cus vs. them\u201D mentality toward other churches or the outside world. High turnover among staff or long-time members \u2014 this often signals deeper issues." },
+              { heading: "How Reviews Can Help", body: "One person\u2019s experience is anecdotal. But when you see patterns across multiple reviews \u2014 consistently high marks for community, or repeated concerns about leadership \u2014 that\u2019s data. That\u2019s what By Their Fruit is built for: giving you a clear, honest picture of what a church is really like from the people who know it best." },
+            ],
+          },
+          {
+            id: "why-church-reviews-matter",
+            title: "Why Honest Church Reviews Matter More Than Ever",
+            date: "March 2026",
+            readTime: "4 min read",
+            intro: "In every other area of life, we rely on reviews. Restaurants, doctors, employers, products \u2014 we read what others think before we commit. So why has church been the exception?",
+            sections: [
+              { heading: "The Information Gap", body: "When someone moves to a new city, they can find restaurant ratings in seconds. But finding a church? They\u2019re left with Google Maps listings, outdated websites, and word of mouth. There\u2019s no structured, honest feedback system \u2014 until now. By Their Fruit exists to close that gap." },
+              { heading: "Reviews Help Churches Grow", body: "Honest feedback isn\u2019t just good for church-seekers \u2014 it\u2019s invaluable for church leaders. How do you know if your welcome team is actually welcoming? If your youth program is resonating? If people feel the teaching is strong? Reviews give churches a mirror they can\u2019t get any other way. The best churches will embrace it." },
+              { heading: "Building Trust Through Transparency", body: "A church that welcomes reviews is a church that has nothing to hide. Claiming your page on By Their Fruit and responding to reviews signals to prospective visitors: \u201CWe care about your experience, and we\u2019re willing to listen.\u201D That kind of transparency builds trust \u2014 and trust is the foundation of any church community." },
+              { heading: "By Their Fruit: Matthew 7:16", body: "The name says it all. \u201CBy their fruit you will recognize them.\u201D We believe that when churches live out their mission well, the fruit speaks for itself. And when it doesn\u2019t, honest feedback is the first step toward growth. That\u2019s what this platform is about." },
+            ],
+          },
+        ];
+        const [selectedArticle, setSelectedArticle] = useState(null);
+        const article = articles.find(a => a.id === selectedArticle);
+        return (
+          <div style={{ maxWidth: 800, margin: "0 auto", padding: "48px 24px" }}>
+            {!article ? (
+              <FadeIn>
+                <div style={{ textAlign: "center", marginBottom: 48 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Blog</div>
+                  <h1 style={{ fontSize: 32, fontFamily: T.heading, fontWeight: 800, margin: "0 0 8px", letterSpacing: "-0.03em" }}>Church Life Insights</h1>
+                  <p style={{ fontSize: 15, color: T.textSoft, margin: 0, maxWidth: 520, marginLeft: "auto", marginRight: "auto", lineHeight: 1.6 }}>Guides, tips, and thoughts on finding the right church, understanding church culture, and growing in community.</p>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {articles.map((a, i) => (
+                    <FadeIn key={a.id} delay={100 + i * 80}>
+                      <div onClick={() => { setSelectedArticle(a.id); window.history.pushState(null, "", `#/blog/${a.id}`); }} style={{ padding: "24px 28px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}`, cursor: "pointer", transition: "all 0.2s" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = "translateY(0)"; }}>
+                        <div style={{ display: "flex", gap: 12, marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, color: T.textMuted }}>{a.date}</span>
+                          <span style={{ fontSize: 11, color: T.textMuted }}>{a.readTime}</span>
+                        </div>
+                        <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 8px", letterSpacing: "-0.02em", color: T.text }}>{a.title}</h2>
+                        <p style={{ fontSize: 14, color: T.textSoft, margin: 0, lineHeight: 1.6 }}>{a.intro.substring(0, 180)}...</p>
+                      </div>
+                    </FadeIn>
+                  ))}
+                </div>
+              </FadeIn>
+            ) : (
+              <FadeIn>
+                <button onClick={() => { setSelectedArticle(null); window.history.pushState(null, "", "#/blog"); }} style={{ background: "none", border: "none", color: T.accent, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0, marginBottom: 32, fontFamily: T.body }}>{"\u2190"} Back to Blog</button>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                    <span style={{ fontSize: 12, color: T.textMuted }}>{article.date}</span>
+                    <span style={{ fontSize: 12, color: T.textMuted }}>{article.readTime}</span>
+                  </div>
+                  <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, margin: "0 0 16px", letterSpacing: "-0.03em", lineHeight: 1.2 }}>{article.title}</h1>
+                  <p style={{ fontSize: 16, color: T.textSoft, lineHeight: 1.8, margin: "0 0 32px" }}>{article.intro}</p>
+                </div>
+                {article.sections.map((s, i) => (
+                  <div key={i} style={{ marginBottom: 28 }}>
+                    <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 8px", color: T.text, letterSpacing: "-0.02em" }}>{s.heading}</h2>
+                    <p style={{ fontSize: 15, color: T.textSoft, lineHeight: 1.8, margin: 0 }}>{s.body}</p>
+                  </div>
+                ))}
+                <div style={{ marginTop: 40, padding: "24px 28px", borderRadius: T.radius, background: T.accentSoft, border: `1.5px solid ${T.accentBorder}`, textAlign: "center" }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading, color: T.accent, marginBottom: 6 }}>Ready to find your church?</div>
+                  <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 16px" }}>Search over 270,000 churches and read honest reviews from real congregants.</p>
+                  <button onClick={() => navigate("discover")} style={{ padding: "10px 28px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Find a Church</button>
+                </div>
+              </FadeIn>
+            )}
+          </div>
+        );
+      })()}
+
       <footer style={{ borderTop: `1px solid ${T.border}`, marginTop: 60 }}>
         <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 24px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 32, marginBottom: 28 }}>
@@ -4152,7 +4256,7 @@ export default function ByTheirFruit() {
             <div style={{ minWidth: 120 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Explore</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[{ label: "Find a Church", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "How It Works", page: "about" }, { label: "For Churches", page: "for-churches" }].map(link => (
+                {[{ label: "Find a Church", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "How It Works", page: "about" }, { label: "Blog", page: "blog" }, { label: "For Churches", page: "for-churches" }].map(link => (
                   <button key={link.page} onClick={() => { if (link.page === "rate") startRateFlow(); else navigate(link.page); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: T.textSoft, fontFamily: T.body, textAlign: "left" }} onMouseEnter={e => e.currentTarget.style.color = T.accent} onMouseLeave={e => e.currentTarget.style.color = T.textSoft}>{link.label}</button>
                 ))}
               </div>
