@@ -177,6 +177,120 @@ function dbChurchToLocal(c) {
   };
 }
 
+/* --- SEO: Dynamic meta tags + JSON-LD structured data --- */
+function updateMeta(property, content) {
+  let el = document.querySelector(`meta[property="${property}"]`) || document.querySelector(`meta[name="${property}"]`);
+  if (!el) {
+    el = document.createElement("meta");
+    if (property.startsWith("og:") || property.startsWith("twitter:")) el.setAttribute("property", property);
+    else el.setAttribute("name", property);
+    document.head.appendChild(el);
+  }
+  el.setAttribute("content", content);
+}
+
+function setJsonLd(data) {
+  let el = document.getElementById("btf-jsonld");
+  if (!el) {
+    el = document.createElement("script");
+    el.id = "btf-jsonld";
+    el.type = "application/ld+json";
+    document.head.appendChild(el);
+  }
+  el.textContent = JSON.stringify(data);
+}
+
+function updateSEOForChurch(church, reviews = []) {
+  const { name, city, state, denomination, address, totalReviews, scores, phone, website } = church;
+  const overall = Object.values(scores);
+  const avgScore = overall.length > 0 ? (overall.reduce((a, b) => a + b, 0) / overall.length).toFixed(1) : null;
+  const location = [city, state].filter(Boolean).join(", ");
+
+  // Page title
+  document.title = `${name} Reviews — ${location} | By Their Fruit`;
+
+  // Meta description
+  const desc = avgScore
+    ? `${name} in ${location} rated ${avgScore}/5 across ${overall.length} categories from ${totalReviews} review${totalReviews !== 1 ? "s" : ""}. ${denomination} church. Read honest reviews from real congregants.`
+    : `Read reviews of ${name} in ${location}. ${denomination} church. Be the first to share your experience on By Their Fruit.`;
+  updateMeta("description", desc);
+
+  // Open Graph
+  updateMeta("og:title", `${name} — Church Reviews | By Their Fruit`);
+  updateMeta("og:description", desc);
+  updateMeta("og:url", `https://bytheirfruit.church/#/church/${church.id}`);
+  updateMeta("og:type", "website");
+  updateMeta("og:site_name", "By Their Fruit");
+
+  // Twitter
+  updateMeta("twitter:title", `${name} — Church Reviews`);
+  updateMeta("twitter:description", desc);
+
+  // JSON-LD: Church + AggregateRating + Reviews
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Church",
+    "name": name,
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": address || undefined,
+      "addressLocality": city,
+      "addressRegion": state,
+    },
+  };
+  if (phone) jsonLd.telephone = phone;
+  if (website) jsonLd.url = website;
+  if (church.latitude && church.longitude) {
+    jsonLd.geo = { "@type": "GeoCoordinates", "latitude": church.latitude, "longitude": church.longitude };
+  }
+  if (avgScore && totalReviews > 0) {
+    jsonLd.aggregateRating = {
+      "@type": "AggregateRating",
+      "ratingValue": avgScore,
+      "bestRating": "5",
+      "worstRating": "1",
+      "reviewCount": totalReviews,
+    };
+  }
+  if (reviews.length > 0) {
+    jsonLd.review = reviews.slice(0, 5).map(r => ({
+      "@type": "Review",
+      "author": { "@type": "Person", "name": r.author || "Anonymous" },
+      "datePublished": r._createdAt ? new Date(r._createdAt).toISOString().split("T")[0] : undefined,
+      "reviewBody": r.text,
+      "reviewRating": {
+        "@type": "Rating",
+        "ratingValue": Object.values(r.scores).length > 0 ? (Object.values(r.scores).reduce((a, b) => a + b, 0) / Object.values(r.scores).length).toFixed(1) : undefined,
+        "bestRating": "5",
+        "worstRating": "1",
+      },
+    }));
+  }
+  setJsonLd(jsonLd);
+}
+
+function updateSEOForPage(pageName) {
+  const pages = {
+    home: { title: "By Their Fruit \u2014 Church Reviews by the Congregation", desc: "Real reviews from real congregants. Honest, structured feedback to help churches grow and help families find home. Matthew 7:16." },
+    discover: { title: "Find a Church Near You | By Their Fruit", desc: "Search and discover churches by location, denomination, and ratings. Read honest reviews from real congregants across 10 categories." },
+    rate: { title: "Share Your Church Experience | By Their Fruit", desc: "Rate and review your church across 10 meaningful categories. Help others find a church they can trust." },
+    about: { title: "How It Works | By Their Fruit", desc: "Learn how By Their Fruit helps church-goers share honest reviews and helps churches grow through constructive feedback." },
+  };
+  const p = pages[pageName] || pages.home;
+  document.title = p.title;
+  updateMeta("description", p.desc);
+  updateMeta("og:title", p.title);
+  updateMeta("og:description", p.desc);
+  updateMeta("og:url", pageName === "home" ? "https://bytheirfruit.church" : `https://bytheirfruit.church/#/${pageName}`);
+  updateMeta("og:type", "website");
+  updateMeta("og:site_name", "By Their Fruit");
+  updateMeta("twitter:title", p.title);
+  updateMeta("twitter:description", p.desc);
+  // Clear church-specific JSON-LD
+  const el = document.getElementById("btf-jsonld");
+  if (el) el.remove();
+}
+
 function dbReviewToLocal(r) {
   const scores = {};
   const comments = {};
@@ -847,14 +961,13 @@ export default function ByTheirFruit() {
     if (church) {
       const slug = church.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
       window.history.pushState(null, "", `#/church/${church.id}/${slug}`);
-      document.title = `${church.name} | By Their Fruit`;
+      updateSEOForChurch(church);
     } else if (newPage !== "home") {
-      const titles = { discover: "Find a Church", rate: "Share Your Experience", about: "How It Works", myprofile: "My Profile", saved: "Saved Churches", dashboard: "Church Dashboard", privacy: "Privacy Policy", terms: "Terms of Service", "for-churches": "For Churches" };
-      document.title = `${titles[newPage] || "By Their Fruit"} | By Their Fruit`;
       window.history.pushState(null, "", `#/${newPage}`);
+      updateSEOForPage(newPage);
     } else {
-      document.title = "By Their Fruit \u2014 Church Reviews by the Congregation";
       window.history.pushState(null, "", window.location.pathname);
+      updateSEOForPage("home");
     }
   }, []);
 
@@ -872,6 +985,7 @@ export default function ByTheirFruit() {
             const church = dbChurchToLocal(data);
             setPage("profile");
             setSelectedChurch(church);
+            updateSEOForChurch(church);
             // Ensure church is in the churches array so fetchReviewsForChurch can update it
             setChurches(prev => prev.some(c => c.id === church.id) ? prev : [...prev, church]);
             fetchReviewsForChurch(churchId);
@@ -1213,11 +1327,17 @@ export default function ByTheirFruit() {
         review.userLiked = user ? likes.some(l => l.user_id === user.id) : false;
         return review;
       });
-      setChurches(prev => prev.map(c =>
-        c.id === churchId ? { ...c, recentReviews: reviews } : c
-      ));
+      setChurches(prev => {
+        const updated = prev.map(c =>
+          c.id === churchId ? { ...c, recentReviews: reviews } : c
+        );
+        // Update JSON-LD with review data if we're viewing this church
+        const church = updated.find(c => c.id === churchId);
+        if (church && page === "profile") updateSEOForChurch(church, reviews);
+        return updated;
+      });
     }
-  }, [user]);
+  }, [user, page]);
 
   /* --- LOAD USER'S OWN REVIEWS --- */
   const fetchUserReviews = useCallback(async (userId) => {
