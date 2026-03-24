@@ -4187,8 +4187,68 @@ export default function ByTheirFruit() {
               { heading: "By Their Fruit: Matthew 7:16", body: "The name says it all. \u201CBy their fruit you will recognize them.\u201D We believe that when churches live out their mission well, the fruit speaks for itself. And when it doesn\u2019t, honest feedback is the first step toward growth. That\u2019s what this platform is about." },
             ],
           },
+          {
+            id: "questions-to-ask-before-joining-a-church",
+            title: "15 Questions to Ask Before Joining a Church",
+            date: "March 2026",
+            readTime: "6 min read",
+            intro: "Joining a church is a big commitment. Before you sign up for membership, volunteer for a team, or put down roots, here are 15 questions worth asking \u2014 both to church leadership and to yourself.",
+            sections: [
+              { heading: "Questions About Teaching and Beliefs", body: "What does the church believe about core doctrines, and where can you read their statement of faith? How are sermons prepared \u2014 are they rooted in scripture or more topical? Is there room for questions and theological conversation, or is it a one-way street? These foundational questions help you understand whether the church\u2019s teaching aligns with your convictions and whether you\u2019ll be spiritually fed week after week." },
+              { heading: "Questions About Community", body: "How do people actually build relationships here \u2014 is it mainly Sunday morning, or are there small groups and mid-week gatherings? What happens when someone goes through a hard time \u2014 does the community rally, or do people slip through the cracks? Is there a path for newcomers to get connected, or do you have to figure it out on your own? The answers reveal whether a church is truly a community or just a weekly event." },
+              { heading: "Questions About Leadership", body: "Who makes the major decisions, and how transparent is that process? Is there accountability for the senior pastor and leadership team? How does the church handle conflict or disagreements? Can members access financial reports? Churches with healthy governance welcome these questions. If leadership gets defensive or evasive, that\u2019s a significant red flag." },
+              { heading: "Questions About Growth and Serving", body: "Are there opportunities to use your gifts and serve, or are volunteer roles limited to a select few? Does the church invest in developing leaders from within the congregation? Is there a culture of mentorship? What does the church do for the local community beyond its own walls? A healthy church equips its people to grow \u2014 not just attend." },
+              { heading: "How Reviews Can Answer These Questions", body: "You might not feel comfortable asking a pastor all 15 of these questions on your second visit. That\u2019s where church reviews come in. On By Their Fruit, real congregants share honest feedback across 10 structured categories \u2014 from teaching quality and financial transparency to youth programs and community culture. It\u2019s like getting answers from dozens of church members before you even walk through the door." },
+            ],
+          },
+          {
+            id: "how-to-leave-a-church-gracefully",
+            title: "How to Leave a Church Gracefully (And When It\u2019s Time)",
+            date: "March 2026",
+            readTime: "5 min read",
+            intro: "Leaving a church is one of the hardest decisions many Christians face. Whether you\u2019re moving, experiencing burnout, or realizing the church is no longer a healthy fit, here\u2019s how to navigate the transition with grace and integrity.",
+            sections: [
+              { heading: "Recognizing When It\u2019s Time", body: "Sometimes the signs are obvious: you dread going, the teaching no longer challenges you, or you\u2019ve witnessed patterns of unhealthy leadership. Other times it\u2019s more subtle \u2014 a slow drift where you realize you\u2019re no longer growing or feeling connected. There\u2019s no shame in acknowledging that a season has ended. Not every church is the right fit forever, and staying out of guilt or obligation isn\u2019t good for you or the church." },
+              { heading: "Have an Honest Conversation", body: "If at all possible, talk to a pastor or leader before you leave. You don\u2019t owe anyone a detailed explanation, but a brief, honest conversation goes a long way. Something like: \u201CThis has been a meaningful season for us, but we feel led to explore other options.\u201D Most healthy leaders will receive that with grace. If they respond with guilt, manipulation, or anger \u2014 that\u2019s a confirmation you\u2019re making the right move." },
+              { heading: "Don\u2019t Burn Bridges", body: "Resist the urge to leave with a list of grievances or to recruit others to leave with you. Even if your experience wasn\u2019t great, you can exit with dignity. Speak well of the good things you experienced. If there are serious concerns \u2014 like misconduct or financial impropriety \u2014 address them privately with the appropriate people, but don\u2019t turn your departure into a campaign." },
+              { heading: "Find Your Next Community", body: "Don\u2019t let a bad church experience keep you from church altogether. Take a breather if you need to, but don\u2019t drift indefinitely. Use tools like By Their Fruit to read reviews and find churches where people are genuinely experiencing strong community, good teaching, and healthy leadership. The right church is out there \u2014 and having honest information makes the search a lot less daunting." },
+              { heading: "Leave a Thoughtful Review", body: "Once you\u2019ve moved on, consider leaving an honest review of the church you left. Not as revenge, but as a service to others. Your experience \u2014 both the good and the difficult parts \u2014 can help someone else make a more informed decision. That\u2019s the heart of By Their Fruit: real experiences, shared with honesty and love." },
+            ],
+          },
+          {
+            id: "church-for-young-adults",
+            title: "Finding a Church as a Young Adult: A Practical Guide",
+            date: "March 2026",
+            readTime: "5 min read",
+            intro: "You\u2019re in your 20s or 30s, maybe fresh out of college, maybe starting a career or a family. Church feels different now than it did growing up \u2014 and finding one that fits this season of life comes with its own set of challenges.",
+            sections: [
+              { heading: "Why Young Adults Leave \u2014 and Why They Come Back", body: "Research consistently shows that a significant number of young adults step away from church after high school. The reasons vary: intellectual doubts, feeling judged, a lack of relevance, or simply the chaos of early adulthood. But many come back \u2014 often when they start a family, go through a crisis, or simply miss the sense of community. If that\u2019s you, welcome back. And if you never left but you\u2019re looking for a better fit, that\u2019s great too." },
+              { heading: "What to Look For", body: "As a young adult, you probably want a church that takes your questions seriously without dismissing them. Look for a community where people your age are actually present and involved \u2014 not just a token \u201Cyoung adults group\u201D that meets once a month. Strong teaching matters, but so does a culture that feels authentic rather than performative. And if you\u2019re starting a family, kids and youth programs become a real factor." },
+              { heading: "Don\u2019t Rule Out the Unexpected", body: "Some of the best church experiences come from places you wouldn\u2019t expect. A smaller, older congregation might have the kind of deep, intergenerational community that a trendy megachurch can\u2019t offer. A church with an outdated website might have the most genuine worship you\u2019ve ever experienced. Don\u2019t judge by the Instagram presence \u2014 judge by the fruit." },
+              { heading: "Use Reviews to Cut Through the Noise", body: "Church websites are marketing tools \u2014 every church looks great on their own site. That\u2019s why peer reviews are so valuable. On By Their Fruit, you can see how real attendees rate a church across 10 specific categories. Want to know if the young adults group is actually active? If the welcome team is genuinely friendly? If the teaching is substantive? The reviews tell you what the website won\u2019t." },
+              { heading: "Give It Time", body: "Finding the right church rarely happens overnight. Give yourself permission to visit several, and don\u2019t commit too quickly or give up too fast. Attend at least 3\u20134 times before deciding. Get involved in a small group or serve team to experience the church beyond Sunday morning. The right community is worth the search." },
+            ],
+          },
+          {
+            id: "what-church-leaders-can-learn-from-reviews",
+            title: "What Church Leaders Can Learn From Honest Reviews",
+            date: "March 2026",
+            readTime: "5 min read",
+            intro: "For church leaders, hearing honest feedback from your congregation can feel vulnerable. But the churches that thrive are the ones that listen. Here\u2019s why embracing reviews is one of the smartest things a church leader can do.",
+            sections: [
+              { heading: "The Feedback You\u2019re Not Getting on Sunday Morning", body: "Most church leaders rely on a few familiar channels for feedback: conversations after service, elder meetings, maybe an annual survey that gets a 15% response rate. But the truth is, the people most likely to share concerns are the ones who\u2019ve already decided to leave \u2014 or have already left. Structured review platforms give you insight from the broader congregation, including the quiet members who would never approach you directly but have valuable perspectives to share." },
+              { heading: "Patterns Matter More Than Individual Reviews", body: "One negative review about parking is just one person having a bad morning. Five reviews mentioning that the welcome team feels cliquish? That\u2019s a pattern worth addressing. By Their Fruit\u2019s 10-category rating system helps you spot trends across teaching, worship, community, youth programs, leadership, and more. Instead of reacting to individual complaints, you can identify systemic strengths and weaknesses." },
+              { heading: "Reviews Build Trust With Visitors", body: "When a prospective visitor is considering your church, what do they find online? If it\u2019s just your website and a few generic Google reviews, they\u2019re making a decision with very little information. But if they find detailed, honest reviews on By Their Fruit \u2014 and see that your church has claimed its page and engaged with feedback \u2014 that builds enormous trust before they ever walk through your doors." },
+              { heading: "How to Respond Well", body: "The best response to a critical review isn\u2019t defensiveness \u2014 it\u2019s curiosity. Thank the reviewer for their honesty. Acknowledge the concern. Share what you\u2019re doing to address it if applicable. This kind of public response shows everyone \u2014 not just the reviewer \u2014 that your church takes feedback seriously. It\u2019s the same principle that makes great businesses stand out: how you handle criticism says more about you than how you handle praise." },
+              { heading: "Claim Your Church Page", body: "If your church is listed on By Their Fruit, you can claim your page to respond to reviews, update your church information, and show visitors that you\u2019re engaged. It\u2019s free, it takes minutes, and it sends a powerful message: this is a church that cares about the experience of its people. Because the churches that are willing to listen are the churches that grow." },
+            ],
+          },
         ];
-        const [selectedArticle, setSelectedArticle] = useState(null);
+        const [selectedArticle, setSelectedArticle] = useState(() => {
+          const h = window.location.hash;
+          const m = h.match(/^#\/blog\/(.+)$/);
+          return m ? m[1] : null;
+        });
         const article = articles.find(a => a.id === selectedArticle);
         return (
           <div style={{ maxWidth: 800, margin: "0 auto", padding: "48px 24px" }}>
