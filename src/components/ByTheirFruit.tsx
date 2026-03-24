@@ -2040,7 +2040,7 @@ export default function ByTheirFruit() {
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.body, color: T.text }}>
       <style>{fonts}{responsiveCSS}{`html,body{margin:0;padding:0;background:${T.bg}}::selection{background:${T.accentSoft};color:${T.accent}}input::placeholder,textarea::placeholder{color:${T.textMuted}}*{box-sizing:border-box}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
-      {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); setPendingReview(null); }} onAuth={() => {}} mode="signup" />}
+      {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); setPendingReview(null); }} onAuth={() => {}} mode="signin" />}
       {showProfileComplete && user && <ProfileCompleteModal userId={user.id} onClose={() => setShowProfileComplete(false)} />}
 
       {/* NAV */}
