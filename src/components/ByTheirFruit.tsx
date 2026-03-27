@@ -218,7 +218,7 @@ function updateSEOForChurch(church, reviews = []) {
   // Open Graph
   updateMeta("og:title", `${name} — Church Reviews | By Their Fruit`);
   updateMeta("og:description", desc);
-  updateMeta("og:url", `https://bytheirfruit.church/#/church/${church.id}`);
+  updateMeta("og:url", `https://bytheirfruit.church/church/${church.id}`);
   updateMeta("og:type", "website");
   updateMeta("og:site_name", "By Their Fruit");
 
@@ -971,26 +971,32 @@ export default function ByTheirFruit() {
     setMobileMenuOpen(false);
     if (church) {
       const slug = church.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
-      window.history.pushState(null, "", `#/church/${church.id}/${slug}`);
+      // Use real path for church pages (SSR-friendly for crawlers + OG tags)
+      window.history.pushState(null, "", `/church/${church.id}/${slug}`);
       updateSEOForChurch(church);
     } else if (newPage !== "home") {
       window.history.pushState(null, "", `#/${newPage}`);
       updateSEOForPage(newPage);
     } else {
-      window.history.pushState(null, "", window.location.pathname);
+      window.history.pushState(null, "", window.location.pathname === "/" ? "/" : "/");
       updateSEOForPage("home");
     }
   }, []);
 
-  // Parse hash on mount and handle back/forward
+  // Parse hash or path on mount and handle back/forward
   useEffect(() => {
     const handleHash = async () => {
       const hash = window.location.hash;
+      const path = window.location.pathname;
       // Skip if hash contains Supabase auth tokens (email confirmation redirect)
       if (hash.includes("access_token=") || hash.includes("type=signup") || hash.includes("type=recovery")) return;
-      if (hash.startsWith("#/church/")) {
-        const churchId = hash.split("/")[2];
-        if (churchId) {
+
+      // Support real path: /church/[id]/[slug]
+      const pathMatch = path.match(/^\/church\/([^/]+)/);
+      const hashChurchMatch = hash.startsWith("#/church/") ? hash.split("/")[2] : null;
+      const churchId = pathMatch ? pathMatch[1] : hashChurchMatch;
+
+      if (churchId) {
           const { data } = await supabase.from("churches").select("*").eq("id", churchId).single();
           if (data) {
             const church = dbChurchToLocal(data);
@@ -1001,9 +1007,15 @@ export default function ByTheirFruit() {
             setChurches(prev => prev.some(c => c.id === church.id) ? prev : [...prev, church]);
             fetchReviewsForChurch(churchId);
             if (user) checkClaimStatus(churchId, user.id);
+            // If we came from a hash URL, update to real path
+            if (hashChurchMatch && !pathMatch) {
+              const slug = church.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
+              window.history.replaceState(null, "", `/church/${churchId}/${slug}`);
+            }
           }
-        }
-      } else if (hash === "#/discover") {
+          return;
+      }
+      if (hash === "#/discover") {
         setPage("discover");
       } else if (hash === "#/about") {
         setPage("about");
@@ -2608,7 +2620,7 @@ export default function ByTheirFruit() {
 
               {/* Share & Report Row */}
               {(() => {
-                const shareUrl = `https://bytheirfruit.church/#/church/${c.id}/${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "")}`;
+                const shareUrl = `https://bytheirfruit.church/church/${c.id}/${c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "")}`;
                 const shareText = rated ? `${c.name} is rated ${overall.toFixed(1)}/5 on By Their Fruit — real experiences from real congregants.` : `Check out ${c.name} on By Their Fruit — real experiences from real congregants.`;
                 return (
                   <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
