@@ -1050,8 +1050,7 @@ export default function ByTheirFruit() {
       } else if (hash === "#/for-churches") {
         setPage("for-churches");
       } else if (hash.startsWith("#/blog")) {
-        /* Blog temporarily disabled — redirect to home */
-        setPage("home");
+        setPage("blog");
       }
     };
     handleHash();
@@ -2253,7 +2252,7 @@ export default function ByTheirFruit() {
           <button onClick={() => navigate("discover")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "discover" ? T.text : "transparent", color: page === "discover" ? T.bg : T.textSoft, border: `1px solid ${page === "discover" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Find a Church</button>
           <button onClick={() => startRateFlow()} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "rate" ? T.text : "transparent", color: page === "rate" ? T.bg : T.textSoft, border: `1px solid ${page === "rate" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Share Your Experience</button>
           <button onClick={() => navigate("about")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "about" ? T.text : "transparent", color: page === "about" ? T.bg : T.textSoft, border: `1px solid ${page === "about" ? T.text : "transparent"}`, transition: "all 0.15s" }}>How It Works</button>
-          {/* Blog nav link temporarily hidden */}
+          <button onClick={() => navigate("blog")} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "blog" ? T.text : "transparent", color: page === "blog" ? T.bg : T.textSoft, border: `1px solid ${page === "blog" ? T.text : "transparent"}`, transition: "all 0.15s" }}>Blog</button>
 
           {hasClaimed && (
             <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); }} style={{ padding: "6px 14px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accent : T.accentSoft, color: page === "dashboard" ? "#fff" : T.accent, border: `1px solid ${page === "dashboard" ? T.accent : T.accentBorder}`, transition: "all 0.15s" }}>Church Dashboard</button>
@@ -2280,7 +2279,7 @@ export default function ByTheirFruit() {
           <button onClick={() => { navigate("discover"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "discover" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "discover" ? T.border : "transparent"}`, textAlign: "left" }}>Find a Church</button>
           <button onClick={() => { startRateFlow(); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", textAlign: "left" }}>Share Your Experience</button>
           <button onClick={() => { navigate("about"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "about" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "about" ? T.border : "transparent"}`, textAlign: "left" }}>How It Works</button>
-          {/* Blog mobile nav link temporarily hidden */}
+          <button onClick={() => { navigate("blog"); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 500, fontFamily: T.body, cursor: "pointer", background: page === "blog" ? T.surfaceAlt : "transparent", color: T.text, border: `1px solid ${page === "blog" ? T.border : "transparent"}`, textAlign: "left" }}>Blog</button>
 
           {hasClaimed && (
             <button onClick={() => { navigate("dashboard"); fetchMyChurches(user.id); setMobileMenuOpen(false); }} style={{ padding: "10px 16px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: page === "dashboard" ? T.accentSoft : "transparent", color: T.accent, border: `1px solid ${page === "dashboard" ? T.accentBorder : "transparent"}`, textAlign: "left" }}>Church Dashboard</button>
@@ -2409,7 +2408,32 @@ export default function ByTheirFruit() {
             </div>
           </FadeIn>
 
-          {/* From the Blog — temporarily hidden */}
+          {/* From the Blog */}
+          <FadeIn delay={285}>
+            <div style={{ marginTop: 32 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Resources</div>
+                  <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>From the Blog</h2>
+                </div>
+                <button onClick={() => navigate("blog")} style={{ fontSize: 12, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>View all →</button>
+              </div>
+              <div className="btf-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                {[
+                  { id: "how-to-find-the-right-church", title: "How to Find the Right Church for You", emoji: "🔍" },
+                  { id: "questions-to-ask-before-joining-a-church", title: "15 Questions to Ask Before Joining", emoji: "❓" },
+                  { id: "church-for-young-adults", title: "Finding a Church as a Young Adult", emoji: "🌱" },
+                ].map((post, i) => (
+                  <div key={post.id} onClick={() => { navigate("blog"); setTimeout(() => window.history.pushState(null, "", `#/blog/${post.id}`), 50); }} style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, cursor: "pointer", transition: "all 0.2s" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = "translateY(0)"; }}>
+                    <div style={{ fontSize: 22, marginBottom: 10 }}>{post.emoji}</div>
+                    <h3 style={{ fontSize: 14, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.01em", lineHeight: 1.35 }}>{post.title}</h3>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </FadeIn>
 
           <FadeIn delay={300}>
             <div style={{ marginTop: 24, padding: "36px 32px", borderRadius: 14, background: T === DARK ? T.surfaceAlt : T.text, color: T === DARK ? T.text : T.bg }}>
@@ -4308,7 +4332,7 @@ export default function ByTheirFruit() {
       })()}
 
       {/* BLOG — temporarily hidden */}
-      {false && !loading && page === "blog" && (() => {
+      {!loading && page === "blog" && (() => {
         const articles = [
           {
             id: "how-to-find-the-right-church",
@@ -4478,7 +4502,7 @@ export default function ByTheirFruit() {
             <div style={{ minWidth: 120 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Explore</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[{ label: "Find a Church", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "How It Works", page: "about" }, { label: "For Churches", page: "for-churches" }].map(link => (
+                {[{ label: "Find a Church", page: "discover" }, { label: "Share Your Experience", page: "rate" }, { label: "How It Works", page: "about" }, { label: "Blog", page: "blog" }, { label: "For Churches", page: "for-churches" }].map(link => (
                   <button key={link.page} onClick={() => { if (link.page === "rate") startRateFlow(); else navigate(link.page); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: T.textSoft, fontFamily: T.body, textAlign: "left" }} onMouseEnter={e => e.currentTarget.style.color = T.accent} onMouseLeave={e => e.currentTarget.style.color = T.textSoft}>{link.label}</button>
                 ))}
               </div>
