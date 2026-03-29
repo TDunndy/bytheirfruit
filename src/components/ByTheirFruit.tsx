@@ -1,7 +1,7 @@
 "use client"
 // @ts-nocheck
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');`;
@@ -943,6 +943,7 @@ export default function ByTheirFruit() {
   const [filterState, setFilterState] = useState("All");
   const [filterCity, setFilterCity] = useState("");
   const [filterZip, setFilterZip] = useState("");
+  const [sortBy, setSortBy] = useState("most_reviews");
   const [nearMeActive, setNearMeActive] = useState(false);
   const [nearMeLocation, setNearMeLocation] = useState(null);
   const [nearMeLoading, setNearMeLoading] = useState(false);
@@ -1163,7 +1164,7 @@ export default function ByTheirFruit() {
     }
   }, []);
 
-  const searchChurchesDB = useCallback(async (query, denomination, state, city, zip, _retried) => {
+  const searchChurchesDB = useCallback(async (query, denomination, state, city, zip, _retried, sort) => {
     if (!query && (!denomination || denomination === "All") && (!state || state === "All") && !city && !zip) {
       setChurches([]);
       setSearchLoading(false);
@@ -1185,7 +1186,7 @@ export default function ByTheirFruit() {
           const { data, error } = await q;
           if (error) {
             console.error("Zip proximity error:", error);
-            if (!_retried) { await supabase.auth.getSession(); return searchChurchesDB(query, denomination, state, city, zip, true); }
+            if (!_retried) { await supabase.auth.getSession(); return searchChurchesDB(query, denomination, state, city, zip, true, sort); }
           }
           if (!error && data) {
             const withDist = data.map(c => ({
@@ -1220,14 +1221,16 @@ export default function ByTheirFruit() {
       if (zip) {
         q = q.ilike("zip", `${zip}%`);
       }
-      q = q.order("total_reviews", { ascending: false }).limit(50);
+      const sortConfig = { most_reviews: ["total_reviews", false], least_reviews: ["total_reviews", true], highest_rated: ["score_overall", false], lowest_rated: ["score_overall", true] };
+      const [sortCol, sortAsc] = sortConfig[sort] || sortConfig.most_reviews;
+      q = q.order(sortCol, { ascending: sortAsc, nullsFirst: false }).limit(50);
       const { data, error } = await q;
       if (error) {
         console.error("Search error:", error);
         // On auth/connection error, refresh session and retry once
         if (!_retried) {
           await supabase.auth.getSession();
-          return searchChurchesDB(query, denomination, state, city, zip, true);
+          return searchChurchesDB(query, denomination, state, city, zip, true, sort);
         }
         showToast("Search failed. Please refresh the page and try again.", "error");
       }
@@ -1241,7 +1244,7 @@ export default function ByTheirFruit() {
       // On network/connection error, refresh session and retry once
       if (!_retried) {
         try { await supabase.auth.getSession(); } catch {}
-        return searchChurchesDB(query, denomination, state, city, zip, true);
+        return searchChurchesDB(query, denomination, state, city, zip, true, sort);
       }
       showToast("Connection issue. Please check your internet and try again.", "error");
     } finally {
@@ -1335,10 +1338,10 @@ export default function ByTheirFruit() {
   useEffect(() => {
     if (page !== "discover" || nearMeActive) return;
     const timer = setTimeout(() => {
-      searchChurchesDB(discoverSearchQuery, filterDenom, filterState, filterCity, filterZip);
+      searchChurchesDB(discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, false, sortBy);
     }, 300);
     return () => clearTimeout(timer);
-  }, [discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, page, searchChurchesDB]);
+  }, [discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, sortBy, page, searchChurchesDB]);
 
   // Debounced search for Rate flow — searches both name and city
   const [rateSearchResults, setRateSearchResults] = useState([]);
@@ -1708,7 +1711,7 @@ export default function ByTheirFruit() {
           await supabase.auth.getSession();
           // If user was searching, re-run the search to recover from stale connections
           if (page === "discover" && (discoverSearchQuery || filterDenom !== "All" || filterState !== "All")) {
-            searchChurchesDB(discoverSearchQuery, filterDenom, filterState, filterCity, filterZip);
+            searchChurchesDB(discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, false, sortBy);
           }
         } catch (err) {
           console.error("Session refresh error:", err);
@@ -2216,7 +2219,15 @@ export default function ByTheirFruit() {
     selectChurchToRate(newChurch);
   };
 
-  const filteredChurches = churches;
+  const filteredChurches = useMemo(() => {
+    if (nearMeActive) return churches; // Near me sorts by distance
+    const sorted = [...churches];
+    if (sortBy === "most_reviews") sorted.sort((a, b) => (b.totalReviews || 0) - (a.totalReviews || 0));
+    else if (sortBy === "least_reviews") sorted.sort((a, b) => (a.totalReviews || 0) - (b.totalReviews || 0));
+    else if (sortBy === "highest_rated") sorted.sort((a, b) => (avg(b.scores) || 0) - (avg(a.scores) || 0));
+    else if (sortBy === "lowest_rated") sorted.sort((a, b) => (avg(a.scores) || 0) - (avg(b.scores) || 0));
+    return sorted;
+  }, [churches, sortBy, nearMeActive]);
   const [currentPage, setCurrentPage] = useState(1);
   const CHURCHES_PER_PAGE = 20;
   const totalPages = Math.ceil(filteredChurches.length / CHURCHES_PER_PAGE);
@@ -2462,25 +2473,36 @@ export default function ByTheirFruit() {
             
           </FadeIn>
           <FadeIn delay={80}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ marginBottom: 20 }}>
+              {/* Search bar + Near Me */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
                 <input value={discoverSearchQuery} onChange={e => { setDiscoverSearchQuery(e.target.value); setCurrentPage(1); if (nearMeActive) { setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); } }} placeholder="Search church name..." style={{ width: "100%", padding: "11px 16px", borderRadius: T.radiusFull, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, boxSizing: "border-box" }} />
                 <button onClick={handleNearMe} disabled={nearMeLoading} style={{ padding: "11px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: nearMeLoading ? "wait" : "pointer", background: nearMeActive ? T.accent : T.surface, color: nearMeActive ? "#fff" : T.textSoft, border: `1.5px solid ${nearMeActive ? T.accent : T.border}`, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s", opacity: nearMeLoading ? 0.6 : 1 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4m10-10h-4M6 12H2"/></svg>
                   {nearMeLoading ? "Locating..." : "Near Me"}
                 </button>
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <select value={filterState} onChange={e => { setFilterState(e.target.value); setFilterCity(""); setCurrentPage(1); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 120 }}>
-                  {US_STATES.map(s => <option key={s} value={s}>{s === "All" ? "All States" : `${s} — ${STATE_NAMES[s] || s}`}</option>)}
+              {/* Filters — consolidated row */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", padding: "10px 14px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.borderLight}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", marginRight: 4 }}>Filters</div>
+                <select value={filterState} onChange={e => { setFilterState(e.target.value); setFilterCity(""); setCurrentPage(1); }} style={{ padding: "6px 10px", borderRadius: T.radiusFull, fontSize: 12, border: `1px solid ${filterState !== "All" ? T.accent : T.border}`, background: filterState !== "All" ? T.accentSoft : T.bg, color: filterState !== "All" ? T.accent : T.text, fontFamily: T.body, cursor: "pointer", fontWeight: filterState !== "All" ? 600 : 400 }}>
+                  {US_STATES.map(s => <option key={s} value={s}>{s === "All" ? "State" : `${s} — ${STATE_NAMES[s] || s}`}</option>)}
                 </select>
-                <input value={filterCity} onChange={e => { setFilterCity(e.target.value); setCurrentPage(1); if (e.target.value) { setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); } }} placeholder="City" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 130 }} />
-                <input value={filterZip} onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 5); setFilterZip(v); setCurrentPage(1); if (v) { setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); } }} placeholder="Zip code" style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, width: 100 }} />
-                <select value={filterDenom} onChange={e => { setFilterDenom(e.target.value); setCurrentPage(1); }} style={{ padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontFamily: T.body, cursor: "pointer", minWidth: 160 }}>
-                  {denoms.map(d => <option key={d} value={d}>{d === "All" ? "All Denominations" : d}</option>)}
+                <input value={filterCity} onChange={e => { setFilterCity(e.target.value); setCurrentPage(1); if (e.target.value) { setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); } }} placeholder="City" style={{ padding: "6px 10px", borderRadius: T.radiusFull, fontSize: 12, border: `1px solid ${filterCity ? T.accent : T.border}`, background: filterCity ? T.accentSoft : T.bg, color: filterCity ? T.accent : T.text, fontFamily: T.body, width: 90, fontWeight: filterCity ? 600 : 400 }} />
+                <input value={filterZip} onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 5); setFilterZip(v); setCurrentPage(1); if (v) { setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); } }} placeholder="Zip" style={{ padding: "6px 10px", borderRadius: T.radiusFull, fontSize: 12, border: `1px solid ${filterZip ? T.accent : T.border}`, background: filterZip ? T.accentSoft : T.bg, color: filterZip ? T.accent : T.text, fontFamily: T.body, width: 70, fontWeight: filterZip ? 600 : 400 }} />
+                <select value={filterDenom} onChange={e => { setFilterDenom(e.target.value); setCurrentPage(1); }} style={{ padding: "6px 10px", borderRadius: T.radiusFull, fontSize: 12, border: `1px solid ${filterDenom !== "All" ? T.accent : T.border}`, background: filterDenom !== "All" ? T.accentSoft : T.bg, color: filterDenom !== "All" ? T.accent : T.text, fontFamily: T.body, cursor: "pointer", fontWeight: filterDenom !== "All" ? 600 : 400 }}>
+                  {denoms.map(d => <option key={d} value={d}>{d === "All" ? "Denomination" : d}</option>)}
                 </select>
-                {(filterState !== "All" || filterCity || filterZip || filterDenom !== "All" || discoverSearchQuery || nearMeActive) && (
-                  <button onClick={() => { setFilterState("All"); setFilterCity(""); setFilterZip(""); setFilterDenom("All"); setDiscoverSearchQuery(""); setCurrentPage(1); setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); }} style={{ padding: "8px 14px", borderRadius: T.radiusSm, fontSize: 12, fontWeight: 600, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.textSoft, cursor: "pointer", fontFamily: T.body }}>Clear filters</button>
+                <div style={{ width: 1, height: 20, background: T.border, margin: "0 2px" }} />
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.06em", marginRight: 2 }}>Sort</div>
+                <select value={sortBy} onChange={e => { setSortBy(e.target.value); setCurrentPage(1); }} style={{ padding: "6px 10px", borderRadius: T.radiusFull, fontSize: 12, border: `1px solid ${T.border}`, background: T.bg, color: T.text, fontFamily: T.body, cursor: "pointer" }}>
+                  <option value="most_reviews">Most Reviews</option>
+                  <option value="least_reviews">Least Reviews</option>
+                  <option value="highest_rated">Highest Rated</option>
+                  <option value="lowest_rated">Lowest Rated</option>
+                </select>
+                {(filterState !== "All" || filterCity || filterZip || filterDenom !== "All" || discoverSearchQuery || nearMeActive || sortBy !== "most_reviews") && (
+                  <button onClick={() => { setFilterState("All"); setFilterCity(""); setFilterZip(""); setFilterDenom("All"); setDiscoverSearchQuery(""); setSortBy("most_reviews"); setCurrentPage(1); setNearMeActive(false); setNearMeLocation(null); setNearMeDistances({}); }} style={{ padding: "5px 12px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 600, border: `1px solid ${T.border}`, background: T.surfaceAlt, color: T.textMuted, cursor: "pointer", fontFamily: T.body, marginLeft: 2 }}>Clear all</button>
                 )}
               </div>
             </div>
