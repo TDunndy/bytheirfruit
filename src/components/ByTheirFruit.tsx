@@ -512,6 +512,7 @@ function AuthModal({ onClose, onAuth, mode: im }) {
   const [mode, setMode] = useState(im || "signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -542,6 +543,8 @@ function AuthModal({ onClose, onAuth, mode: im }) {
     try {
       if (mode === "signup") {
         if (!name) { setError("Name is required"); setLoading(false); return; }
+        if (password.length < 6) { setError("Password must be at least 6 characters"); setLoading(false); return; }
+        if (password !== confirmPassword) { setError("Passwords do not match"); setLoading(false); return; }
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -549,7 +552,12 @@ function AuthModal({ onClose, onAuth, mode: im }) {
             data: { full_name: name, display_name: name },
           },
         });
-        if (error) { setError(error.message); setLoading(false); return; }
+        if (error) {
+          const msg = error.message.toLowerCase().includes("sending confirmation") || error.message.toLowerCase().includes("email")
+            ? "Unable to send confirmation email. Please try signing up with Google or Microsoft instead, or try again in a few minutes."
+            : error.message;
+          setError(msg); setLoading(false); return;
+        }
         if (data?.user?.identities?.length === 0) {
           setError("An account with this email already exists.");
           setLoading(false);
@@ -603,10 +611,11 @@ function AuthModal({ onClose, onAuth, mode: im }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {mode === "signup" && <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />}
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email" style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
-          <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" onKeyDown={e => e.key === "Enter" && emailAuth()} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
-          <button onClick={emailAuth} disabled={loading || !email || !password || (mode === "signup" && !name)} style={{ padding: "11px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: (loading || !email || !password) ? 0.35 : 1 }}>{loading ? "..." : (mode === "signin" ? "Sign In" : "Create Account")}</button>
+          <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" onKeyDown={e => mode === "signin" && e.key === "Enter" && emailAuth()} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
+          {mode === "signup" && <input value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm password" type="password" onKeyDown={e => e.key === "Enter" && emailAuth()} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />}
+          <button onClick={emailAuth} disabled={loading || !email || !password || (mode === "signup" && (!name || !confirmPassword))} style={{ padding: "11px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: (loading || !email || !password) ? 0.35 : 1 }}>{loading ? "..." : (mode === "signin" ? "Sign In" : "Create Account")}</button>
         </div>
-        <div style={{ textAlign: "center", marginTop: 18, fontSize: 13, color: T.textMuted }}>{mode === "signin" ? "No account? " : "Have an account? "}<span onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); }} style={{ color: T.accent, fontWeight: 600, cursor: "pointer" }}>{mode === "signin" ? "Sign Up" : "Sign In"}</span></div>
+        <div style={{ textAlign: "center", marginTop: 18, fontSize: 13, color: T.textMuted }}>{mode === "signin" ? "No account? " : "Have an account? "}<span onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); setConfirmPassword(""); }} style={{ color: T.accent, fontWeight: 600, cursor: "pointer" }}>{mode === "signin" ? "Sign Up" : "Sign In"}</span></div>
       </div>
     </div>
   );
