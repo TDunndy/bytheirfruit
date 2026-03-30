@@ -588,14 +588,32 @@ function AuthModal({ onClose, onAuth, mode: im }) {
     }
   };
 
+  const resetPassword = async () => {
+    if (!email) { setError("Please enter your email address"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + "/#/reset-password",
+      });
+      if (error) { setError(error.message); setLoading(false); return; }
+      setConfirmMsg("Password reset link sent! Check your email (and spam folder) and click the link to set a new password.");
+      setMode("signin");
+    } catch (e) {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: T.surface, borderRadius: 16, padding: "36px 32px", boxShadow: "0 24px 48px rgba(0,0,0,0.12)", animation: "modalIn 0.25s ease" }}>
         <style>{`@keyframes modalIn{from{opacity:0;transform:scale(0.95) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><Logo size={15} /></div>
-          <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{mode === "signin" ? "Welcome back" : "Create your account"}</h2>
-          <p style={{ fontSize: 13, color: T.textMuted, margin: 0 }}>{mode === "signin" ? "Sign in to share your experience" : "Sign up to share your experience"}</p>
+          <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{mode === "forgot" ? "Reset your password" : mode === "signin" ? "Welcome back" : "Create your account"}</h2>
+          <p style={{ fontSize: 13, color: T.textMuted, margin: 0 }}>{mode === "forgot" ? "Enter your email and we\u2019ll send a reset link" : mode === "signin" ? "Sign in to share your experience" : "Sign up to share your experience"}</p>
         </div>
         {confirmMsg && (
           <div style={{ padding: "10px 14px", borderRadius: T.radiusSm, background: T.greenSoft, border: `1px solid ${T.greenBorder}`, color: T.green, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>{confirmMsg}</div>
@@ -603,6 +621,7 @@ function AuthModal({ onClose, onAuth, mode: im }) {
         {error && (
           <div style={{ padding: "10px 14px", borderRadius: T.radiusSm, background: T.redSoft, border: `1px solid ${T.redBorder}`, color: T.red, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>{error}</div>
         )}
+        {mode !== "forgot" && (<>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
           {[
             { p: "google", l: "Continue with Google", i: <GoogleIcon /> },
@@ -612,17 +631,75 @@ function AuthModal({ onClose, onAuth, mode: im }) {
           ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0" }}><div style={{ flex: 1, height: 1, background: T.border }} /><span style={{ fontSize: 11, color: T.textMuted, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" }}>or</span><div style={{ flex: 1, height: 1, background: T.border }} /></div>
+        </>)}
+        {mode === "forgot" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email" onKeyDown={e => e.key === "Enter" && resetPassword()} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
+            <button onClick={resetPassword} disabled={loading || !email} style={{ padding: "11px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: (loading || !email) ? 0.35 : 1 }}>{loading ? "..." : "Send Reset Link"}</button>
+            <div style={{ textAlign: "center", marginTop: 8, fontSize: 13, color: T.textMuted }}>Remember your password? <span onClick={() => { setMode("signin"); setError(""); }} style={{ color: T.accent, fontWeight: 600, cursor: "pointer" }}>Sign In</span></div>
+          </div>
+        ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {mode === "signup" && <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />}
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email" style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
           <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" onKeyDown={e => mode === "signin" && e.key === "Enter" && emailAuth()} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
+          {mode === "signin" && <div style={{ textAlign: "right", marginTop: -4 }}><span onClick={() => { setMode("forgot"); setError(""); setConfirmMsg(""); }} style={{ fontSize: 12, color: T.accent, fontWeight: 500, cursor: "pointer" }}>Forgot password?</span></div>}
           {mode === "signup" && <input value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm password" type="password" style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />}
           {mode === "signup" && <input value={zipCode} onChange={e => setZipCode(e.target.value)} placeholder="Zip code *" maxLength={10} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />}
           {mode === "signup" && <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number (optional)" type="tel" style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />}
           {mode === "signup" && <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Address (optional)" style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />}
           <button onClick={emailAuth} disabled={loading || !email || !password || (mode === "signup" && (!name || !confirmPassword || !zipCode))} style={{ padding: "11px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: (loading || !email || !password) ? 0.35 : 1 }}>{loading ? "..." : (mode === "signin" ? "Sign In" : "Create Account")}</button>
         </div>
-        <div style={{ textAlign: "center", marginTop: 18, fontSize: 13, color: T.textMuted }}>{mode === "signin" ? "No account? " : "Have an account? "}<span onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); setConfirmPassword(""); setPhone(""); setAddress(""); setZipCode(""); }} style={{ color: T.accent, fontWeight: 600, cursor: "pointer" }}>{mode === "signin" ? "Sign Up" : "Sign In"}</span></div>
+        )}
+        {mode !== "forgot" && <div style={{ textAlign: "center", marginTop: 18, fontSize: 13, color: T.textMuted }}>{mode === "signin" ? "No account? " : "Have an account? "}<span onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); setConfirmMsg(""); setConfirmPassword(""); setPhone(""); setAddress(""); setZipCode(""); }} style={{ color: T.accent, fontWeight: 600, cursor: "pointer" }}>{mode === "signin" ? "Sign Up" : "Sign In"}</span></div>}
+      </div>
+    </div>
+  );
+}
+
+/* --- RESET PASSWORD MODAL --- */
+function ResetPasswordModal({ onClose }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNew, setConfirmNew] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  const handleReset = async () => {
+    if (newPassword.length < 6) { setError("Password must be at least 6 characters"); return; }
+    if (newPassword !== confirmNew) { setError("Passwords do not match"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) { setError(error.message); setLoading(false); return; }
+      setSuccess(true);
+      setTimeout(() => { onClose(); window.location.hash = "#/"; }, 2000);
+    } catch (e) {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: T.surface, borderRadius: 16, padding: "36px 32px", boxShadow: "0 24px 48px rgba(0,0,0,0.12)", animation: "modalIn 0.25s ease" }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><Logo size={15} /></div>
+          <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Set new password</h2>
+          <p style={{ fontSize: 13, color: T.textMuted, margin: 0 }}>Enter your new password below</p>
+        </div>
+        {error && <div style={{ padding: "10px 14px", borderRadius: T.radiusSm, background: T.redSoft, border: `1px solid ${T.redBorder}`, color: T.red, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>{error}</div>}
+        {success ? (
+          <div style={{ padding: "14px", borderRadius: T.radiusSm, background: T.greenSoft, border: `1px solid ${T.greenBorder}`, color: T.green, fontSize: 14, textAlign: "center", fontWeight: 600 }}>Password updated successfully! Redirecting...</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <input value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" type="password" style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
+            <input value={confirmNew} onChange={e => setConfirmNew(e.target.value)} placeholder="Confirm new password" type="password" onKeyDown={e => e.key === "Enter" && handleReset()} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 13.5, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body }} />
+            <button onClick={handleReset} disabled={loading || !newPassword || !confirmNew} style={{ padding: "11px", borderRadius: T.radiusSm, fontSize: 14, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body, opacity: (loading || !newPassword || !confirmNew) ? 0.35 : 1 }}>{loading ? "..." : "Update Password"}</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -952,6 +1029,7 @@ export default function ByTheirFruit() {
   const [geoRequested, setGeoRequested] = useState(false);
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [showProfileComplete, setShowProfileComplete] = useState(false);
   const [pendingReview, setPendingReview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1618,6 +1696,10 @@ export default function ByTheirFruit() {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setShowResetPassword(true);
+        return;
+      }
       if (event === "SIGNED_IN" && session?.user) {
         const u = session.user;
         const { data: profileRow } = await supabase.from("profiles").select("role").eq("id", u.id).single();
@@ -2253,6 +2335,7 @@ export default function ByTheirFruit() {
       <style>{fonts}{responsiveCSS}{`html,body{margin:0;padding:0;background:${T.bg}}::selection{background:${T.accentSoft};color:${T.accent}}input::placeholder,textarea::placeholder{color:${T.textMuted}}*{box-sizing:border-box}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); setPendingReview(null); }} onAuth={() => {}} mode="signin" />}
+      {showResetPassword && <ResetPasswordModal onClose={() => setShowResetPassword(false)} />}
       {showProfileComplete && user && <ProfileCompleteModal userId={user.id} onClose={() => setShowProfileComplete(false)} />}
 
       {/* NAV */}
