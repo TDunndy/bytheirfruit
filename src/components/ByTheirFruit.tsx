@@ -607,7 +607,7 @@ function AuthModal({ onClose, onAuth, mode: im }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }} onClick={onClose}>
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: T.surface, borderRadius: 16, padding: "36px 32px", boxShadow: "0 24px 48px rgba(0,0,0,0.12)", animation: "modalIn 0.25s ease" }}>
         <style>{`@keyframes modalIn{from{opacity:0;transform:scale(0.95) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -683,7 +683,7 @@ function ResetPasswordModal({ onClose }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}>
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
       <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: T.surface, borderRadius: 16, padding: "36px 32px", boxShadow: "0 24px 48px rgba(0,0,0,0.12)", animation: "modalIn 0.25s ease" }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><Logo size={15} /></div>
@@ -733,7 +733,7 @@ function ProfileCompleteModal({ userId, onClose }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }} onClick={onClose}>
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: T.surface, borderRadius: 16, padding: "36px 32px", boxShadow: "0 24px 48px rgba(0,0,0,0.12)", animation: "modalIn 0.25s ease" }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "0 0 6px", letterSpacing: "-0.03em" }}>Complete Your Profile</h2>
@@ -2339,7 +2339,7 @@ export default function ByTheirFruit() {
       {showProfileComplete && user && <ProfileCompleteModal userId={user.id} onClose={() => setShowProfileComplete(false)} />}
 
       {/* NAV */}
-      <nav style={{ padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.navBg, position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(16px)" }}>
+      <nav style={{ padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.navBg, position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>
         <div onClick={() => navigate("home")}><Logo size={15} /></div>
 
         {/* Desktop nav */}
@@ -2730,7 +2730,7 @@ export default function ByTheirFruit() {
                       </button>
                       {showShareMenu && (
                         <>
-                          <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setShowShareMenu(false)} />
+                          <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, zIndex: 99 }} onClick={() => setShowShareMenu(false)} />
                           <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 100, minWidth: 180, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: T.radius, boxShadow: "0 8px 24px rgba(0,0,0,0.25)", padding: "6px 0", fontFamily: T.body }}>
                             <button onClick={() => { navigator.clipboard.writeText(shareUrl); showToast("Link copied!", "success"); setShowShareMenu(false); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 16px", background: "none", border: "none", color: T.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: T.body, textAlign: "left" }} onMouseEnter={e => e.currentTarget.style.background = T.surfaceAlt} onMouseLeave={e => e.currentTarget.style.background = "none"}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -2846,7 +2846,7 @@ export default function ByTheirFruit() {
 
             {/* Claim Church Modal */}
             {showClaimModal && currentChurch && (
-              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowClaimModal(false)}>
+              <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowClaimModal(false)}>
                 <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
                   <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{claimStep === "verify" ? "Verify your email" : claimStep === "done" ? "Verified!" : `Claim ${currentChurch.name}`}</h2>
                   {claimStep === "form" && <>
@@ -3000,7 +3000,7 @@ export default function ByTheirFruit() {
 
             {/* Report Church Modal */}
             {showReportModal && currentChurch && (
-              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowReportModal(false)}>
+              <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowReportModal(false)}>
                 <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
                   {reportSubmitted ? (
                     <div style={{ textAlign: "center", padding: "12px 0" }}>
@@ -3901,7 +3901,7 @@ export default function ByTheirFruit() {
 
             {/* Reviewer History Modal */}
             {reviewerHistory && (
-              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setReviewerHistory(null)}>
+              <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setReviewerHistory(null)}>
                 <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "28px 24px", maxWidth: 520, width: "100%", maxHeight: "80vh", overflow: "auto" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                     <div>
@@ -4619,7 +4619,7 @@ export default function ByTheirFruit() {
 
       {/* ANONYMOUS ABUSE REPORT MODAL */}
       {showAbuseModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", padding: 20 }} onClick={() => setShowAbuseModal(false)}>
+        <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", padding: 20 }} onClick={() => setShowAbuseModal(false)}>
           <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 520, background: T.surface, borderRadius: 16, padding: "32px 28px", maxHeight: "90vh", overflow: "auto", boxShadow: "0 24px 48px rgba(0,0,0,0.15)", animation: "modalIn 0.25s ease" }}>
             {abuseSubmitted ? (
               <div style={{ textAlign: "center", padding: "20px 0" }}>
