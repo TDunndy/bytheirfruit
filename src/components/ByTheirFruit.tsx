@@ -1286,6 +1286,10 @@ export default function ByTheirFruit() {
         // If geocoding fails, fall through to normal zip prefix search
       }
 
+      // Determine if we have user location for proximity-aware search
+      const userLoc = nearMeLocation || userGeoLocation || (ipLocation ? { lat: ipLocation.lat, lng: ipLocation.lng } : null);
+      const useProximity = !!userLoc && !!query;
+
       let q = supabase.from("churches").select("*");
       if (query) {
         q = q.ilike("name", `%${query}%`);
@@ -1302,9 +1306,14 @@ export default function ByTheirFruit() {
       if (zip) {
         q = q.ilike("zip", `${zip}%`);
       }
-      const sortConfig = { most_reviews: ["total_reviews", false], least_reviews: ["total_reviews", true], highest_rated: ["score_overall", false], lowest_rated: ["score_overall", true] };
-      const [sortCol, sortAsc] = sortConfig[sort] || sortConfig.most_reviews;
-      q = q.order(sortCol, { ascending: sortAsc, nullsFirst: false }).limit(50);
+      if (useProximity) {
+        // Fetch more results so we can re-sort by distance client-side
+        q = q.limit(200);
+      } else {
+        const sortConfig = { most_reviews: ["total_reviews", false], least_reviews: ["total_reviews", true], highest_rated: ["score_overall", false], lowest_rated: ["score_overall", true] };
+        const [sortCol, sortAsc] = sortConfig[sort] || sortConfig.most_reviews;
+        q = q.order(sortCol, { ascending: sortAsc, nullsFirst: false }).limit(50);
+      }
       const { data, error } = await q;
       if (error) {
         console.error("Search error:", error);
@@ -1316,9 +1325,21 @@ export default function ByTheirFruit() {
         showToast("Search failed. Please refresh the page and try again.", "error");
       }
       if (!error && data) {
-        // Clear distance data when not doing proximity search
-        setNearMeDistances({});
-        setChurches(data.map(dbChurchToLocal));
+        if (useProximity) {
+          // Sort name search results by distance from user
+          const withDist = data.map(c => ({
+            ...c,
+            _dist: (c.latitude && c.longitude) ? haversineDistance(userLoc.lat, userLoc.lng, c.latitude, c.longitude) : 99999
+          })).sort((a, b) => a._dist - b._dist).slice(0, 50);
+          const distMap = {};
+          withDist.forEach(c => { distMap[c.id] = c._dist; });
+          setNearMeDistances(distMap);
+          setChurches(withDist.map(dbChurchToLocal));
+        } else {
+          // Clear distance data when not doing proximity search
+          setNearMeDistances({});
+          setChurches(data.map(dbChurchToLocal));
+        }
       }
     } catch (err) {
       console.error("Search exception:", err);
@@ -1331,7 +1352,7 @@ export default function ByTheirFruit() {
     } finally {
       setSearchLoading(false);
     }
-  }, []);
+  }, [nearMeLocation, userGeoLocation, ipLocation]);
 
   /* --- NEAR ME: geolocation search --- */
   const searchNearMe = useCallback(async (lat, lng) => {
