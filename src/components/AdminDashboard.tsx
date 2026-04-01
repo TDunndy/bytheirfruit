@@ -23,7 +23,9 @@ const SCORE_FIELDS = ["teaching", "welcome", "community", "worship", "prayer", "
 const SCORE_LABELS = { teaching: "Teaching", welcome: "Welcome", community: "Community", worship: "Worship", prayer: "Prayer", kids: "Kids Program", youth: "Youth Program", leadership: "Leadership", service: "Service", finances: "Finances" };
 
 /* --- HELPERS --- */
-const scoreColor = (s) => s >= 4.5 ? T.green : s >= 3.5 ? T.amber : T.red;
+function scoreHue(s) { const t = Math.max(0, Math.min(1, (s - 1) / 4)); const eased = t * t * (3 - 2 * t); return eased * 142; }
+const scoreColor = (s) => `hsl(${scoreHue(s)}, 72%, 45%)`;
+const scoreBg = (s) => `hsl(${scoreHue(s)}, 50%, 12%)`;
 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
 const formatDateTime = (d) => d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "—";
 
@@ -246,8 +248,8 @@ export default function AdminDashboard() {
     setLoadingData(true);
     const [usersRes, churchCountRes, reviewsRes, flagsRes, reportsRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-      supabase.from("churches").select("*", { count: "exact", head: true }),
-      supabase.from("reviews").select("*, profiles(display_name, id), churches(name, id, city, state)").order("created_at", { ascending: false }),
+      supabase.from("churches").select("*", { count: "estimated", head: true }),
+      supabase.from("reviews").select("*, profiles!reviews_user_id_fkey(display_name, id), churches!reviews_church_id_fkey(name, id, city, state)").order("created_at", { ascending: false }),
       supabase.from("review_flags").select("*").order("created_at", { ascending: false }),
       supabase.from("church_reports").select("*, churches(name, city, state)").order("created_at", { ascending: false }),
     ]);
@@ -345,21 +347,31 @@ export default function AdminDashboard() {
 
   /* --- ACTIONS --- */
   const updateReviewStatus = async (reviewId, status) => {
-    const { error } = await supabase.from("reviews").update({ status }).eq("id", reviewId);
+    const updateData = { status };
+    if (status === "published" && user) {
+      updateData.approved_at = new Date().toISOString();
+      updateData.approved_by = user.id;
+    }
+    const { error } = await supabase.from("reviews").update(updateData).eq("id", reviewId);
     if (!error) {
-      setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, status } : r));
-      showToast(`Review ${status === "published" ? "published" : status === "hidden" ? "hidden" : status === "removed" ? "removed" : "updated"}`);
+      setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, ...updateData } : r));
+      showToast(`Review ${status === "published" ? "approved & published" : status === "hidden" ? "hidden" : status === "removed" ? "removed" : "updated"}`);
     }
   };
 
   const bulkUpdateReviews = async (status) => {
     const count = selectedReviews.size;
-    for (const reviewId of selectedReviews) {
-      await supabase.from("reviews").update({ status }).eq("id", reviewId);
+    const updateData = { status };
+    if (status === "published" && user) {
+      updateData.approved_at = new Date().toISOString();
+      updateData.approved_by = user.id;
     }
-    setReviews(prev => prev.map(r => selectedReviews.has(r.id) ? { ...r, status } : r));
+    for (const reviewId of selectedReviews) {
+      await supabase.from("reviews").update(updateData).eq("id", reviewId);
+    }
+    setReviews(prev => prev.map(r => selectedReviews.has(r.id) ? { ...r, ...updateData } : r));
     setSelectedReviews(new Set());
-    showToast(`${count} reviews ${status === "published" ? "published" : status === "removed" ? "removed" : status === "hidden" ? "hidden" : "updated"}`);
+    showToast(`${count} reviews ${status === "published" ? "approved & published" : status === "removed" ? "removed" : status === "hidden" ? "hidden" : "updated"}`);
   };
 
   const deleteReview = async (reviewId) => {
@@ -392,7 +404,7 @@ export default function AdminDashboard() {
   };
 
   const viewChurchReviews = async (churchId, churchName) => {
-    const { data } = await supabase.from("reviews").select("*, profiles(display_name)").eq("church_id", churchId).order("created_at", { ascending: false });
+    const { data } = await supabase.from("reviews").select("*, profiles!reviews_user_id_fkey(display_name)").eq("church_id", churchId).order("created_at", { ascending: false });
     setChurchReviewsList(data || []);
     setChurchReviewsModal({ id: churchId, name: churchName });
   };
@@ -415,11 +427,16 @@ export default function AdminDashboard() {
   };
 
   const saveChurch = async (churchId, updates) => {
+    // Track who approved if status is being changed to approved
+    if (updates.status === "approved" && user) {
+      updates.approved_at = new Date().toISOString();
+      updates.approved_by = user.id;
+    }
     const { error } = await supabase.from("churches").update(updates).eq("id", churchId);
     if (!error) {
       setChurches(prev => prev.map(c => c.id === churchId ? { ...c, ...updates } : c));
       setEditingChurch(null);
-      showToast("Church updated");
+      showToast(updates.status === "approved" ? "Church approved & published" : "Church updated");
     }
   };
 
@@ -510,6 +527,7 @@ export default function AdminDashboard() {
     { id: "churches", label: "Churches" },
     { id: "reports", label: "Reports" },
     { id: "demographics", label: "Demographics" },
+    { id: "newsletter", label: "Newsletter" },
     { id: "settings", label: "Settings" },
   ];
 
@@ -790,12 +808,13 @@ export default function AdminDashboard() {
                             <div>
                               <span style={{ fontSize: 13, fontWeight: 700 }}>{r.profiles?.display_name || "Anonymous"}</span>
                               <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 8 }}>{r.reviewer_role}</span>
-                              <a href={`/#/profile/${r.church_id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, marginLeft: 8, textDecoration: "none", fontWeight: 600 }}>→ {r.churches?.name || "Unknown"}</a>
+                              <a href={`/#/church/${r.church_id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, marginLeft: 8, textDecoration: "none", fontWeight: 600 }}>→ {r.churches?.name || "Unknown"}</a>
                             </div>
                           </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                           <Badge status={r.status} />
+                          {r.deleted_at && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: T.radiusFull, background: T.amberSoft, color: T.amber, fontWeight: 600, border: `1px solid ${T.amberBorder}` }}>User deleted {formatDate(r.deleted_at)}</span>}
                           {r.flag_count > 0 && <span style={{ fontSize: 10, color: T.red, fontWeight: 600 }}>{r.flag_count} flags</span>}
                           <span style={{ fontSize: 11, color: T.textMuted }}>{formatDate(r.created_at)}</span>
                         </div>
@@ -826,7 +845,7 @@ export default function AdminDashboard() {
 
                       <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 10 }}>
                         {Object.entries(scores).map(([k, v]) => (
-                          <span key={k} style={{ fontSize: 9, padding: "2px 6px", borderRadius: T.radiusFull, background: scoreColor(v) === T.green ? T.greenSoft : scoreColor(v) === T.amber ? T.amberSoft : T.redSoft, color: scoreColor(v), fontWeight: 700, fontFamily: T.heading }}>{k.slice(0, 3).toUpperCase()} {v}</span>
+                          <span key={k} style={{ fontSize: 9, padding: "2px 6px", borderRadius: T.radiusFull, background: scoreBg(v), color: scoreColor(v), fontWeight: 700, fontFamily: T.heading }}>{k.slice(0, 3).toUpperCase()} {v}</span>
                         ))}
                       </div>
 
@@ -906,7 +925,7 @@ export default function AdminDashboard() {
                       <div style={{ marginBottom: 12 }}>
                         <div style={{ fontWeight: 600, color: T.textMuted, fontSize: 11, marginBottom: 6, textTransform: "uppercase" }}>User Reviews ({reviews.filter(r => r.user_id === u.id).length})</div>
                         {reviews.filter(r => r.user_id === u.id).slice(0, 5).map(r => (
-                          <a key={r.id} href={`/#/profile/${r.church_id}`} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", color: "inherit", cursor: "pointer" }}>
+                          <a key={r.id} href={`/#/church/${r.church_id}`} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 0", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", textDecoration: "none", color: "inherit", cursor: "pointer" }}>
                             <div>
                               <div style={{ fontWeight: 600, color: T.accent }}>{r.churches?.name}</div>
                               <div style={{ fontSize: 11, color: T.textMuted }}>{r.churches?.city}, {r.churches?.state} · {formatDate(r.created_at)}</div>
@@ -1046,7 +1065,7 @@ export default function AdminDashboard() {
                               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                                 {SCORE_FIELDS.map(f => (
                                   c[`score_${f}`] && (
-                                    <span key={f} style={{ fontSize: 10, padding: "3px 8px", borderRadius: T.radiusFull, background: scoreColor(parseFloat(c[`score_${f}`])) === T.green ? T.greenSoft : scoreColor(parseFloat(c[`score_${f}`])) === T.amber ? T.amberSoft : T.redSoft, color: scoreColor(parseFloat(c[`score_${f}`])), fontWeight: 700, fontFamily: T.heading }}>{f.slice(0, 3).toUpperCase()} {parseFloat(c[`score_${f}`]).toFixed(1)}</span>
+                                    <span key={f} style={{ fontSize: 10, padding: "3px 8px", borderRadius: T.radiusFull, background: scoreBg(parseFloat(c[`score_${f}`])), color: scoreColor(parseFloat(c[`score_${f}`])), fontWeight: 700, fontFamily: T.heading }}>{f.slice(0, 3).toUpperCase()} {parseFloat(c[`score_${f}`]).toFixed(1)}</span>
                                   )
                                 ))}
                                 {!SCORE_FIELDS.some(f => c[`score_${f}`]) && <span style={{ fontSize: 11, color: T.textMuted }}>No scores yet</span>}
@@ -1244,6 +1263,110 @@ export default function AdminDashboard() {
           );
         })()}
 
+        {/* === NEWSLETTER === */}
+        {!loadingData && tab === "newsletter" && (() => {
+          function NewsletterTab() {
+            const [subscribers, setSubscribers] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [searchQuery, setSearchQuery] = useState("");
+
+            useEffect(() => {
+              async function loadSubscribers() {
+                const { data, error } = await supabase
+                  .from("newsletter_subscribers")
+                  .select("*")
+                  .order("created_at", { ascending: false });
+                if (!error && data) setSubscribers(data);
+                setLoading(false);
+              }
+              loadSubscribers();
+            }, []);
+
+            const filtered = subscribers.filter(s =>
+              !searchQuery || s.email.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+
+            const downloadCSV = () => {
+              const header = "Email,Subscribed Date\n";
+              const rows = filtered.map(s =>
+                `${s.email},${new Date(s.created_at).toLocaleDateString("en-US")}`
+              ).join("\n");
+              const blob = new Blob([header + rows], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `btf-newsletter-subscribers-${new Date().toISOString().split("T")[0]}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            };
+
+            const copyAllEmails = () => {
+              const emails = filtered.map(s => s.email).join(", ");
+              navigator.clipboard.writeText(emails).then(() => {
+                showToast(`${filtered.length} emails copied to clipboard`, "success");
+              });
+            };
+
+            if (loading) return <div style={{ textAlign: "center", padding: "60px" }}><div style={{ fontSize: 14, color: T.textMuted }}>Loading subscribers...</div></div>;
+
+            return (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div>
+                    <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Newsletter Subscribers</h2>
+                    <div style={{ fontSize: 13, color: T.textMuted }}>{subscribers.length} total subscriber{subscribers.length !== 1 ? "s" : ""}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Button onClick={copyAllEmails} variant="secondary">Copy All Emails</Button>
+                    <Button onClick={downloadCSV} variant="primary">Download CSV</Button>
+                  </div>
+                </div>
+
+                <input
+                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search subscribers..."
+                  style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, marginBottom: 16, boxSizing: "border-box" }}
+                />
+
+                {filtered.length === 0 ? (
+                  <div style={{ padding: "40px", textAlign: "center", color: T.textMuted, fontSize: 14 }}>
+                    {searchQuery ? "No subscribers match your search." : "No subscribers yet."}
+                  </div>
+                ) : (
+                  <div style={{ borderRadius: T.radiusSm, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 100px", padding: "10px 16px", background: T.surfaceAlt, borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      <div>Email</div>
+                      <div>Subscribed</div>
+                      <div>Actions</div>
+                    </div>
+                    {filtered.map((sub, i) => (
+                      <div key={sub.id || i} style={{ display: "grid", gridTemplateColumns: "1fr 160px 100px", padding: "10px 16px", borderBottom: i < filtered.length - 1 ? `1px solid ${T.borderLight}` : "none", alignItems: "center", fontSize: 13 }}>
+                        <div style={{ color: T.text, fontWeight: 500 }}>{sub.email}</div>
+                        <div style={{ color: T.textMuted, fontSize: 12 }}>{new Date(sub.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                        <button onClick={async () => {
+                          await supabase.from("newsletter_subscribers").delete().eq("id", sub.id);
+                          setSubscribers(prev => prev.filter(s => s.id !== sub.id));
+                          showToast("Subscriber removed");
+                        }} style={{ fontSize: 11, color: T.red, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, fontWeight: 600, padding: 0 }}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginTop: 24, padding: "16px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 6 }}>How to email your subscribers</div>
+                  <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.6 }}>
+                    1. Click "Download CSV" above to get the current list.<br />
+                    2. Go to <a href="https://resend.com/broadcasts" target="_blank" rel="noopener" style={{ color: T.accent }}>Resend Broadcasts</a> to compose and send an email to the list.<br />
+                    3. Or click "Copy All Emails" to paste into any email tool.
+                  </div>
+                </div>
+              </>
+            );
+          }
+          return <NewsletterTab />;
+        })()}
+
         {/* === SETTINGS === */}
         {!loadingData && tab === "settings" && (
           <>
@@ -1287,8 +1410,9 @@ export default function AdminDashboard() {
                       variant: "green",
                       onConfirm: async () => {
                         const pendingIds = reviews.filter(r => r.status === "pending").map(r => r.id);
+                        const approvalData = { status: "published", approved_at: new Date().toISOString(), approved_by: user?.id };
                         for (const id of pendingIds) {
-                          await supabase.from("reviews").update({ status: "published" }).eq("id", id);
+                          await supabase.from("reviews").update(approvalData).eq("id", id);
                         }
                         setReviews(prev => prev.map(r => r.status === "pending" ? { ...r, status: "published" } : r));
                         showToast(`${pendingIds.length} pending reviews published`);
@@ -1334,7 +1458,7 @@ export default function AdminDashboard() {
                   }
                 }} variant="secondary">Export Users (CSV)</Button>
                 <Button onClick={async () => {
-                  const { data } = await supabase.from("reviews").select("*, profiles(display_name), churches(name, city, state)").order("created_at", { ascending: false });
+                  const { data } = await supabase.from("reviews").select("*, profiles!reviews_user_id_fkey(display_name), churches!reviews_church_id_fkey(name, city, state)").order("created_at", { ascending: false });
                   if (data) {
                     const csv = "Reviewer,Church,City,State,Status,Score,Text,Date\n" + data.map(r =>
                       `"${r.profiles?.display_name || ""}","${r.churches?.name || ""}","${r.churches?.city || ""}","${r.churches?.state || ""}",${r.status},${r.score_overall || ""},"${(r.text || "").replace(/"/g, '""').slice(0, 200)}",${r.created_at}`
