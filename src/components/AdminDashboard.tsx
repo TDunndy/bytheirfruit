@@ -358,7 +358,7 @@ export default function AdminDashboard() {
       showToast(`Review ${status === "published" ? "approved & published" : status === "hidden" ? "hidden" : status === "removed" ? "removed" : "updated"}`);
     } else {
       console.error("Failed to update review:", error);
-      showToast("Failed to update review. Please try again.", T.red);
+      showToast(`Failed to update review: ${error.message || "Unknown error"}`, T.red);
     }
   };
 
