@@ -526,13 +526,11 @@ export default function AdminDashboard() {
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "reviews", label: "Reviews" },
-    { id: "users", label: "Users" },
     { id: "churches", label: "Churches" },
-    { id: "reports", label: "Reports" },
-    { id: "demographics", label: "Demographics" },
-    { id: "newsletter", label: "Newsletter" },
+    { id: "users", label: "Users" },
     { id: "settings", label: "Settings" },
   ];
+  const [showDemographics, setShowDemographics] = useState(false);
 
   if (loadingAuth) {
     return (
@@ -631,115 +629,34 @@ export default function AdminDashboard() {
           <>
             <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 20px", letterSpacing: "-0.03em" }}>Dashboard</h1>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
-              <Stat label="Total Users" value={users.length} sub={`${activeUsers} active`} color={T.accent} icon="👥" />
-              <Stat label="Churches" value={totalChurchCount.toLocaleString()} icon="⛪" />
-              <Stat label="Total Reviews" value={reviews.length} sub={`${publishedReviews} published`} color={T.green} icon="📝" />
-              <Stat label="Pending" value={pendingReviews} sub="Awaiting moderation" color={T.accent} icon="⏳" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
+              <Stat label="Users" value={users.length} sub={`${activeUsers} active`} color={T.accent} icon="👥" />
+              <Stat label="Reviews" value={reviews.length} sub={`${publishedReviews} published`} color={T.green} icon="📝" />
+              <Stat label="Pending" value={pendingReviews} sub="Awaiting approval" color={T.accent} icon="⏳" />
               <Stat label="Flagged" value={flaggedReviews} sub="Needs attention" color={T.amber} icon="⚠️" />
-              <Stat label="Hidden" value={hiddenReviews} sub="Temporarily hidden" color={T.purple} icon="👁️" />
-              <Stat label="Removed" value={removedReviews} sub="Permanently removed" color={T.red} icon="🗑️" />
             </div>
 
-            {/* Review Status Breakdown */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
-              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>Review Status Breakdown</div>
-                {Object.entries(statusBreakdown).map(([status, count]) => (
-                  <MiniBar key={status} label={status.charAt(0).toUpperCase() + status.slice(1)} value={count} max={reviews.length} color={
-                    status === "published" ? T.green : status === "flagged" ? T.amber : status === "pending" ? T.accent : status === "hidden" ? T.purple : T.red
-                  } />
-                ))}
-              </div>
-
-              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>User Roles</div>
-                <MiniBar label="Admins" value={roleBreakdown.admin} max={users.length} color={T.accent} />
-                <MiniBar label="Moderators" value={roleBreakdown.moderator} max={users.length} color="#66cdaa" />
-                <MiniBar label="Users" value={roleBreakdown.user} max={users.length} color={T.textMuted} />
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.borderLight}` }}>
-                  <div style={{ fontSize: 11, color: T.textMuted }}>User signups this week: {users.filter(u => new Date(u.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length}</div>
-                </div>
-              </div>
-
-              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>Reviews This Week</div>
-                {reviewsByWeek.length > 0 ? (
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 80 }}>
-                    {reviewsByWeek.map(([week, count]) => {
-                      const maxCount = Math.max(...reviewsByWeek.map(w => w[1]));
-                      const height = maxCount > 0 ? (count / maxCount) * 70 : 0;
-                      return (
-                        <div key={week} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                          <div style={{ fontSize: 9, color: T.textMuted, fontFamily: T.mono }}>{count}</div>
-                          <div style={{ width: "100%", height: Math.max(height, 2), borderRadius: 2, background: T.accent }} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No review data yet</div>
-                )}
-                <div style={{ fontSize: 10, color: T.textMuted, textAlign: "center", marginTop: 6 }}>Last 12 weeks</div>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-              {/* Top Reviewed Churches */}
-              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 12, letterSpacing: "-0.02em" }}>Top Reviewed Churches</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                  {topReviewedChurches.length > 0 ? topReviewedChurches.map((c, i) => (
-                    <div key={i} style={{ padding: "8px 0", borderBottom: `1px solid ${T.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 600 }}>{c.name}</div>
-                        <div style={{ fontSize: 10, color: T.textMuted }}>{c.city}, {c.state}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, fontFamily: T.heading, color: T.accent }}>{c.count} reviews</div>
-                        <div style={{ fontSize: 10, color: T.textMuted }}>avg {(c.totalScore / c.count).toFixed(1)}</div>
-                      </div>
-                    </div>
-                  )) : <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No reviewed churches yet</div>}
-                </div>
-              </div>
-
-              {/* Flagged Items Queue */}
-              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 12, letterSpacing: "-0.02em" }}>Moderation Queue ({flaggedReviews + pendingReviews})</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {reviews.filter(r => r.status === "flagged" || r.status === "pending").slice(0, 6).map(r => (
-                    <div key={r.id} style={{ padding: "12px", borderRadius: T.radiusSm, background: r.status === "flagged" ? T.amberSoft : T.accentSoft, border: `1px solid ${r.status === "flagged" ? "rgba(245,158,11,0.2)" : T.accentBorder}` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: r.status === "flagged" ? T.amber : T.accent }}>{r.profiles?.display_name} → {r.churches?.name}</div>
-                        <Badge status={r.status} />
-                      </div>
-                      <div style={{ fontSize: 11, color: T.textSoft, lineHeight: 1.5, marginBottom: 8 }}>{r.text?.slice(0, 80)}...</div>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">Approve</Button>
-                        <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>
-                        <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>
-                      </div>
-                    </div>
-                  ))}
-                  {flaggedReviews + pendingReviews === 0 && <div style={{ fontSize: 12, color: T.textMuted, padding: "20px 0", textAlign: "center" }}>Queue is clear!</div>}
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Users */}
+            {/* Moderation Queue - the main focus */}
             <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-              <div style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, marginBottom: 12, letterSpacing: "-0.02em" }}>Recent Users</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
-                {users.slice(0, 6).map(u => (
-                  <div key={u.id} style={{ padding: 12, borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ fontWeight: 600, fontSize: 12 }}>{u.display_name}</div>
-                      <Badge status={u.role} />
+              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, marginBottom: 14, letterSpacing: "-0.02em" }}>Moderation Queue ({flaggedReviews + pendingReviews})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {reviews.filter(r => r.status === "flagged" || r.status === "pending").slice(0, 10).map(r => (
+                  <div key={r.id} style={{ padding: "14px", borderRadius: T.radiusSm, background: r.status === "flagged" ? T.amberSoft : T.accentSoft, border: `1px solid ${r.status === "flagged" ? "rgba(245,158,11,0.2)" : T.accentBorder}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: r.status === "flagged" ? T.amber : T.accent }}>{r.profiles?.display_name} → {r.churches?.name}</div>
+                      <Badge status={r.status} />
                     </div>
-                    <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{u.provider || "email"} · Joined {formatDate(u.created_at)}</div>
+                    <div style={{ fontSize: 12, color: T.textSoft, lineHeight: 1.5, marginBottom: 8 }}>{r.text?.slice(0, 120)}{r.text?.length > 120 ? "..." : ""}</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">Approve</Button>
+                      <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>
+                      <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>
+                    </div>
                   </div>
                 ))}
+                {flaggedReviews + pendingReviews === 0 && (
+                  <div style={{ fontSize: 14, color: T.textMuted, padding: "40px 0", textAlign: "center" }}>All caught up! No reviews need attention.</div>
+                )}
               </div>
             </div>
           </>
@@ -939,6 +856,46 @@ export default function AdminDashboard() {
               {filteredUsers.length === 0 && <div style={{ padding: "30px", textAlign: "center", color: T.textMuted }}>No users found</div>}
             </div>
 
+            {/* Demographics toggle */}
+            <div style={{ marginTop: 20 }}>
+              <button onClick={() => setShowDemographics(!showDemographics)} style={{ fontSize: 13, fontWeight: 600, color: T.accent, background: "none", border: `1px solid ${T.accentBorder}`, borderRadius: T.radiusSm, padding: "8px 16px", cursor: "pointer", fontFamily: T.body }}>
+                {showDemographics ? "Hide Demographics" : "Show Demographics"}
+              </button>
+              {showDemographics && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
+                    <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 16 }}>Gender</div>
+                      {Object.entries(demographics.gender).filter(([_, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([label, count]) => (
+                        <MiniBar key={label} label={label} value={count} max={users.length} color={label === "Male" ? T.accent : label === "Female" ? T.purple : T.textMuted} />
+                      ))}
+                      {Object.values(demographics.gender).every(v => v === 0) && <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No data yet</div>}
+                    </div>
+                    <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 16 }}>Age Range</div>
+                      {Object.entries(demographics.age).filter(([_, v]) => v > 0).sort((a, b) => {
+                        const order = ["18-24", "25-34", "35-44", "45-54", "55-64", "65+", "Prefer not to answer", "Not set"];
+                        return order.indexOf(a[0]) - order.indexOf(b[0]);
+                      }).map(([label, count]) => (
+                        <MiniBar key={label} label={label} value={count} max={users.length} color={label === "Not set" ? T.textMuted : T.green} />
+                      ))}
+                      {Object.values(demographics.age).every(v => v === 0) && <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No data yet</div>}
+                    </div>
+                    <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 16 }}>Income Bracket</div>
+                      {Object.entries(demographics.income).filter(([_, v]) => v > 0).sort((a, b) => {
+                        const order = ["Under $25k", "$25k-$50k", "$50k-$75k", "$75k-$100k", "$100k-$150k", "$150k+", "Prefer not to answer", "Not set"];
+                        return order.indexOf(a[0]) - order.indexOf(b[0]);
+                      }).map(([label, count]) => (
+                        <MiniBar key={label} label={label} value={count} max={users.length} color={label === "Not set" ? T.textMuted : T.amber} />
+                      ))}
+                      {Object.values(demographics.income).every(v => v === 0) && <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No data yet</div>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <Modal isOpen={!!userRoleModal} onClose={() => setUserRoleModal(null)} title={`Edit ${userRoleModal?.display_name}`}>
               {userRoleModal && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1116,254 +1073,6 @@ export default function AdminDashboard() {
           </>
         )}
 
-        {/* === DEMOGRAPHICS === */}
-        {!loadingData && tab === "demographics" && (
-          <>
-            <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: "0 0 20px", letterSpacing: "-0.03em" }}>User Demographics</h1>
-            <div style={{ padding: "12px 16px", borderRadius: T.radiusSm, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 20, fontSize: 12, color: T.accent, lineHeight: 1.6 }}>
-              All demographic data is anonymous and aggregated. Individual user data is never shared or sold. This data helps churches understand their community better.
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-              {/* Gender */}
-              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>Gender</div>
-                {Object.entries(demographics.gender).filter(([_, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([label, count]) => (
-                  <MiniBar key={label} label={label} value={count} max={users.length} color={label === "Male" ? T.accent : label === "Female" ? T.purple : T.textMuted} />
-                ))}
-                {Object.values(demographics.gender).every(v => v === 0) && <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No data yet</div>}
-              </div>
-
-              {/* Age Range */}
-              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>Age Range</div>
-                {Object.entries(demographics.age).filter(([_, v]) => v > 0).sort((a, b) => {
-                  const order = ["18-24", "25-34", "35-44", "45-54", "55-64", "65+", "Prefer not to answer", "Not set"];
-                  return order.indexOf(a[0]) - order.indexOf(b[0]);
-                }).map(([label, count]) => (
-                  <MiniBar key={label} label={label} value={count} max={users.length} color={label === "Not set" ? T.textMuted : T.green} />
-                ))}
-                {Object.values(demographics.age).every(v => v === 0) && <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No data yet</div>}
-              </div>
-
-              {/* Income */}
-              <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 16, letterSpacing: "-0.02em" }}>Income Bracket</div>
-                {Object.entries(demographics.income).filter(([_, v]) => v > 0).sort((a, b) => {
-                  const order = ["Under $25k", "$25k-$50k", "$50k-$75k", "$75k-$100k", "$100k-$150k", "$150k+", "Prefer not to answer", "Not set"];
-                  return order.indexOf(a[0]) - order.indexOf(b[0]);
-                }).map(([label, count]) => (
-                  <MiniBar key={label} label={label} value={count} max={users.length} color={label === "Not set" ? T.textMuted : T.amber} />
-                ))}
-                {Object.values(demographics.income).every(v => v === 0) && <div style={{ fontSize: 12, color: T.textMuted, textAlign: "center", padding: "20px 0" }}>No data yet</div>}
-              </div>
-            </div>
-
-            <div style={{ marginTop: 20, padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, marginBottom: 12, letterSpacing: "-0.02em" }}>Completion Rate</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-                {[
-                  { label: "Gender", filled: users.filter(u => u.gender && u.gender !== "Prefer not to answer").length },
-                  { label: "Age Range", filled: users.filter(u => u.age_range && u.age_range !== "Prefer not to answer").length },
-                  { label: "Income", filled: users.filter(u => u.income_bracket && u.income_bracket !== "Prefer not to answer").length },
-                ].map(({ label, filled }) => (
-                  <div key={label} style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 28, fontWeight: 800, fontFamily: T.heading, color: T.accent }}>{users.length > 0 ? Math.round((filled / users.length) * 100) : 0}%</div>
-                    <div style={{ fontSize: 12, color: T.textMuted }}>{label} provided</div>
-                    <div style={{ fontSize: 11, color: T.textMuted }}>{filled} of {users.length}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* === CHURCH REPORTS === */}
-        {!loadingData && tab === "reports" && (() => {
-          const REASON_LABELS = { not_christian: "Not Christian", lgbtq_affirming: "LGBTQ+ Affirming", false_teaching: "False Teaching", cult_or_abusive: "Cult / Abusive", closed_or_moved: "Closed / Moved", duplicate: "Duplicate", other: "Other" };
-          const REASON_COLORS = { not_christian: T.amber, lgbtq_affirming: T.purple, false_teaching: T.red, cult_or_abusive: T.red, closed_or_moved: T.textMuted, duplicate: T.textMuted, other: T.textSoft };
-          const filtered = churchReports.filter(r => reportFilter === "all" ? true : r.status === reportFilter);
-          const pendingCount = churchReports.filter(r => r.status === "pending").length;
-          return (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-                <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Church Reports <span style={{ fontSize: 14, fontWeight: 500, color: T.textMuted }}>({churchReports.length})</span></h1>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {["pending", "reviewed", "actioned", "dismissed", "all"].map(f => (
-                    <button key={f} onClick={() => setReportFilter(f)} style={{
-                      padding: "5px 14px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.body, border: "none",
-                      background: reportFilter === f ? T.text : T.surfaceAlt, color: reportFilter === f ? T.bg : T.textMuted,
-                    }}>{f.charAt(0).toUpperCase() + f.slice(1)} {f === "pending" && pendingCount > 0 ? `(${pendingCount})` : ""}</button>
-                  ))}
-                </div>
-              </div>
-
-              {filtered.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "60px 20px", color: T.textMuted }}>
-                  <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>🏳️</div>
-                  <div style={{ fontSize: 14 }}>No {reportFilter === "all" ? "" : reportFilter} reports</div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {filtered.map(report => (
-                    <div key={report.id} style={{ padding: "16px 20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                            <a href={`/#/church/${report.church_id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, color: T.accent, textDecoration: "none", letterSpacing: "-0.02em" }}>{report.churches?.name || "Unknown"}</a>
-                            <span style={{ fontSize: 12, color: T.textMuted }}>{report.churches?.city}, {report.churches?.state}</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: T.radiusFull, background: `${REASON_COLORS[report.reason] || T.textMuted}20`, color: REASON_COLORS[report.reason] || T.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>{REASON_LABELS[report.reason] || report.reason}</span>
-                            <span style={{ fontSize: 11, color: T.textMuted }}>{formatDateTime(report.created_at)}</span>
-                            <Badge status={report.status} />
-                          </div>
-                          {report.description && <div style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6, marginTop: 4 }}>{report.description}</div>}
-                          {report.admin_notes && <div style={{ fontSize: 12, color: T.amber, marginTop: 6, fontStyle: "italic" }}>Admin: {report.admin_notes}</div>}
-                        </div>
-                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                          {report.status === "pending" && (
-                            <>
-                              <Button variant="green" onClick={async () => {
-                                await supabase.from("church_reports").update({ status: "reviewed", reviewed_at: new Date().toISOString() }).eq("id", report.id);
-                                setChurchReports(prev => prev.map(r => r.id === report.id ? { ...r, status: "reviewed", reviewed_at: new Date().toISOString() } : r));
-                                showToast("Marked as reviewed");
-                              }}>Reviewed</Button>
-                              <Button variant="amber" onClick={async () => {
-                                await supabase.from("church_reports").update({ status: "actioned", reviewed_at: new Date().toISOString() }).eq("id", report.id);
-                                setChurchReports(prev => prev.map(r => r.id === report.id ? { ...r, status: "actioned", reviewed_at: new Date().toISOString() } : r));
-                                showToast("Report actioned");
-                              }}>Action</Button>
-                              <Button variant="secondary" onClick={async () => {
-                                await supabase.from("church_reports").update({ status: "dismissed", reviewed_at: new Date().toISOString() }).eq("id", report.id);
-                                setChurchReports(prev => prev.map(r => r.id === report.id ? { ...r, status: "dismissed", reviewed_at: new Date().toISOString() } : r));
-                                showToast("Report dismissed");
-                              }}>Dismiss</Button>
-                            </>
-                          )}
-                          <Button variant="secondary" onClick={async () => {
-                            if (confirm("Delete this church from the database? This cannot be undone.")) {
-                              await supabase.from("reviews").delete().eq("church_id", report.church_id);
-                              await supabase.from("church_reports").delete().eq("church_id", report.church_id);
-                              await supabase.from("churches").delete().eq("id", report.church_id);
-                              setChurchReports(prev => prev.filter(r => r.church_id !== report.church_id));
-                              showToast("Church deleted", T.red);
-                            }
-                          }}>Delete Church</Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          );
-        })()}
-
-        {/* === NEWSLETTER === */}
-        {!loadingData && tab === "newsletter" && (() => {
-          function NewsletterTab() {
-            const [subscribers, setSubscribers] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [searchQuery, setSearchQuery] = useState("");
-
-            useEffect(() => {
-              async function loadSubscribers() {
-                const { data, error } = await supabase
-                  .from("newsletter_subscribers")
-                  .select("*")
-                  .order("created_at", { ascending: false });
-                if (!error && data) setSubscribers(data);
-                setLoading(false);
-              }
-              loadSubscribers();
-            }, []);
-
-            const filtered = subscribers.filter(s =>
-              !searchQuery || s.email.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-
-            const downloadCSV = () => {
-              const header = "Email,Subscribed Date\n";
-              const rows = filtered.map(s =>
-                `${s.email},${new Date(s.created_at).toLocaleDateString("en-US")}`
-              ).join("\n");
-              const blob = new Blob([header + rows], { type: "text/csv" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `btf-newsletter-subscribers-${new Date().toISOString().split("T")[0]}.csv`;
-              a.click();
-              URL.revokeObjectURL(url);
-            };
-
-            const copyAllEmails = () => {
-              const emails = filtered.map(s => s.email).join(", ");
-              navigator.clipboard.writeText(emails).then(() => {
-                showToast(`${filtered.length} emails copied to clipboard`, "success");
-              });
-            };
-
-            if (loading) return <div style={{ textAlign: "center", padding: "60px" }}><div style={{ fontSize: 14, color: T.textMuted }}>Loading subscribers...</div></div>;
-
-            return (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                  <div>
-                    <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>Newsletter Subscribers</h2>
-                    <div style={{ fontSize: 13, color: T.textMuted }}>{subscribers.length} total subscriber{subscribers.length !== 1 ? "s" : ""}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Button onClick={copyAllEmails} variant="secondary">Copy All Emails</Button>
-                    <Button onClick={downloadCSV} variant="primary">Download CSV</Button>
-                  </div>
-                </div>
-
-                <input
-                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search subscribers..."
-                  style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, fontSize: 14, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, outline: "none", fontFamily: T.body, marginBottom: 16, boxSizing: "border-box" }}
-                />
-
-                {filtered.length === 0 ? (
-                  <div style={{ padding: "40px", textAlign: "center", color: T.textMuted, fontSize: 14 }}>
-                    {searchQuery ? "No subscribers match your search." : "No subscribers yet."}
-                  </div>
-                ) : (
-                  <div style={{ borderRadius: T.radiusSm, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 160px 100px", padding: "10px 16px", background: T.surfaceAlt, borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      <div>Email</div>
-                      <div>Subscribed</div>
-                      <div>Actions</div>
-                    </div>
-                    {filtered.map((sub, i) => (
-                      <div key={sub.id || i} style={{ display: "grid", gridTemplateColumns: "1fr 160px 100px", padding: "10px 16px", borderBottom: i < filtered.length - 1 ? `1px solid ${T.borderLight}` : "none", alignItems: "center", fontSize: 13 }}>
-                        <div style={{ color: T.text, fontWeight: 500 }}>{sub.email}</div>
-                        <div style={{ color: T.textMuted, fontSize: 12 }}>{new Date(sub.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
-                        <button onClick={async () => {
-                          await supabase.from("newsletter_subscribers").delete().eq("id", sub.id);
-                          setSubscribers(prev => prev.filter(s => s.id !== sub.id));
-                          showToast("Subscriber removed");
-                        }} style={{ fontSize: 11, color: T.red, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, fontWeight: 600, padding: 0 }}>Remove</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div style={{ marginTop: 24, padding: "16px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 6 }}>How to email your subscribers</div>
-                  <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.6 }}>
-                    1. Click "Download CSV" above to get the current list.<br />
-                    2. Go to <a href="https://resend.com/broadcasts" target="_blank" rel="noopener" style={{ color: T.accent }}>Resend Broadcasts</a> to compose and send an email to the list.<br />
-                    3. Or click "Copy All Emails" to paste into any email tool.
-                  </div>
-                </div>
-              </>
-            );
-          }
-          return <NewsletterTab />;
-        })()}
-
         {/* === SETTINGS === */}
         {!loadingData && tab === "settings" && (
           <>
@@ -1468,6 +1177,172 @@ export default function AdminDashboard() {
                 }} variant="secondary">Export Reviews (CSV)</Button>
               </div>
             </div>
+
+            {/* Newsletter Subscribers */}
+            {(() => {
+              function NewsletterSection() {
+                const [subscribers, setSubscribers] = useState([]);
+                const [nlLoading, setNlLoading] = useState(true);
+                const [nlSearch, setNlSearch] = useState("");
+
+                useEffect(() => {
+                  async function loadSubscribers() {
+                    const { data, error } = await supabase.from("newsletter_subscribers").select("*").order("created_at", { ascending: false });
+                    if (!error && data) setSubscribers(data);
+                    setNlLoading(false);
+                  }
+                  loadSubscribers();
+                }, []);
+
+                const filtered = subscribers.filter(s => !nlSearch || s.email.toLowerCase().includes(nlSearch.toLowerCase()));
+
+                const downloadCSV = () => {
+                  const rows = "Email,Subscribed Date\n" + filtered.map(s => `${s.email},${new Date(s.created_at).toLocaleDateString("en-US")}`).join("\n");
+                  const blob = new Blob([rows], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a"); a.href = url; a.download = `btf-newsletter-subscribers-${new Date().toISOString().split("T")[0]}.csv`; a.click();
+                  URL.revokeObjectURL(url);
+                };
+
+                const copyAllEmails = () => {
+                  navigator.clipboard.writeText(filtered.map(s => s.email).join(", ")).then(() => showToast(`${filtered.length} emails copied`));
+                };
+
+                return (
+                  <div style={{ marginTop: 20, padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                      <div>
+                        <h3 style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, margin: "0 0 4px", letterSpacing: "-0.02em" }}>Newsletter Subscribers</h3>
+                        <div style={{ fontSize: 12, color: T.textMuted }}>{subscribers.length} total subscriber{subscribers.length !== 1 ? "s" : ""}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Button onClick={copyAllEmails} variant="secondary">Copy All Emails</Button>
+                        <Button onClick={downloadCSV} variant="primary">Download CSV</Button>
+                      </div>
+                    </div>
+
+                    {nlLoading ? (
+                      <div style={{ fontSize: 13, color: T.textMuted, padding: "16px 0", textAlign: "center" }}>Loading subscribers...</div>
+                    ) : (
+                      <>
+                        <input value={nlSearch} onChange={e => setNlSearch(e.target.value)} placeholder="Search subscribers..." style={{
+                          width: "100%", padding: "8px 12px", borderRadius: T.radiusSm, fontSize: 13, border: `1px solid ${T.border}`,
+                          background: T.surfaceAlt, color: T.text, fontFamily: T.body, marginBottom: 12, boxSizing: "border-box",
+                        }} />
+                        {filtered.length === 0 ? (
+                          <div style={{ padding: "20px", textAlign: "center", color: T.textMuted, fontSize: 13 }}>{nlSearch ? "No subscribers match." : "No subscribers yet."}</div>
+                        ) : (
+                          <div style={{ maxHeight: 300, overflowY: "auto", borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 140px 80px", padding: "8px 14px", background: T.surfaceAlt, borderBottom: `1px solid ${T.border}`, fontSize: 10, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", position: "sticky", top: 0 }}>
+                              <div>Email</div><div>Subscribed</div><div>Actions</div>
+                            </div>
+                            {filtered.map((sub, i) => (
+                              <div key={sub.id || i} style={{ display: "grid", gridTemplateColumns: "1fr 140px 80px", padding: "8px 14px", borderBottom: i < filtered.length - 1 ? `1px solid ${T.borderLight}` : "none", alignItems: "center", fontSize: 12 }}>
+                                <div style={{ color: T.text, fontWeight: 500 }}>{sub.email}</div>
+                                <div style={{ color: T.textMuted, fontSize: 11 }}>{new Date(sub.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                                <button onClick={async () => {
+                                  await supabase.from("newsletter_subscribers").delete().eq("id", sub.id);
+                                  setSubscribers(prev => prev.filter(s => s.id !== sub.id));
+                                  showToast("Subscriber removed");
+                                }} style={{ fontSize: 11, color: T.red, background: "none", border: "none", cursor: "pointer", fontFamily: T.body, fontWeight: 600, padding: 0 }}>Remove</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ marginTop: 12, padding: "12px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 4 }}>How to email subscribers</div>
+                          <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.6 }}>
+                            1. Click "Download CSV" to get the list. 2. Go to <a href="https://resend.com/broadcasts" target="_blank" rel="noopener" style={{ color: T.accent }}>Resend Broadcasts</a> to send. 3. Or "Copy All Emails" to paste into any email tool.
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              }
+              return <NewsletterSection />;
+            })()}
+
+            {/* Church Reports */}
+            {(() => {
+              const REASON_LABELS = { not_christian: "Not Christian", lgbtq_affirming: "LGBTQ+ Affirming", false_teaching: "False Teaching", cult_or_abusive: "Cult / Abusive", closed_or_moved: "Closed / Moved", duplicate: "Duplicate", other: "Other" };
+              const REASON_COLORS = { not_christian: T.amber, lgbtq_affirming: T.purple, false_teaching: T.red, cult_or_abusive: T.red, closed_or_moved: T.textMuted, duplicate: T.textMuted, other: T.textSoft };
+              const filtered = churchReports.filter(r => reportFilter === "all" ? true : r.status === reportFilter);
+              const pendingCount = churchReports.filter(r => r.status === "pending").length;
+              return (
+                <div style={{ marginTop: 20, padding: "20px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+                    <div>
+                      <h3 style={{ fontSize: 14, fontWeight: 700, fontFamily: T.heading, margin: "0 0 4px", letterSpacing: "-0.02em" }}>Church Reports</h3>
+                      <div style={{ fontSize: 12, color: T.textMuted }}>{churchReports.length} total report{churchReports.length !== 1 ? "s" : ""}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {["pending", "reviewed", "actioned", "dismissed", "all"].map(f => (
+                        <button key={f} onClick={() => setReportFilter(f)} style={{
+                          padding: "4px 12px", borderRadius: T.radiusFull, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: T.body, border: "none",
+                          background: reportFilter === f ? T.text : T.surfaceAlt, color: reportFilter === f ? T.bg : T.textMuted,
+                        }}>{f.charAt(0).toUpperCase() + f.slice(1)} {f === "pending" && pendingCount > 0 ? `(${pendingCount})` : ""}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {filtered.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "30px 20px", color: T.textMuted, fontSize: 13 }}>No {reportFilter === "all" ? "" : reportFilter} reports</div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {filtered.map(report => (
+                        <div key={report.id} style={{ padding: "14px 16px", borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                <a href={`/#/church/${report.church_id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, color: T.accent, textDecoration: "none" }}>{report.churches?.name || "Unknown"}</a>
+                                <span style={{ fontSize: 11, color: T.textMuted }}>{report.churches?.city}, {report.churches?.state}</span>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: T.radiusFull, background: `${REASON_COLORS[report.reason] || T.textMuted}20`, color: REASON_COLORS[report.reason] || T.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>{REASON_LABELS[report.reason] || report.reason}</span>
+                                <span style={{ fontSize: 10, color: T.textMuted }}>{formatDateTime(report.created_at)}</span>
+                                <Badge status={report.status} />
+                              </div>
+                              {report.description && <div style={{ fontSize: 12, color: T.textSoft, lineHeight: 1.5, marginTop: 2 }}>{report.description}</div>}
+                            </div>
+                            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                              {report.status === "pending" && (
+                                <>
+                                  <Button variant="green" onClick={async () => {
+                                    await supabase.from("church_reports").update({ status: "reviewed", reviewed_at: new Date().toISOString() }).eq("id", report.id);
+                                    setChurchReports(prev => prev.map(r => r.id === report.id ? { ...r, status: "reviewed", reviewed_at: new Date().toISOString() } : r));
+                                    showToast("Marked as reviewed");
+                                  }}>Reviewed</Button>
+                                  <Button variant="amber" onClick={async () => {
+                                    await supabase.from("church_reports").update({ status: "actioned", reviewed_at: new Date().toISOString() }).eq("id", report.id);
+                                    setChurchReports(prev => prev.map(r => r.id === report.id ? { ...r, status: "actioned", reviewed_at: new Date().toISOString() } : r));
+                                    showToast("Report actioned");
+                                  }}>Action</Button>
+                                  <Button variant="secondary" onClick={async () => {
+                                    await supabase.from("church_reports").update({ status: "dismissed", reviewed_at: new Date().toISOString() }).eq("id", report.id);
+                                    setChurchReports(prev => prev.map(r => r.id === report.id ? { ...r, status: "dismissed", reviewed_at: new Date().toISOString() } : r));
+                                    showToast("Report dismissed");
+                                  }}>Dismiss</Button>
+                                </>
+                              )}
+                              <Button variant="secondary" onClick={async () => {
+                                if (confirm("Delete this church from the database? This cannot be undone.")) {
+                                  await supabase.from("reviews").delete().eq("church_id", report.church_id);
+                                  await supabase.from("church_reports").delete().eq("church_id", report.church_id);
+                                  await supabase.from("churches").delete().eq("id", report.church_id);
+                                  setChurchReports(prev => prev.filter(r => r.church_id !== report.church_id));
+                                  showToast("Church deleted", T.red);
+                                }
+                              }}>Delete Church</Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </>
         )}
 
