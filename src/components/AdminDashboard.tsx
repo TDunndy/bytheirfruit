@@ -8,9 +8,9 @@ const fonts = `@import url('https://fonts.googleapis.com/css2?family=Sora:wght@4
 
 const T = {
   bg: "#09090b", surface: "#18181b", surfaceAlt: "#27272a",
-  border: "#3f3f46", borderLight: "#27272a",
+  border: "#`f3f46", borderLight: "#27272a",
   text: "#fafafa", textSoft: "#a1a1aa", textMuted: "#71717a",
-  accent: "#3b82f6", accentSoft: "rgba(59,130,246,0.12)", accentBorder: "rgba(59,130,246,0.3)",
+  accent: "#`b82f6", accentSoft: "rgba(59,130,246,0.12)", accentBorder: "rgba(59,130,246,0.3)",
   green: "#22c55e", greenSoft: "rgba(34,197,94,0.12)",
   amber: "#f59e0b", amberSoft: "rgba(245,158,11,0.12)",
   red: "#ef4444", redSoft: "rgba(239,68,68,0.12)",
@@ -668,131 +668,167 @@ export default function AdminDashboard() {
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Reviews ({filteredReviews.length})</h1>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {selectedReviews.size > 0 && (
                     <>
-                      <Button onClick={() => bulkUpdateReviews("published")} variant="green">Approve ({selectedReviews.size})</Button>
-                      <Button onClick={() => bulkUpdateReviews("hidden")} variant="purple">Hide ({selectedReviews.size})</Button>
-                      <Button onClick={() => bulkUpdateReviews("removed")} variant="red">Remove ({selectedReviews.size})</Button>
+                      <span style={{ fontSize: 12, color: T.textMuted, marginRight: 4 }}>{selectedReviews.size} selected</span>
+                      <Button onClick={() => bulkUpdateReviews("published")} variant="green">Approve</Button>
+                      <Button onClick={() => bulkUpdateReviews("hidden")} variant="purple">Hide</Button>
+                      <Button onClick={() => bulkUpdateReviews("removed")} variant="red">Remove</Button>
+                      <Button onClick={() => setSelectedReviews(new Set())} variant="secondary">Clear</Button>
                     </>
                   )}
                 </div>
               </div>
 
-              {/* Filters */}
-              <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-                <input type="text" placeholder="Search by church, reviewer, or text..." value={reviewSearchQuery} onChange={(e) => setReviewSearchQuery(e.target.value)} style={{
-                  padding: "8px 12px", background: T.surfaceAlt, border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
-                  color: T.text, fontFamily: T.body, fontSize: 13, flex: 1, minWidth: 200,
-                }} />
-                <select value={reviewStatusFilter} onChange={(e) => setReviewStatusFilter(e.target.value)} style={{
-                  padding: "8px 12px", background: T.surfaceAlt, border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
-                  color: T.text, fontFamily: T.body, fontSize: 13,
-                }}>
-                  <option value="all">All Statuses</option>
-                  <option value="published">Published</option>
-                  <option value="pending">Pending</option>
-                  <option value="flagged">Flagged</option>
-                  <option value="hidden">Hidden</option>
-                  <option value="removed">Removed</option>
-                </select>
-                {selectedReviews.size === 0 && (
-                  <Button onClick={() => {
-                    const allIds = new Set(filteredReviews.map(r => r.id));
-                    setSelectedReviews(allIds);
-                  }} variant="secondary">Select All</Button>
-                )}
-                {selectedReviews.size > 0 && (
-                  <Button onClick={() => setSelectedReviews(new Set())} variant="secondary">Deselect All</Button>
-                )}
+              {/* Filter bar */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+                <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
+                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.textMuted, fontSize: 13, pointerEvents: "none" }}>&#x1F50D;</span>
+                  <input type="text" placeholder="Search reviews..." value={reviewSearchQuery} onChange={(e) => setReviewSearchQuery(e.target.value)} style={{
+                    width: "100%", padding: "8px 12px 8px 32px", background: T.surfaceAlt, border: `1px solid ${T.border}`, borderRadius: T.radiusFull,
+                    color: T.text, fontFamily: T.body, fontSize: 13, outline: "none",
+                  }} />
+                </div>
+                <div style={{ display: "flex", gap: 4, background: T.surfaceAlt, borderRadius: T.radiusFull, padding: 3, border: `1px solid ${T.border}` }}>
+                  {[{ v: "all", l: "All" }, { v: "pending", l: "Pending" }, { v: "published", l: "Published" }, { v: "flagged", l: "Flagged" }, { v: "hidden", l: "Hidden" }, { v: "removed", l: "Removed" }].map(f => (
+                    <button key={f.v} onClick={() => setReviewStatusFilter(f.v)} style={{
+                      padding: "5px 12px", borderRadius: T.radiusFull, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: T.body,
+                      background: reviewStatusFilter === f.v ? T.accent : "transparent",
+                      color: reviewStatusFilter === f.v ? "#fff" : T.textMuted,
+                      transition: "all 0.15s ease",
+                    }}>{f.l}{f.v === "pending" && reviews.filter(r => r.status === "pending").length > 0 ? ` (${reviews.filter(r => r.status === "pending").length})` : ""}</button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* Two-column review grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))", gap: 12 }}>
               {filteredReviews.map(r => {
                 const scores = {};
                 SCORE_FIELDS.forEach(f => { if (r[`score_${f}`] != null) scores[f] = r[`score_${f}`]; });
+                const scoreVals = Object.values(scores);
+                const avgScore = scoreVals.length > 0 ? (scoreVals.reduce((a, b) => a + b, 0) / scoreVals.length).toFixed(1) : null;
                 const isExpanded = expandedReview === r.id;
+                const borderLeft = r.status === "flagged" ? T.amber : r.status === "pending" ? T.accent : r.status === "hidden" ? "rgba(168,85,247,0.6)" : r.status === "removed" ? "rgba(239,68,68,0.4)" : "transparent";
+
                 return (
-                  <div key={r.id} style={{ borderRadius: T.radius, background: T.surface, border: `1px solid ${r.status === "flagged" ? "rgba(245,158,11,0.3)" : r.status === "hidden" ? "rgba(168,85,247,0.3)" : T.border}`, overflow: "hidden" }}>
-                    <div style={{ padding: "16px 20px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 12 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div key={r.id} onClick={() => !isExpanded && setExpandedReview(r.id)} style={{
+                    borderRadius: 12, background: T.surface, border: `1px solid ${T.border}`,
+                    borderLeft: `3px solid ${borderLeft}`,
+                    cursor: isExpanded ? "default" : "pointer", transition: "all 0.15s ease",
+                    display: "flex", flexDirection: "column",
+                  }}
+                  onMouseEnter={(e) => { if (!isExpanded) e.currentTarget.style.borderColor = T.textMuted; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.border; }}
+                  >
+                    <div style={{ padding: "16px 18px 12px" }}>
+                      {/* Top row: avatar + name + status */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          {isExpanded && (
                             <input type="checkbox" checked={selectedReviews.has(r.id)} onChange={(e) => {
+                              e.stopPropagation();
                               const newSet = new Set(selectedReviews);
                               e.target.checked ? newSet.add(r.id) : newSet.delete(r.id);
                               setSelectedReviews(newSet);
                             }} style={{ cursor: "pointer" }} />
-                            <div style={{ width: 28, height: 28, borderRadius: 14, background: T.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: T.textMuted, fontFamily: T.heading }}>{(r.profiles?.display_name || "A").charAt(0)}</div>
-                            <div>
-                              <span style={{ fontSize: 13, fontWeight: 700 }}>{r.profiles?.display_name || "Anonymous"}</span>
-                              <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 8 }}>{r.reviewer_role}</span>
-                              <a href={`/#/church/${r.church_id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, marginLeft: 8, textDecoration: "none", fontWeight: 600 }}>→ {r.churches?.name || "Unknown"}</a>
-                            </div>
+                          )}
+                          <div style={{ width: 32, height: 32, borderRadius: 16, background: `hsl(${((r.profiles?.display_name || "A").charCodeAt(0) * 47) % 360}, 40%, 25%)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: T.heading }}>{(r.profiles?.display_name || "A").charAt(0)}</div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, lineHeight: 1.2 }}>{r.profiles?.display_name || "Anonymous"}</div>
+                            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 1 }}>{r.reviewer_role}</div>
                           </div>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                          <Badge status={r.status} />
-                          {r.deleted_at && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: T.radiusFull, background: T.amberSoft, color: T.amber, fontWeight: 600, border: `1px solid ${T.amberBorder}` }}>User deleted {formatDate(r.deleted_at)}</span>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           {r.flag_count > 0 && <span style={{ fontSize: 10, color: T.red, fontWeight: 600 }}>{r.flag_count} flags</span>}
-                          <span style={{ fontSize: 11, color: T.textMuted }}>{formatDate(r.created_at)}</span>
+                          <Badge status={r.status} />
                         </div>
                       </div>
 
-                      <p style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.65, margin: "8px 0", maxHeight: isExpanded ? "none" : 60, overflow: "hidden" }}>{r.text}</p>
+                      {/* Church name */}
+                      <a href={`/#/church/${r.church_id}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{
+                        fontSize: 12, color: T.accent, textDecoration: "none", fontWeight: 600, display: "inline-block", marginBottom: 8,
+                      }}>{r.churches?.name || "Unknown Church"}</a>
 
-                      {!isExpanded && r.text?.length > 150 && (
-                        <button onClick={() => setExpandedReview(r.id)} style={{ fontSize: 11, color: T.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer", marginBottom: 8 }}>Show more</button>
-                      )}
-                      {isExpanded && (
-                        <button onClick={() => setExpandedReview(null)} style={{ fontSize: 11, color: T.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer", marginBottom: 8 }}>Show less</button>
-                      )}
+                      {/* Review text preview */}
+                      <p style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6, margin: "0 0 10px", maxHeight: isExpanded ? "none" : 52, overflow: "hidden", display: isExpanded ? "block" : "-webkit-box", WebkitLineClamp: isExpanded ? "unset" : 2, WebkitBoxOrient: "vertical" }}>{r.text}</p>
 
-                      {isExpanded && (
-                        <div style={{ marginBottom: 12, padding: 12, borderRadius: T.radiusSm, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>Category Comments</div>
-                          {SCORE_FIELDS.map(f => (
-                            r[`comment_${f}`] && (
-                              <div key={f} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${T.borderLight}` }}>
-                                <div style={{ fontSize: 11, fontWeight: 600, color: T.text }}>{SCORE_LABELS[f]}</div>
-                                <div style={{ fontSize: 11, color: T.textSoft, marginTop: 2, lineHeight: 1.5 }}>{r[`comment_${f}`]}</div>
-                              </div>
-                            )
-                          ))}
-                        </div>
-                      )}
-
-                      <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 10 }}>
-                        {Object.entries(scores).map(([k, v]) => (
-                          <span key={k} style={{ fontSize: 9, padding: "2px 6px", borderRadius: T.radiusFull, background: scoreBg(v), color: scoreColor(v), fontWeight: 700, fontFamily: T.heading }}>{k.slice(0, 3).toUpperCase()} {v}</span>
-                        ))}
-                      </div>
-
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        {r.status !== "published" && (
-                          <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">
-                            {r.status === "pending" ? "Publish" : r.status === "flagged" ? "Approve" : "Restore"}
-                          </Button>
-                        )}
-                        {r.status !== "hidden" && <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>}
-                        {r.status !== "removed" && <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>}
-                        {(r.status === "removed" || r.status === "hidden") && (
-                          <Button onClick={() => setConfirmDialog({
-                            title: "Permanently Delete Review",
-                            message: "This will permanently delete this review from the database. This cannot be undone.",
-                            confirmLabel: "Delete Forever",
-                            variant: "red",
-                            onConfirm: () => deleteReview(r.id),
-                          })} variant="red" style={{ marginLeft: 8 }}>Delete Forever</Button>
+                      {/* Bottom row: date + avg score */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 11, color: T.textMuted }}>{formatDate(r.created_at)}{r.deleted_at ? ` · Deleted ${formatDate(r.deleted_at)}` : ""}</span>
+                        {avgScore && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontSize: 11, color: T.textMuted }}>Avg</span>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: scoreColor(parseFloat(avgScore)), fontFamily: T.heading }}>{avgScore}</span>
+                          </div>
                         )}
                       </div>
                     </div>
+
+                    {/* Expanded section */}
+                    {isExpanded && (
+                      <div style={{ borderTop: `1px solid ${T.border}`, padding: "14px 18px" }}>
+                        {/* Score breakdown */}
+                        {scoreVals.length > 0 && (
+                          <div style={{ marginBottom: 14 }}>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>Scores</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
+                              {Object.entries(scores).map(([k, v]) => (
+                                <div key={k} style={{ textAlign: "center", padding: "6px 0", borderRadius: 8, background: scoreBg(v) }}>
+                                  <div style={{ fontSize: 15, fontWeight: 800, color: scoreColor(v), fontFamily: T.heading }}>{v}</div>
+                                  <div style={{ fontSize: 9, color: T.textMuted, marginTop: 1, textTransform: "uppercase" }}>{SCORE_LABELS[k]?.slice(0, 4) || k.slice(0, 4)}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Category comments */}
+                        {SCORE_FIELDS.some(f => r[`comment_${f}`]) && (
+                          <div style={{ marginBottom: 14, padding: 12, borderRadius: 8, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>Comments</div>
+                            {SCORE_FIELDS.map(f => (
+                              r[`comment_${f}`] && (
+                                <div key={f} style={{ marginBottom: 6 }}>
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: T.text }}>{SCORE_LABELS[f]}: </span>
+                                  <span style={{ fontSize: 11, color: T.textSoft, lineHeight: 1.5 }}>{r[`comment_${f}`]}</span>
+                                </div>
+                              )
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "space-between" }}>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            {r.status !== "published" && (
+                              <Button onClick={(e) => { e.stopPropagation(); updateReviewStatus(r.id, "published"); }} variant="green">
+                                {r.status === "pending" ? "Publish" : r.status === "flagged" ? "Approve" : "Restore"}
+                              </Button>
+                            )}
+                            {r.status !== "hidden" && <Button onClick={(e) => { e.stopPropagation(); updateReviewStatus(r.id, "hidden"); }} variant="purple">Hide</Button>}
+                            {r.status !== "removed" && <Button onClick={(e) => { e.stopPropagation(); updateReviewStatus(r.id, "removed"); }} variant="red">Remove</Button>}
+                            {(r.status === "removed" || r.status === "hidden") && (
+                              <Button onClick={(e) => { e.stopPropagation(); setConfirmDialog({
+                                title: "Permanently Delete Review",
+                                message: "This will permanently delete this review from the database. This cannot be undone.",
+                                confirmLabel: "Delete Forever",
+                                variant: "red",
+                                onConfirm: () => deleteReview(r.id),
+                              }); }} variant="red">Delete Forever</Button>
+                            )}
+                          </div>
+                          <button onClick={(e) => { e.stopPropagation(); setExpandedReview(null); }} style={{ fontSize: 11, color: T.textMuted, background: "none", border: "none", cursor: "pointer", padding: "4px 8px" }}>Collapse</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
-              {filteredReviews.length === 0 && <div style={{ padding: "40px", textAlign: "center", color: T.textMuted, borderRadius: T.radius, background: T.surface, border: `1.5px dashed ${T.border}` }}>No reviews found</div>}
             </div>
+            {filteredReviews.length === 0 && <div style={{ padding: "40px", textAlign: "center", color: T.textMuted, borderRadius: 12, background: T.surface, border: `1.5px dashed ${T.border}` }}>No reviews found</div>}
           </>
         )}
 
@@ -1333,20 +1369,4 @@ export default function AdminDashboard() {
                                   setChurchReports(prev => prev.filter(r => r.church_id !== report.church_id));
                                   showToast("Church deleted", T.red);
                                 }
-                              }}>Delete Church</Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </>
-        )}
-
-      </div>
-    </div>
-  );
-}
+                              }
