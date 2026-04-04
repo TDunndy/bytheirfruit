@@ -348,23 +348,26 @@ export default function AdminDashboard() {
   /* --- ACTIONS --- */
   const updateReviewStatus = async (reviewId, status) => {
     const updateData = { status };
-    if (status === "published" && user) {
+    if (status === "published" && adminUser) {
       updateData.approved_at = new Date().toISOString();
-      updateData.approved_by = user.id;
+      updateData.approved_by = adminUser.id;
     }
     const { error } = await supabase.from("reviews").update(updateData).eq("id", reviewId);
     if (!error) {
       setReviews(prev => prev.map(r => r.id === reviewId ? { ...r, ...updateData } : r));
       showToast(`Review ${status === "published" ? "approved & published" : status === "hidden" ? "hidden" : status === "removed" ? "removed" : "updated"}`);
+    } else {
+      console.error("Failed to update review:", error);
+      showToast("Failed to update review. Please try again.", T.red);
     }
   };
 
   const bulkUpdateReviews = async (status) => {
     const count = selectedReviews.size;
     const updateData = { status };
-    if (status === "published" && user) {
+    if (status === "published" && adminUser) {
       updateData.approved_at = new Date().toISOString();
-      updateData.approved_by = user.id;
+      updateData.approved_by = adminUser.id;
     }
     for (const reviewId of selectedReviews) {
       await supabase.from("reviews").update(updateData).eq("id", reviewId);
@@ -428,9 +431,9 @@ export default function AdminDashboard() {
 
   const saveChurch = async (churchId, updates) => {
     // Track who approved if status is being changed to approved
-    if (updates.status === "approved" && user) {
+    if (updates.status === "approved" && adminUser) {
       updates.approved_at = new Date().toISOString();
-      updates.approved_by = user.id;
+      updates.approved_by = adminUser.id;
     }
     const { error } = await supabase.from("churches").update(updates).eq("id", churchId);
     if (!error) {
@@ -850,19 +853,13 @@ export default function AdminDashboard() {
                       </div>
 
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        {r.status !== "published" && <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">{r.status === "removed" || r.status === "hidden" ? "Restore" : "Publish"}</Button>}
-                        {r.status === "published" && <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>}
-                        {r.status === "published" && <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>}
-                        {r.status === "flagged" && <>
-                          <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">Approve</Button>
-                          <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>
-                          <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>
-                        </>}
-                        {r.status === "pending" && <>
-                          <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">Publish</Button>
-                          <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>
-                          <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>
-                        </>}
+                        {r.status !== "published" && (
+                          <Button onClick={() => updateReviewStatus(r.id, "published")} variant="green">
+                            {r.status === "pending" ? "Publish" : r.status === "flagged" ? "Approve" : "Restore"}
+                          </Button>
+                        )}
+                        {r.status !== "hidden" && <Button onClick={() => updateReviewStatus(r.id, "hidden")} variant="purple">Hide</Button>}
+                        {r.status !== "removed" && <Button onClick={() => updateReviewStatus(r.id, "removed")} variant="red">Remove</Button>}
                         {(r.status === "removed" || r.status === "hidden") && (
                           <Button onClick={() => setConfirmDialog({
                             title: "Permanently Delete Review",
@@ -1410,7 +1407,7 @@ export default function AdminDashboard() {
                       variant: "green",
                       onConfirm: async () => {
                         const pendingIds = reviews.filter(r => r.status === "pending").map(r => r.id);
-                        const approvalData = { status: "published", approved_at: new Date().toISOString(), approved_by: user?.id };
+                        const approvalData = { status: "published", approved_at: new Date().toISOString(), approved_by: adminUser?.id };
                         for (const id of pendingIds) {
                           await supabase.from("reviews").update(approvalData).eq("id", id);
                         }
