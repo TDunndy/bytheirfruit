@@ -1,7 +1,7 @@
 "use client"
 // @ts-nocheck
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');`;
@@ -1028,6 +1028,15 @@ export default function ByTheirFruit() {
   const [userGeoLocation, setUserGeoLocation] = useState(null);
   const [geoRequested, setGeoRequested] = useState(false);
   const [ipLocation, setIpLocation] = useState(null); // { city, state, zip, lat, lng }
+  // Refs mirror the location state so searchChurchesDB can read latest values
+  // without including them as useCallback deps (which would cause an infinite
+  // re-render loop via the debounced search effect).
+  const nearMeLocationRef = useRef(nearMeLocation);
+  const userGeoLocationRef = useRef(userGeoLocation);
+  const ipLocationRef = useRef(ipLocation);
+  useEffect(() => { nearMeLocationRef.current = nearMeLocation; }, [nearMeLocation]);
+  useEffect(() => { userGeoLocationRef.current = userGeoLocation; }, [userGeoLocation]);
+  useEffect(() => { ipLocationRef.current = ipLocation; }, [ipLocation]);
   const [recentlyReviewed, setRecentlyReviewed] = useState([]); // Churches with recent reviews
   const [heroZip, setHeroZip] = useState(""); // Zip input on homepage hero
   const [user, setUser] = useState(null);
@@ -1227,7 +1236,8 @@ export default function ByTheirFruit() {
     try {
       const { count, error } = await supabase
         .from("churches")
-        .select("*", { count: "exact", head: true });
+        .select("*", { count: "exact", head: true })
+        .eq("status", "approved"); // public stat = approved churches only
       if (error) console.error("fetchChurches error:", error);
       setTotalChurchCount(count || 0);
 
@@ -1259,6 +1269,7 @@ export default function ByTheirFruit() {
         if (coords) {
           // Fetch churches with coordinates, apply denomination/state filters
           let q = supabase.from("churches").select("*")
+            .eq("status", "approved") // browse public-approved only
             .not("latitude", "is", null)
             .not("longitude", "is", null);
           if (denomination && denomination !== "All") q = q.eq("denomination", denomination);
@@ -1287,10 +1298,14 @@ export default function ByTheirFruit() {
       }
 
       // Determine if we have user location for proximity-aware search
-      const userLoc = nearMeLocation || userGeoLocation || (ipLocation ? { lat: ipLocation.lat, lng: ipLocation.lng } : null);
+      // Read from refs so this callback doesn't depend on these state values
+      const _nearMeLoc = nearMeLocationRef.current;
+      const _userGeoLoc = userGeoLocationRef.current;
+      const _ipLoc = ipLocationRef.current;
+      const userLoc = _nearMeLoc || _userGeoLoc || (_ipLoc ? { lat: _ipLoc.lat, lng: _ipLoc.lng } : null);
       const useProximity = !!userLoc && !!query;
 
-      let q = supabase.from("churches").select("*");
+      let q = supabase.from("churches").select("*").eq("status", "approved");
       if (query) {
         q = q.ilike("name", `%${query}%`);
       }
@@ -1352,16 +1367,17 @@ export default function ByTheirFruit() {
     } finally {
       setSearchLoading(false);
     }
-  }, [nearMeLocation, userGeoLocation, ipLocation]);
+  }, []); // Stable identity — location values are read from refs above
 
   /* --- NEAR ME: geolocation search --- */
   const searchNearMe = useCallback(async (lat, lng) => {
     setSearchLoading(true);
     try {
-      // Fetch churches that have coordinates, up to 200
+      // Fetch churches that have coordinates, up to 500 (approved only)
       const { data, error } = await supabase
         .from("churches")
         .select("*")
+        .eq("status", "approved")
         .not("latitude", "is", null)
         .not("longitude", "is", null)
         .limit(500);
@@ -1448,13 +1464,22 @@ export default function ByTheirFruit() {
   }, [page]);
 
   // Debounced search for Discover page
+  // Note: searchChurchesDB intentionally omitted from deps — it's a stable
+  // useCallback with [] deps, and including it would cause an infinite loop
+  // when the callback internally updates nearMeLocation (zip proximity path).
   useEffect(() => {
     if (page !== "discover" || nearMeActive) return;
+    // Skip the query while the user is still typing a zip. Partial zip prefix
+    // searches ("1%", "12%", "123%") are not useful and would otherwise cause
+    // the results list to visibly bounce each keystroke as searchLoading
+    // toggles. Only query when the zip is empty or exactly 5 digits.
+    if (filterZip && filterZip.length < 5) return;
     const timer = setTimeout(() => {
       searchChurchesDB(discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, false, sortBy);
     }, 300);
     return () => clearTimeout(timer);
-  }, [discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, sortBy, page, searchChurchesDB]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, sortBy, page, nearMeActive]);
 
   // Debounced search for Rate flow — searches both name and city
   const [rateSearchResults, setRateSearchResults] = useState([]);
@@ -1893,7 +1918,9 @@ export default function ByTheirFruit() {
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [page, discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, searchChurchesDB]);
+    // searchChurchesDB is a stable useCallback — omitted from deps intentionally
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, discoverSearchQuery, filterDenom, filterState, filterCity, filterZip, sortBy]);
 
   /* --- SUBMIT REVIEW TO DB --- */
   const submitReviewToDB = async (reviewData, userId) => {
@@ -2382,13 +2409,15 @@ export default function ByTheirFruit() {
       service_times: addData.serviceTimes || null,
       source: "manual",
       added_by: user.id,
+      status: "pending", // admin-approval queue; public browse filters status=approved
     }).select().single();
 
     if (error) { showToast("Failed to add church: " + error.message, "error"); return; }
     const newChurch = dbChurchToLocal(data);
-    setChurches(prev => [...prev, newChurch]);
+    // Don't append to the public churches list — it's pending approval.
+    // The submitter can still proceed to rate it (review will also be pending).
     setShowAddChurch(false);
-    showToast("Church submitted! It will appear in search results after admin approval.", "success");
+    showToast("Church submitted for review! Your experience will also need approval before appearing publicly.", "success");
     selectChurchToRate(newChurch);
   };
 
@@ -2770,7 +2799,11 @@ export default function ByTheirFruit() {
                 <button onClick={() => startRateFlow()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Add a Church</button>
               </div>
             )}
-            {searchLoading && (
+            {/* Only show the big "Searching..." card on the FIRST search (when
+                there are no current results). Once we have results, the card
+                would otherwise push the list up and down as searchLoading
+                toggles per keystroke. */}
+            {searchLoading && filteredChurches.length === 0 && (
               <div style={{ padding: "40px", textAlign: "center" }}>
                 <div style={{ width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite", margin: "0 auto 12px" }} />
                 <div style={{ fontSize: 13, color: T.textMuted }}>Searching...</div>
