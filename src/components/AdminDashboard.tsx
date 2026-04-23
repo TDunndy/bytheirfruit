@@ -952,6 +952,30 @@ export default function AdminDashboard() {
                   </div>
                   {expandedUser === u.id && (
                     <div style={{ padding: "16px", background: T.surfaceAlt, borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+                      <div style={{ fontWeight: 600, color: T.textMuted, fontSize: 11, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Contact</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <span style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase" }}>Email</span><br />
+                          {u.email ? (
+                            <a href={`mailto:${u.email}`} style={{ color: T.accent, textDecoration: "none", wordBreak: "break-all" }}>{u.email}</a>
+                          ) : <span style={{ color: T.textMuted }}>Not set</span>}
+                        </div>
+                        <div>
+                          <span style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase" }}>Phone</span><br />
+                          {u.phone ? (
+                            <a href={`tel:${u.phone}`} style={{ color: T.accent, textDecoration: "none" }}>{u.phone}</a>
+                          ) : <span style={{ color: T.textMuted }}>Not set</span>}
+                        </div>
+                        <div>
+                          <span style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase" }}>Zip Code</span><br />
+                          {u.zip_code || <span style={{ color: T.textMuted }}>Not set</span>}
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 14 }}>
+                        <span style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase" }}>Address</span><br />
+                        {u.address || <span style={{ color: T.textMuted }}>Not set</span>}
+                      </div>
+                      <div style={{ fontWeight: 600, color: T.textMuted, fontSize: 11, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Demographics</div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
                         <div><span style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase" }}>Gender</span><br />{u.gender || "Not set"}</div>
                         <div><span style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase" }}>Age Range</span><br />{u.age_range || "Not set"}</div>
