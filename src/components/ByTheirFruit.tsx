@@ -174,6 +174,9 @@ function dbChurchToLocal(c) {
     latitude: c.latitude || null,
     longitude: c.longitude || null,
     status: c.status || "approved",
+    subscriptionStatus: c.subscription_status || null,
+    currentPeriodEnd: c.current_period_end || null,
+    stripeCustomerId: c.stripe_customer_id || null,
   };
 }
 
@@ -2255,6 +2258,123 @@ export default function ByTheirFruit() {
     }, 1500);
   };
 
+  /* --- EXPORT REVIEWS TO PDF (board-meeting-ready, client-side) ---
+   * Dynamic-imports jspdf + jspdf-autotable so they aren't in the main bundle.
+   * Owners click "Export PDF" → file downloads instantly.
+   */
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const exportReviewsToPDF = async () => {
+    const oc = myChurchesData.claimed[0];
+    if (!oc) return;
+    setExportingPdf(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const autoTableMod = await import("jspdf-autotable");
+      const autoTable = autoTableMod.default || autoTableMod;
+
+      const doc = new jsPDF({ unit: "pt", format: "letter" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 48;
+
+      // Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.text(oc.name || "Church", margin, 60);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(110);
+      doc.text(`${oc.denomination || ""} · ${oc.city || ""}, ${oc.state || ""}`, margin, 78);
+      doc.setFontSize(9);
+      doc.text(`Generated ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} · ${ownerReviews.length} review${ownerReviews.length === 1 ? "" : "s"}`, margin, 92);
+      doc.setTextColor(0);
+
+      // Summary stats block
+      const ocScores = oc.scores || {};
+      const overall = Object.values(ocScores).length > 0
+        ? Object.values(ocScores).reduce((a, b) => a + b, 0) / Object.values(ocScores).length
+        : 0;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("Summary", margin, 124);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      const summaryLines = [
+        `Overall Score: ${overall > 0 ? overall.toFixed(2) : "—"} / 5`,
+        `Total Reviews: ${ownerReviews.length}`,
+        `Period Covered: ${ownerReviews.length > 0 ? new Date(ownerReviews[ownerReviews.length - 1].created_at).toLocaleDateString() + " – " + new Date(ownerReviews[0].created_at).toLocaleDateString() : "—"}`,
+      ];
+      summaryLines.forEach((line, i) => doc.text(line, margin, 144 + i * 14));
+
+      // Scorecard table
+      const scorecardRows = SCORE_FIELDS.map(f => {
+        const cat = CATEGORIES.find(c => c.id === f);
+        const s = ocScores[f];
+        return [cat ? cat.label : f, s ? s.toFixed(2) : "—"];
+      });
+      autoTable(doc, {
+        startY: 200,
+        head: [["Category", "Score"]],
+        body: scorecardRows,
+        margin: { left: margin, right: margin },
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [22, 163, 74], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+      });
+
+      // Reviews table
+      const finalY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 320;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("Reviews", margin, finalY + 28);
+
+      const reviewRows = ownerReviews.map(r => {
+        const revScores = SCORE_FIELDS.map(f => r[`score_${f}`]).filter(v => v != null);
+        const revAvg = revScores.length > 0 ? (revScores.reduce((a, b) => Number(a) + Number(b), 0) / revScores.length).toFixed(1) : "—";
+        return [
+          new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+          r.reviewer_role || "—",
+          revAvg,
+          (r.text || "").replace(/\s+/g, " ").trim(),
+        ];
+      });
+      autoTable(doc, {
+        startY: finalY + 36,
+        head: [["Date", "Role", "Score", "Comment"]],
+        body: reviewRows,
+        margin: { left: margin, right: margin },
+        styles: { fontSize: 9, cellPadding: 6, valign: "top" },
+        columnStyles: {
+          0: { cellWidth: 70 },
+          1: { cellWidth: 80 },
+          2: { cellWidth: 40 },
+          3: { cellWidth: "auto" },
+        },
+        headStyles: { fillColor: [22, 163, 74], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+      });
+
+      // Footer with bytheirfruit.church
+      const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`bytheirfruit.church · Page ${i} of ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 24, { align: "center" });
+        doc.setTextColor(0);
+      }
+
+      const safeName = (oc.name || "church").replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+      const stamp = new Date().toISOString().slice(0, 10);
+      doc.save(`${safeName}_reviews_${stamp}.pdf`);
+      showToast("PDF exported", "success");
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      showToast("PDF export failed: " + (err as Error).message, "error");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   /* --- CHURCH OWNER RESPONSE TO REVIEW --- */
   const submitChurchResponse = async (reviewId, churchId) => {
     if (!responseText.trim()) return;
@@ -3681,7 +3801,45 @@ export default function ByTheirFruit() {
               </div>
             )}
 
-            {!myChurchesLoading && myChurchesData.claimed.length > 0 && (() => {
+            {/* Subscription gate: claimed but no active subscription. Admins
+                bypass this gate via user.role === 'admin'. */}
+            {!myChurchesLoading && myChurchesData.claimed.length > 0
+              && myChurchesData.claimed[0].subscriptionStatus !== "active"
+              && user?.role !== "admin" && (
+              <div style={{ textAlign: "center", padding: "80px 24px", maxWidth: 560, margin: "0 auto" }}>
+                <div style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, marginBottom: 12, letterSpacing: "-0.02em" }}>
+                  {myChurchesData.claimed[0].subscriptionStatus === "past_due"
+                    ? "Your subscription is past due"
+                    : myChurchesData.claimed[0].subscriptionStatus === "canceled"
+                    ? "Your subscription was canceled"
+                    : "Activate your Church Dashboard"}
+                </div>
+                <p style={{ fontSize: 14, color: T.textSoft, lineHeight: 1.6, marginBottom: 24 }}>
+                  {myChurchesData.claimed[0].subscriptionStatus === "past_due"
+                    ? "We couldn't process your last payment. Update your payment method to restore access to your dashboard."
+                    : myChurchesData.claimed[0].subscriptionStatus === "canceled"
+                    ? "Reactivate your subscription to keep responding to reviews and tracking your church's growth."
+                    : "Your church is claimed. Activate your $39/month subscription to unlock reviews, benchmarks, demographics, and PDF exports."}
+                </p>
+                <button
+                  onClick={() => {
+                    const email = user?.email || "";
+                    const url = `https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00?prefilled_email=${encodeURIComponent(email)}&client_reference_id=${encodeURIComponent(user?.id || "")}`;
+                    window.open(url, "_blank");
+                  }}
+                  style={{ padding: "12px 24px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}
+                >
+                  {myChurchesData.claimed[0].subscriptionStatus === "past_due" ? "Update payment method" : "Activate subscription"}
+                </button>
+                <div style={{ fontSize: 11, color: T.textMuted, marginTop: 16 }}>
+                  Already paid? Subscription status updates within a minute of payment.
+                </div>
+              </div>
+            )}
+
+            {!myChurchesLoading && myChurchesData.claimed.length > 0
+              && (myChurchesData.claimed[0].subscriptionStatus === "active" || user?.role === "admin")
+              && (() => {
               const oc = myChurchesData.claimed[0];
               // dbChurchToLocal stores per-category scores in oc.scores ({ teaching: 4.2, ... }),
               // not as oc.score_teaching. Read from oc.scores directly.
@@ -3917,6 +4075,25 @@ export default function ByTheirFruit() {
                   {/* ========== EXPERIENCES TAB ========== */}
                   {dashboardTab === "experiences" && (
                     <FadeIn>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                        <div style={{ fontSize: 13, color: T.textMuted }}>
+                          {ownerReviews.length} review{ownerReviews.length === 1 ? "" : "s"} total
+                        </div>
+                        <button
+                          onClick={exportReviewsToPDF}
+                          disabled={exportingPdf || ownerReviews.length === 0}
+                          style={{
+                            padding: "8px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600,
+                            background: exportingPdf || ownerReviews.length === 0 ? T.surfaceAlt : T.text,
+                            color: exportingPdf || ownerReviews.length === 0 ? T.textMuted : (T === DARK ? "#000" : "#fff"),
+                            border: `1px solid ${exportingPdf || ownerReviews.length === 0 ? T.border : T.text}`,
+                            cursor: exportingPdf || ownerReviews.length === 0 ? "not-allowed" : "pointer",
+                            fontFamily: T.body, transition: "all 0.15s",
+                          }}
+                        >
+                          {exportingPdf ? "Generating PDF…" : "Export PDF"}
+                        </button>
+                      </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                         {ownerReviews.length > 0 ? ownerReviews.map(rev => {
                           const revScores = SCORE_FIELDS.map(f => rev[`score_${f}`]).filter(v => v != null);
