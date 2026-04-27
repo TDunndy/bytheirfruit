@@ -1829,6 +1829,17 @@ export default function ByTheirFruit() {
     if (mounted) fetchChurches();
   }, [mounted, fetchChurches]);
 
+  /* --- AUTO-LOAD CHURCH DASHBOARD on direct navigation/refresh ---
+   * Without this, hitting /dashboard via URL or page refresh leaves the
+   * page stuck on "loading" because fetchMyChurches was previously only
+   * wired to the navbar button click handler. */
+  useEffect(() => {
+    if (page === "dashboard" && user && hasClaimed
+        && myChurchesData.claimed.length === 0 && !myChurchesLoading) {
+      fetchMyChurches(user.id);
+    }
+  }, [page, user, hasClaimed, myChurchesData.claimed.length, myChurchesLoading, fetchMyChurches]);
+
   /* --- REQUEST GEOLOCATION ON PAGE LOAD (silent, non-blocking) --- */
   useEffect(() => {
     if (!mounted || geoRequested) return;
@@ -3662,10 +3673,19 @@ export default function ByTheirFruit() {
               </div>
             )}
 
+            {!myChurchesLoading && myChurchesData.claimed.length === 0 && (
+              <div style={{ textAlign: "center", padding: "80px 24px", maxWidth: 560, margin: "0 auto" }}>
+                <div style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, marginBottom: 12, letterSpacing: "-0.02em" }}>You haven't claimed a church yet</div>
+                <p style={{ fontSize: 14, color: T.textSoft, lineHeight: 1.6, marginBottom: 24 }}>The Church Dashboard is for verified church owners. Find your church and claim it to access reviews, benchmarks, and demographics for your congregation.</p>
+                <button onClick={() => navigate("browse")} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Find your church</button>
+              </div>
+            )}
+
             {!myChurchesLoading && myChurchesData.claimed.length > 0 && (() => {
               const oc = myChurchesData.claimed[0];
-              const ocScores = {};
-              SCORE_FIELDS.forEach(f => { if (oc[`score_${f}`] != null) ocScores[f] = parseFloat(oc[`score_${f}`]); });
+              // dbChurchToLocal stores per-category scores in oc.scores ({ teaching: 4.2, ... }),
+              // not as oc.score_teaching. Read from oc.scores directly.
+              const ocScores = oc.scores || {};
               const overall = Object.values(ocScores).length > 0 ? Object.values(ocScores).reduce((a, b) => a + b, 0) / Object.values(ocScores).length : 0;
               const benchmarks = dashboardBenchmarks[benchmarkLevel] || {};
 
