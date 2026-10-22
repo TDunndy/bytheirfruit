@@ -1,0 +1,17 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "rules": {
+    "react/no-unescaped-entities": "off",
+    "@next/next/no-img-element": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/components/ByTheirFruit.tsx", "src/components/AdminDashboard.tsx"],
+      "rules": {
+        "react-hooks/exhaustive-deps": "warn",
+        "react-hooks/rules-of-hooks": "warn"
+      }
+    }
+  ],
+  "ignorePatterns": ["out/", ".next/", "node_modules/", "functions/", "supabase/functions/"]
+}

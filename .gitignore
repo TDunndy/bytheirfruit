@@ -4,3 +4,5 @@ out/
 .env.local
 .env*.local
 *.tsbuildinfo
+supabase/.temp/
+.eslintcache
