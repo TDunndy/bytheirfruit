@@ -124,8 +124,9 @@ rename the local files to match.
 - Authentication → URL configuration: add `https://bytheirfruit.church` and
   `https://bytheirfruit.church/**` to redirect URLs (PKCE flow).
 - Stripe → Developers → Webhooks: the only endpoint should be
-  `https://ffqmbhftivmiubvtzhhr.supabase.co/functions/v1/stripe-webhook`. The
-  old `/api/stripe-webhook` Cloudflare handler was removed.
+  `https://ffqmbhftivmiubvtzhhr.supabase.co/functions/v1/stripe-webhook`.
+  The legacy Cloudflare handler `functions/api/stripe-webhook.js` is kept
+  until that is confirmed; delete it afterwards.
 
 ## 6. Verify
 
