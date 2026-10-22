@@ -1,0 +1,58 @@
+# Supabase CLI configuration. Run `supabase link --project-ref ffqmbhftivmiubvtzhhr`
+# once, then `supabase db push` to apply new migrations.
+project_id = "bytheirfruit"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.migrations]
+schema_paths = []
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://bytheirfruit.church", "https://bytheirfruit.church/**"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+
+[storage]
+enabled = true
+file_size_limit = "5MiB"
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.notify-new-review]
+verify_jwt = false
+
+[functions.weekly-digest]
+verify_jwt = false
+
+[functions.send-verification-email]
+verify_jwt = true
+
+[functions.notify-admin-report]
+verify_jwt = true
