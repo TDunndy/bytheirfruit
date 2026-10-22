@@ -1,5 +1,6 @@
-"use client"
 // @ts-nocheck
+// Legacy component: still untyped. New code lives in src/lib and is strict.
+"use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
@@ -27,6 +28,17 @@ function scoreHue(s) { const t = Math.max(0, Math.min(1, (s - 1) / 4)); const ea
 const scoreColor = (s) => `hsl(${scoreHue(s)}, 72%, 45%)`;
 const scoreBg = (s) => `hsl(${scoreHue(s)}, 50%, 12%)`;
 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
+// reviews rows have per-category scores but no stored overall; derive it.
+const reviewAverage = (r) => {
+  const vals = SCORE_FIELDS.map(f => r[`score_${f}`]).filter(v => v != null).map(Number);
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+};
+// CSV cell: quote, escape quotes, and neutralise spreadsheet formula injection.
+const csvCell = (v) => {
+  let s = v == null ? "" : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return `"${s.replace(/"/g, '""')}"`;
+};
 const formatDateTime = (d) => d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "—";
 
 function Stat({ label, value, sub, color, icon }) {
@@ -299,18 +311,6 @@ export default function AdminDashboard() {
     return Object.entries(weeks).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
   }, [reviews]);
 
-  // Denomination breakdown from reviews
-  const reviewsByDenom = useMemo(() => {
-    const counts = {};
-    reviews.forEach(r => {
-      const church = r.churches;
-      if (church) {
-        // We don't have denomination from the join, but we can count by church
-      }
-    });
-    return counts;
-  }, [reviews]);
-
   // User demographics
   const demographics = useMemo(() => {
     const gender = { Male: 0, Female: 0, "Prefer not to answer": 0, "Not set": 0 };
@@ -338,7 +338,8 @@ export default function AdminDashboard() {
         const key = r.churches.id;
         if (!counts[key]) counts[key] = { name: r.churches.name, city: r.churches.city, state: r.churches.state, count: 0, totalScore: 0 };
         counts[key].count++;
-        if (r.score_overall) counts[key].totalScore += parseFloat(r.score_overall);
+        const avg = reviewAverage(r);
+        if (avg != null) counts[key].totalScore += avg;
       }
     });
     return Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 10);
@@ -380,8 +381,10 @@ export default function AdminDashboard() {
       updateData.approved_at = new Date().toISOString();
       updateData.approved_by = adminUser.id;
     }
-    for (const reviewId of selectedReviews) {
-      await supabase.from("reviews").update(updateData).eq("id", reviewId);
+    const { error } = await supabase.from("reviews").update(updateData).in("id", Array.from(selectedReviews));
+    if (error) {
+      showToast(`Failed to update reviews: ${error.message || "Unknown error"}`, T.red);
+      return;
     }
     setReviews(prev => prev.map(r => selectedReviews.has(r.id) ? { ...r, ...updateData } : r));
     setSelectedReviews(new Set());
@@ -1242,9 +1245,8 @@ export default function AdminDashboard() {
                       variant: "amber",
                       onConfirm: async () => {
                         const flaggedIds = reviews.filter(r => r.status === "flagged").map(r => r.id);
-                        for (const id of flaggedIds) {
-                          await supabase.from("reviews").update({ status: "removed" }).eq("id", id);
-                        }
+                        const { error } = await supabase.from("reviews").update({ status: "removed" }).in("id", flaggedIds);
+                        if (error) { showToast(`Failed: ${error.message}`, T.red); return; }
                         setReviews(prev => prev.map(r => r.status === "flagged" ? { ...r, status: "removed" } : r));
                         showToast(`${flaggedIds.length} flagged reviews removed`);
                       },
@@ -1262,9 +1264,8 @@ export default function AdminDashboard() {
                       onConfirm: async () => {
                         const pendingIds = reviews.filter(r => r.status === "pending").map(r => r.id);
                         const approvalData = { status: "published", approved_at: new Date().toISOString(), approved_by: adminUser?.id };
-                        for (const id of pendingIds) {
-                          await supabase.from("reviews").update(approvalData).eq("id", id);
-                        }
+                        const { error } = await supabase.from("reviews").update(approvalData).in("id", pendingIds);
+                        if (error) { showToast(`Failed: ${error.message}`, T.red); return; }
                         setReviews(prev => prev.map(r => r.status === "pending" ? { ...r, status: "published" } : r));
                         showToast(`${pendingIds.length} pending reviews published`);
                       },
@@ -1300,7 +1301,7 @@ export default function AdminDashboard() {
                   const { data } = await supabase.from("profiles").select("display_name,role,status,gender,age_range,income_bracket,provider,created_at");
                   if (data) {
                     const csv = "Name,Role,Status,Gender,Age,Income,Provider,Joined\n" + data.map(u =>
-                      `"${u.display_name}",${u.role},${u.status},${u.gender || ""},${u.age_range || ""},${u.income_bracket || ""},${u.provider || ""},${u.created_at}`
+                      [u.display_name, u.role, u.status, u.gender, u.age_range, u.income_bracket, u.provider, u.created_at].map(csvCell).join(",")
                     ).join("\n");
                     const blob = new Blob([csv], { type: "text/csv" });
                     const url = URL.createObjectURL(blob);
@@ -1311,9 +1312,11 @@ export default function AdminDashboard() {
                 <Button onClick={async () => {
                   const { data } = await supabase.from("reviews").select("*, profiles!reviews_user_id_fkey(display_name), churches!reviews_church_id_fkey(name, city, state)").order("created_at", { ascending: false });
                   if (data) {
-                    const csv = "Reviewer,Church,City,State,Status,Score,Text,Date\n" + data.map(r =>
-                      `"${r.profiles?.display_name || ""}","${r.churches?.name || ""}","${r.churches?.city || ""}","${r.churches?.state || ""}",${r.status},${r.score_overall || ""},"${(r.text || "").replace(/"/g, '""').slice(0, 200)}",${r.created_at}`
-                    ).join("\n");
+                    const csv = "Reviewer,Church,City,State,Status,Score,Text,Date\n" + data.map(r => {
+                      const avg = reviewAverage(r);
+                      return [r.profiles?.display_name, r.churches?.name, r.churches?.city, r.churches?.state, r.status,
+                        avg == null ? "" : avg.toFixed(2), (r.text || "").slice(0, 200), r.created_at].map(csvCell).join(",");
+                    }).join("\n");
                     const blob = new Blob([csv], { type: "text/csv" });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a"); a.href = url; a.download = "reviews_export.csv"; a.click();
@@ -1332,7 +1335,7 @@ export default function AdminDashboard() {
 
                 useEffect(() => {
                   async function loadSubscribers() {
-                    const { data, error } = await supabase.from("newsletter_subscribers").select("*").order("created_at", { ascending: false });
+                    const { data, error } = await supabase.from("newsletter_subscribers").select("*").order("subscribed_at", { ascending: false });
                     if (!error && data) setSubscribers(data);
                     setNlLoading(false);
                   }
@@ -1342,7 +1345,7 @@ export default function AdminDashboard() {
                 const filtered = subscribers.filter(s => !nlSearch || s.email.toLowerCase().includes(nlSearch.toLowerCase()));
 
                 const downloadCSV = () => {
-                  const rows = "Email,Subscribed Date\n" + filtered.map(s => `${s.email},${new Date(s.created_at).toLocaleDateString("en-US")}`).join("\n");
+                  const rows = "Email,Subscribed Date\n" + filtered.map(s => [s.email, new Date(s.subscribed_at || s.created_at).toLocaleDateString("en-US")].map(csvCell).join(",")).join("\n");
                   const blob = new Blob([rows], { type: "text/csv" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a"); a.href = url; a.download = `btf-newsletter-subscribers-${new Date().toISOString().split("T")[0]}.csv`; a.click();
@@ -1384,7 +1387,7 @@ export default function AdminDashboard() {
                             {filtered.map((sub, i) => (
                               <div key={sub.id || i} style={{ display: "grid", gridTemplateColumns: "1fr 140px 80px", padding: "8px 14px", borderBottom: i < filtered.length - 1 ? `1px solid ${T.borderLight}` : "none", alignItems: "center", fontSize: 12 }}>
                                 <div style={{ color: T.text, fontWeight: 500 }}>{sub.email}</div>
-                                <div style={{ color: T.textMuted, fontSize: 11 }}>{new Date(sub.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                                <div style={{ color: T.textMuted, fontSize: 11 }}>{new Date(sub.subscribed_at || sub.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
                                 <button onClick={async () => {
                                   await supabase.from("newsletter_subscribers").delete().eq("id", sub.id);
                                   setSubscribers(prev => prev.filter(s => s.id !== sub.id));

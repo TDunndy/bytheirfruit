@@ -1,8 +1,13 @@
-"use client"
 // @ts-nocheck
+// Legacy component: still untyped. New code lives in src/lib and is strict.
+"use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  churchesNear, geocodeZip as geocodeZipDb, requestClaimCode, verifyClaimCode as verifyClaimCodeRpc,
+  recordReviewLocation, fetchChurchDemographics, updateChurchProfile, PUBLIC_REVIEW_SELECT,
+} from "@/lib/api";
 
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');`;
 
@@ -64,6 +69,8 @@ function useTheme() {
 }
 
 const MIN_REVIEWS_FOR_SCORE = 3;
+// Authors can edit for 7 days after posting; mirrors the RLS policy exactly.
+const EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const US_STATES = [
   "All", "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
@@ -117,12 +124,18 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/* --- GEOCODE ZIP CODE TO COORDINATES (OpenStreetMap Nominatim, free, no key) --- */
+/* --- GEOCODE ZIP CODE TO COORDINATES ---
+ * Primary: zip centroids derived from our own church dataset (geocode_zip RPC).
+ * Fallback: OpenStreetMap Nominatim for zips we have no churches in. */
 async function geocodeZip(zip) {
   try {
-    const resp = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${zip}&country=US&format=json&limit=1`, {
-      headers: { "User-Agent": "ByTheirFruit/1.0" }
-    });
+    const hit = await geocodeZipDb(zip);
+    if (hit) return hit;
+  } catch (e) {
+    console.error("Geocode zip (db) error:", e);
+  }
+  try {
+    const resp = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${encodeURIComponent(zip)}&country=US&format=json&limit=1`);
     const data = await resp.json();
     if (data && data.length > 0) {
       return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
@@ -304,7 +317,9 @@ function dbReviewToLocal(r) {
   });
   return {
     id: r.id,
-    author: r.profiles?.display_name || "Anonymous",
+    author: r.public_profiles?.display_name || r.profiles?.display_name || "Anonymous",
+    status: r.status,
+    pending: r.status === "pending",
     role: r.reviewer_role,
     date: new Date(r.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
     text: r.text,
@@ -315,7 +330,7 @@ function dbReviewToLocal(r) {
     responses: (r.church_responses || []).map(resp => ({
       id: resp.id,
       text: resp.text,
-      author: resp.profiles?.display_name || "Church Admin",
+      author: resp.public_profiles?.display_name || resp.profiles?.display_name || "Church Admin",
       date: new Date(resp.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
     })),
   };
@@ -873,8 +888,10 @@ function ReviewCard({ rev, delay = 0, userId, nameLevel = "public", onDelete }) 
   return (
     <FadeIn delay={delay}>
       <div style={{ padding: "20px 22px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}`, marginBottom: 8, position: "relative" }}>
-        {rev.pending && (
-          <div style={{ position: "absolute", top: 12, right: 14, padding: "3px 8px", borderRadius: T.radiusFull, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, fontSize: 10, fontWeight: 600, color: T.amber }}>Under review</div>
+        {isOwnReview && rev.status && rev.status !== "published" && (
+          <div style={{ position: "absolute", top: 12, right: 14, padding: "3px 8px", borderRadius: T.radiusFull, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, fontSize: 10, fontWeight: 600, color: T.amber }}>
+            {rev.status === "pending" ? "Under review" : rev.status === "hidden" ? "Hidden by moderators" : rev.status === "flagged" ? "Flagged for review" : "Removed"}
+          </div>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1202,9 +1219,6 @@ export default function ByTheirFruit() {
   const [responseText, setResponseText] = useState("");
   const [respondingTo, setRespondingTo] = useState(null);
   const [responseSubmitting, setResponseSubmitting] = useState(false);
-  // Reviewer history (for church owners to see a reviewer's other experiences)
-  const [reviewerHistory, setReviewerHistory] = useState(null); // { userId, name, reviews: [] }
-  const [reviewerHistoryLoading, setReviewerHistoryLoading] = useState(false);
   // Church report modal
   const [showReportModal, setShowReportModal] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -1270,29 +1284,18 @@ export default function ByTheirFruit() {
       if (zip && zip.length === 5 && !query && !city) {
         const coords = await geocodeZip(zip);
         if (coords) {
-          // Fetch churches with coordinates, apply denomination/state filters
-          let q = supabase.from("churches").select("*")
-            .eq("status", "approved") // browse public-approved only
-            .not("latitude", "is", null)
-            .not("longitude", "is", null);
-          if (denomination && denomination !== "All") q = q.eq("denomination", denomination);
-          if (state && state !== "All") q = q.eq("state", state);
-          q = q.limit(500);
-          const { data, error } = await q;
-          if (error) {
-            console.error("Zip proximity error:", error);
-            if (!_retried) { await supabase.auth.getSession(); return searchChurchesDB(query, denomination, state, city, zip, true, sort); }
-          }
-          if (!error && data) {
-            const withDist = data.map(c => ({
-              ...c,
-              _dist: haversineDistance(coords.lat, coords.lng, c.latitude, c.longitude)
-            })).sort((a, b) => a._dist - b._dist).slice(0, 50);
+          // Radius search runs in the database (GiST index), sorted by distance.
+          try {
+            const rows = await churchesNear(coords.lat, coords.lng, { radiusMiles: 50, denomination, state, limit: 50 });
             const distMap = {};
-            withDist.forEach(c => { distMap[c.id] = c._dist; });
+            rows.forEach(c => { distMap[c.id] = c.distance_miles; });
             setNearMeDistances(distMap);
             setNearMeLocation(coords);
-            setChurches(withDist.map(dbChurchToLocal));
+            setChurches(rows.map(dbChurchToLocal));
+          } catch (error) {
+            console.error("Zip proximity error:", error);
+            if (!_retried) { await supabase.auth.getSession(); return searchChurchesDB(query, denomination, state, city, zip, true, sort); }
+            showToast("Search failed. Please refresh the page and try again.", "error");
           }
           setSearchLoading(false);
           return;
@@ -1376,25 +1379,14 @@ export default function ByTheirFruit() {
   const searchNearMe = useCallback(async (lat, lng) => {
     setSearchLoading(true);
     try {
-      // Fetch churches that have coordinates, up to 500 (approved only)
-      const { data, error } = await supabase
-        .from("churches")
-        .select("*")
-        .eq("status", "approved")
-        .not("latitude", "is", null)
-        .not("longitude", "is", null)
-        .limit(500);
-      if (error) { console.error("Near me error:", error); return; }
-      if (!data) return;
-      // Calculate distances and sort
-      const withDist = data.map(c => ({
-        ...c,
-        _dist: haversineDistance(lat, lng, c.latitude, c.longitude)
-      })).sort((a, b) => a._dist - b._dist).slice(0, 50);
+      // Radius search in the database: nearest approved churches within 50
+      // miles, widening to 150 miles for rural areas with few results.
+      let rows = await churchesNear(lat, lng, { radiusMiles: 50, limit: 50 });
+      if (rows.length < 10) rows = await churchesNear(lat, lng, { radiusMiles: 150, limit: 50 });
       const distMap = {};
-      withDist.forEach(c => { distMap[c.id] = c._dist; });
+      rows.forEach(c => { distMap[c.id] = c.distance_miles; });
       setNearMeDistances(distMap);
-      setChurches(withDist.map(dbChurchToLocal));
+      setChurches(rows.map(dbChurchToLocal));
     } catch (err) {
       console.error("Near me exception:", err);
     } finally {
@@ -1412,7 +1404,7 @@ export default function ByTheirFruit() {
       return;
     }
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
+      showToast("Geolocation is not supported by your browser. Try entering your zip code instead.", "error");
       return;
     }
     setNearMeLoading(true);
@@ -1440,8 +1432,8 @@ export default function ByTheirFruit() {
           searchNearMe(loc.lat, loc.lng);
           return;
         }
-        if (err.code === 1) alert("Location access was denied. Try entering your zip code instead.");
-        else alert("Could not determine your location. Try entering your zip code instead.");
+        if (err.code === 1) showToast("Location access was denied. Try entering your zip code instead.", "error");
+        else showToast("Could not determine your location. Try entering your zip code instead.", "error");
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -1505,9 +1497,9 @@ export default function ByTheirFruit() {
   const fetchReviewsForChurch = useCallback(async (churchId) => {
     const { data, error } = await supabase
       .from("reviews")
-      .select("*, profiles!reviews_user_id_fkey(display_name, avatar_url), church_responses(id, text, created_at, profiles!church_responses_responder_id_fkey(display_name)), review_likes(user_id), review_photos(id, storage_path, caption, sort_order)")
+      .select(PUBLIC_REVIEW_SELECT)
       .eq("church_id", churchId)
-      .in("status", ["published", "pending", "hidden", "flagged"])
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
     if (!error && data) {
       const reviews = data.map(r => {
@@ -1618,9 +1610,9 @@ export default function ByTheirFruit() {
     // Fetch all reviews for this church with reviewer profiles
     const { data: reviews } = await supabase
       .from("reviews")
-      .select("*, profiles!reviews_user_id_fkey(display_name, gender, age_range, income_bracket)")
+      .select("*, public_profiles!reviews_user_id_fkey(display_name)")
       .eq("church_id", churchId)
-      .in("status", ["published", "pending", "hidden", "flagged"])
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
     setOwnerReviews(reviews || []);
 
@@ -1650,28 +1642,20 @@ export default function ByTheirFruit() {
       .order("snapshot_date", { ascending: true });
     setDashboardTrends(snapshots || []);
 
-    // Compute demographics from reviewer profiles
-    if (reviews && reviews.length > 0) {
-      const genderCounts = {}, ageCounts = {}, incomeCounts = {}, roleCounts = {};
-      const scoreAvgs = {};
-      reviews.forEach(r => {
-        const g = r.profiles?.gender || "Not specified";
-        const a = r.profiles?.age_range || "Not specified";
-        const inc = r.profiles?.income_bracket || "Not specified";
-        const role = r.reviewer_role || "Not specified";
-        genderCounts[g] = (genderCounts[g] || 0) + 1;
-        ageCounts[a] = (ageCounts[a] || 0) + 1;
-        incomeCounts[inc] = (incomeCounts[inc] || 0) + 1;
-        roleCounts[role] = (roleCounts[role] || 0) + 1;
-      });
-      SCORE_FIELDS.forEach(f => {
-        const vals = reviews.map(r => r[`score_${f}`]).filter(v => v != null);
-        if (vals.length > 0) scoreAvgs[f] = vals.reduce((a, b) => a + b, 0) / vals.length;
-      });
-      setOwnerDemographics({ genderCounts, ageCounts, incomeCounts, roleCounts, scoreAvgs, totalReviews: reviews.length });
-    } else {
-      setOwnerDemographics({ genderCounts: {}, ageCounts: {}, incomeCounts: {}, roleCounts: {}, scoreAvgs: {}, totalReviews: 0 });
-    }
+    // Category averages come from the reviews the owner can see. Reviewer
+    // demographics are aggregated server-side and suppressed below a minimum
+    // review count so no individual reviewer can be singled out.
+    const scoreAvgs = {};
+    SCORE_FIELDS.forEach(f => {
+      const vals = (reviews || []).map(r => r[`score_${f}`]).filter(v => v != null);
+      if (vals.length > 0) scoreAvgs[f] = vals.reduce((a, b) => a + b, 0) / vals.length;
+    });
+    let demo = { total: 0, suppressed: true };
+    try { demo = await fetchChurchDemographics(churchId); } catch (e) { console.error("Demographics error:", e); }
+    setOwnerDemographics({
+      genderCounts: demo.gender || {}, ageCounts: demo.age || {}, incomeCounts: demo.income || {}, roleCounts: demo.role || {},
+      scoreAvgs, totalReviews: (reviews || []).length, suppressed: !!demo.suppressed, minRequired: demo.min_required || 5,
+    });
 
     // Fetch church responses
     const { data: responses } = await supabase.from("church_responses").select("*").eq("church_id", churchId);
@@ -1974,15 +1958,6 @@ export default function ByTheirFruit() {
       }
     }
 
-    // Calculate distance if reviewer location and church location are available
-    const church = churches.find(c => c.id === churchId);
-    let distanceMiles = null;
-    let locationVerified = false;
-    if (reviewerLat && reviewerLng && church?.latitude && church?.longitude) {
-      distanceMiles = Math.round(haversineDistance(reviewerLat, reviewerLng, church.latitude, church.longitude) * 10) / 10;
-      locationVerified = true;
-    }
-
     const row = {
       church_id: churchId,
       user_id: userId,
@@ -1990,10 +1965,6 @@ export default function ByTheirFruit() {
       text,
       status: "pending",
       last_visited: lastVisited || null,
-      reviewer_lat: reviewerLat || null,
-      reviewer_lng: reviewerLng || null,
-      distance_miles: distanceMiles,
-      location_verified: locationVerified,
     };
     SCORE_FIELDS.forEach(f => {
       row[`score_${f}`] = scores[f] != null ? Math.round(scores[f]) : null;
@@ -2042,57 +2013,14 @@ export default function ByTheirFruit() {
       }
     }
 
-    // --- GEO-FLAG CHECK: After successful new review, check for suspicious multi-state activity ---
-    if (!isEdit) {
+    // Where was this written from? Stored in a moderator-only table; the
+    // database computes the distance, sets location_verified and applies any
+    // anti-abuse holds (multi-state activity, far-away submissions).
+    if (!isEdit && reviewId && reviewerLat && reviewerLng) {
       try {
-        // Get all states this user has reviewed churches in
-        const { data: userReviewData } = await supabase
-          .from("reviews")
-          .select("church_id")
-          .eq("user_id", userId);
-
-        if (userReviewData && userReviewData.length >= 2) {
-          const churchIds = userReviewData.map(r => r.church_id);
-          const { data: churchData } = await supabase
-            .from("churches")
-            .select("state")
-            .in("id", churchIds);
-
-          if (churchData) {
-            const uniqueStates = [...new Set(churchData.map(c => c.state).filter(Boolean))];
-            // If reviewing churches in 3+ different states, flag the user
-            if (uniqueStates.length >= 3) {
-              await supabase
-                .from("profiles")
-                .update({
-                  review_suspended: true,
-                  suspension_reason: `Auto-flagged: reviewed churches across ${uniqueStates.length} states (${uniqueStates.join(", ")})`
-                })
-                .eq("id", userId);
-
-              showToast("Thanks for your experience! We noticed activity across several states — we'll verify your experiences within 24-48 hours.", "info");
-            }
-          }
-        }
+        await recordReviewLocation(reviewId, userId, reviewerLat, reviewerLng);
       } catch (err) {
-        console.error("Geo-flag check error:", err);
-        // Don't block the review if the flag check fails
-      }
-    }
-
-    // --- DISTANCE FLAG: Auto-flag submissions 50+ miles from church ---
-    if (!isEdit && distanceMiles !== null && distanceMiles > 50) {
-      try {
-        await supabase
-          .from("profiles")
-          .update({
-            review_suspended: true,
-            suspension_reason: `Auto-flagged: submitted experience from ${Math.round(distanceMiles)} miles away from ${church?.name || "church"}`
-          })
-          .eq("id", userId);
-        showToast("Thanks for your submission! Because your location is far from this church, our team will verify it within 24-48 hours.", "info");
-      } catch (err) {
-        console.error("Distance flag error:", err);
+        console.error("Review location error:", err);
       }
     }
 
@@ -2151,14 +2079,11 @@ export default function ByTheirFruit() {
     setClaimSubmitting(true);
     setVerifyError("");
 
-    // Call edge function to generate code and send email
-    const { data, error } = await supabase.functions.invoke("send-verification-email", {
-      body: { churchId, claimEmail: claimData.workEmail, userId: user.id },
-    });
-
-    if (error || data?.error) {
+    // The edge function identifies the claimant from the session JWT.
+    const sent = await requestClaimCode(churchId, claimData.workEmail);
+    if (!sent.ok) {
       setClaimSubmitting(false);
-      showToast(data?.error || error?.message || "Failed to send verification email", "error");
+      showToast(sent.error || "Failed to send verification email", "error");
       return;
     }
 
@@ -2184,55 +2109,39 @@ export default function ByTheirFruit() {
     setClaimSubmitting(true);
     setVerifyError("");
 
-    // Check code against church_claims table
-    const { data: claim, error } = await supabase
-      .from("church_claims")
-      .select("verification_code")
-      .eq("church_id", churchId)
-      .eq("user_id", user.id)
-      .single();
-
-    if (error || !claim) {
+    // Verified server-side: compares the hashed code, enforces expiry and
+    // attempt limits, and claims the church (RLS blocks the client from that).
+    const result = await verifyClaimCodeRpc(churchId, verifyCodeInput.trim());
+    if (!result.ok) {
       setClaimSubmitting(false);
-      setVerifyError("No pending claim found. Please try again.");
+      setVerifyError(result.error || "Verification failed. Please try again.");
       return;
     }
 
-    if (claim.verification_code !== verifyCodeInput.trim()) {
-      setClaimSubmitting(false);
-      setVerifyError("Incorrect code. Please check your email and try again.");
-      return;
+    // Claimants may only edit church profile fields; a DB trigger enforces the list.
+    try {
+      await updateChurchProfile(churchId, {
+        service_days: claimData.serviceDays,
+        avg_attendance: claimData.avgAttendance ? parseInt(claimData.avgAttendance) : null,
+        staff_count: claimData.staffCount ? parseInt(claimData.staffCount) : null,
+        volunteer_count: claimData.volunteerCount ? parseInt(claimData.volunteerCount) : null,
+        campus_count: claimData.campusCount ? parseInt(claimData.campusCount) : null,
+        programs: claimData.programs.length > 0 ? claimData.programs : null,
+        website: claimData.website || null,
+        email: claimData.churchEmail || null,
+        phone: claimData.churchPhone || null,
+        facebook_url: claimData.facebook || null,
+        instagram_url: claimData.instagram || null,
+        youtube_url: claimData.youtube || null,
+        livestream_url: claimData.livestream || null,
+        pastor_name: claimData.pastorName || null,
+        year_founded: claimData.yearFounded ? parseInt(claimData.yearFounded) : null,
+        description: claimData.description || null,
+      });
+    } catch (err) {
+      console.error("Church profile update failed:", err);
     }
-
-    // Code correct — mark as verified
-    await supabase.from("church_claims").update({
-      verified: true,
-      verified_at: new Date().toISOString(),
-    }).eq("church_id", churchId).eq("user_id", user.id);
-
-    // Update church record with claim info and form data
-    await supabase.from("churches").update({
-      claimed_by: user.id,
-      claimed_at: new Date().toISOString(),
-      claim_email: claimData.workEmail,
-      claim_verified: true,
-      service_days: claimData.serviceDays,
-      avg_attendance: claimData.avgAttendance ? parseInt(claimData.avgAttendance) : null,
-      staff_count: claimData.staffCount ? parseInt(claimData.staffCount) : null,
-      volunteer_count: claimData.volunteerCount ? parseInt(claimData.volunteerCount) : null,
-      campus_count: claimData.campusCount ? parseInt(claimData.campusCount) : null,
-      programs: claimData.programs.length > 0 ? claimData.programs : null,
-      website: claimData.website || null,
-      email: claimData.churchEmail || null,
-      phone: claimData.churchPhone || null,
-      facebook_url: claimData.facebook || null,
-      instagram_url: claimData.instagram || null,
-      youtube_url: claimData.youtube || null,
-      livestream_url: claimData.livestream || null,
-      pastor_name: claimData.pastorName || null,
-      year_founded: claimData.yearFounded ? parseInt(claimData.yearFounded) : null,
-      description: claimData.description || null,
-    }).eq("id", churchId);
+    setHasClaimed(true);
 
     setClaimSubmitting(false);
     setClaimStep("done");
@@ -2242,7 +2151,8 @@ export default function ByTheirFruit() {
     // Redirect to Stripe for $39/month subscription payment
     setTimeout(() => {
       const stripePaymentUrl = `https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00?prefilled_email=${encodeURIComponent(claimData.workEmail)}&client_reference_id=${encodeURIComponent(user.id)}`;
-      window.open(stripePaymentUrl, "_blank");
+      // Same-tab navigation: window.open() inside a timer is blocked by popup blockers.
+      window.location.assign(stripePaymentUrl);
       setShowClaimModal(false);
       setClaimStep("form");
       setVerifyCodeInput("");
@@ -2396,22 +2306,6 @@ export default function ByTheirFruit() {
     await fetchReviewsForChurch(churchId);
   };
 
-  // Fetch all reviews by a specific user (for church owners)
-  const fetchReviewerHistory = async (reviewerUserId, reviewerName) => {
-    setReviewerHistoryLoading(true);
-    const { data } = await supabase
-      .from("reviews")
-      .select("*, churches(name, city, state)")
-      .eq("user_id", reviewerUserId)
-      .order("created_at", { ascending: false });
-    setReviewerHistory({
-      userId: reviewerUserId,
-      name: displayName(reviewerName, "church"),
-      reviews: data || [],
-    });
-    setReviewerHistoryLoading(false);
-  };
-
   /* --- HANDLE SIGN OUT --- */
   const handleSignOut = async () => {
     try {
@@ -2431,11 +2325,10 @@ export default function ByTheirFruit() {
   /* --- RATE FLOW --- */
   const startRateFlow = (preselect) => {
     const existingReview = preselect && user ? userReviews[preselect.id] : null;
-    const canEdit = existingReview && (Date.now() - existingReview.postedAt >= 7 * 24 * 60 * 60 * 1000);
+    const canEdit = existingReview && (Date.now() - existingReview.postedAt < EDIT_WINDOW_MS);
 
     if (existingReview && !canEdit) {
-      const daysLeft = Math.ceil((7 * 24 * 60 * 60 * 1000 - (Date.now() - existingReview.postedAt)) / (24 * 60 * 60 * 1000));
-      showToast(`You've already shared your experience with this church. You can update your experience in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`, "info");
+      showToast("You've already shared your experience with this church. Experiences can be edited for 7 days after posting.", "info");
       return;
     }
 
@@ -2460,10 +2353,9 @@ export default function ByTheirFruit() {
   const selectChurchToRate = (c) => {
     const existing = user ? userReviews[c.id] : null;
     if (existing) {
-      const canEdit = Date.now() - existing.postedAt >= 7 * 24 * 60 * 60 * 1000;
+      const canEdit = Date.now() - existing.postedAt < EDIT_WINDOW_MS;
       if (!canEdit) {
-        const daysLeft = Math.ceil((7 * 24 * 60 * 60 * 1000 - (Date.now() - existing.postedAt)) / (24 * 60 * 60 * 1000));
-        showToast(`You've already shared your experience with ${c.name}. You can update in ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`, "info");
+        showToast(`You've already shared your experience with ${c.name}. Experiences can be edited for 7 days after posting.`, "info");
         return;
       }
       setIsEditing(true);
@@ -3403,11 +3295,11 @@ export default function ByTheirFruit() {
                     <h3 style={{ fontSize: 17, fontFamily: T.heading, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>Experiences</h3>
                     {(() => {
                       const existing = user && userReviews[c.id];
-                      const canEdit = existing && (Date.now() - existing.postedAt >= 7 * 24 * 60 * 60 * 1000);
-                      const daysLeft = existing ? Math.ceil((7 * 24 * 60 * 60 * 1000 - (Date.now() - existing.postedAt)) / (24 * 60 * 60 * 1000)) : 0;
+                      const canEdit = existing && (Date.now() - existing.postedAt < EDIT_WINDOW_MS);
+                      const daysLeft = existing ? Math.max(0, Math.ceil((EDIT_WINDOW_MS - (Date.now() - existing.postedAt)) / (24 * 60 * 60 * 1000))) : 0;
                       return existing ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          {!canEdit && <span style={{ fontSize: 11, color: T.textMuted }}>Edit in {daysLeft}d</span>}
+                          <span style={{ fontSize: 11, color: T.textMuted }}>{canEdit ? `Editable for ${daysLeft}d` : "Edit window closed"}</span>
                           <button onClick={() => startRateFlow(c)} disabled={!canEdit} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: canEdit ? T.accent : T.surfaceAlt, color: canEdit ? "#fff" : T.textMuted, border: "none", cursor: canEdit ? "pointer" : "not-allowed", fontFamily: T.body }}>Edit Your Experience</button>
                         </div>
                       ) : (
@@ -3438,7 +3330,7 @@ export default function ByTheirFruit() {
                     _onResponseChange: (val) => setResponseText(val),
                     _onSubmitResponse: () => submitChurchResponse(rev.id, c.id),
                   } : rev;
-                  return <ReviewCard key={rev.id || i} rev={enrichedRev} delay={240 + i * 70} userId={user?.id} nameLevel={isOwner ? "church" : "public"} onDelete={(deletedId) => {
+                  return <ReviewCard key={rev.id || i} rev={enrichedRev} delay={240 + i * 70} userId={user?.id} nameLevel="public" onDelete={(deletedId) => {
                     setChurches(prev => prev.map(ch => ch.id === c.id ? { ...ch, recentReviews: ch.recentReviews.filter(r => r.id !== deletedId) } : ch));
                     setUserReviews(prev => { const next = { ...prev }; delete next[c.id]; return next; });
                     showToast("Your review has been deleted", "info");
@@ -3797,7 +3689,7 @@ export default function ByTheirFruit() {
               <div style={{ textAlign: "center", padding: "80px 24px", maxWidth: 560, margin: "0 auto" }}>
                 <div style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, marginBottom: 12, letterSpacing: "-0.02em" }}>You haven't claimed a church yet</div>
                 <p style={{ fontSize: 14, color: T.textSoft, lineHeight: 1.6, marginBottom: 24 }}>The Church Dashboard is for verified church owners. Find your church and claim it to access reviews, benchmarks, and demographics for your congregation.</p>
-                <button onClick={() => navigate("browse")} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Find your church</button>
+                <button onClick={() => navigate("discover")} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Find your church</button>
               </div>
             )}
 
@@ -4106,7 +3998,7 @@ export default function ByTheirFruit() {
                                 background: expandedReview === rev.id ? T.surfaceAlt : T.surface, transition: "background 0.15s",
                               }}>
                                 <div>
-                                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4 }}>{displayName(rev.profiles?.display_name, "church")}</div>
+                                  <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 4 }}>{displayName(rev.public_profiles?.display_name, "public")}</div>
                                   <div style={{ fontSize: 12, color: T.textMuted }}>{rev.reviewer_role} &middot; {new Date(rev.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</div>
                                 </div>
                                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -4170,6 +4062,11 @@ export default function ByTheirFruit() {
                   {/* ========== DEMOGRAPHICS TAB ========== */}
                   {dashboardTab === "demographics" && (
                     <FadeIn>
+                      {ownerDemographics?.suppressed && (
+                        <div style={{ padding: "12px 16px", borderRadius: T.radiusSm, background: T.amberSoft, border: `1px solid ${T.amberBorder}`, color: T.amber, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
+                          Reviewer demographics unlock once {ownerDemographics.minRequired} published experiences exist, so no individual reviewer can be identified. ({ownerDemographics.totalReviews} so far)
+                        </div>
+                      )}
                       <div className="btf-grid-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20 }}>
                         {/* Reviewer Type */}
                         <div style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}` }}>
@@ -4287,44 +4184,6 @@ export default function ByTheirFruit() {
               );
             })()}
 
-            {/* Reviewer History Modal */}
-            {reviewerHistory && (
-              <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setReviewerHistory(null)}>
-                <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "28px 24px", maxWidth: 520, width: "100%", maxHeight: "80vh", overflow: "auto" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                    <div>
-                      <h3 style={{ fontSize: 18, fontFamily: T.heading, fontWeight: 800, margin: "0 0 2px", letterSpacing: "-0.02em" }}>All experiences by {reviewerHistory.name}</h3>
-                      <div style={{ fontSize: 12, color: T.textMuted }}>{reviewerHistory.reviews.length} experience{reviewerHistory.reviews.length !== 1 ? "s" : ""} across all churches</div>
-                    </div>
-                    <button onClick={() => setReviewerHistory(null)} style={{ fontSize: 18, background: "none", border: "none", color: T.textMuted, cursor: "pointer" }}>✕</button>
-                  </div>
-                  {reviewerHistoryLoading && <div style={{ textAlign: "center", padding: "30px 0", color: T.textMuted }}>Loading...</div>}
-                  {!reviewerHistoryLoading && reviewerHistory.reviews.map(r => {
-                    const scores = SCORE_FIELDS.map(f => r[`score_${f}`]).filter(v => v != null);
-                    const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-                    return (
-                      <div key={r.id} style={{ padding: "14px 0", borderBottom: `1px solid ${T.borderLight}` }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                          <div>
-                            <span style={{ fontWeight: 700, fontSize: 13, fontFamily: T.heading }}>{r.churches?.name || "Unknown"}</span>
-                            <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 8 }}>{r.churches?.city}, {r.churches?.state}</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            {avg && <span style={{ fontSize: 13, fontWeight: 700, fontFamily: T.heading, color: scoreColor(avg) }}>{avg.toFixed(1)}</span>}
-                            <span style={{ fontSize: 11, color: T.textMuted }}>{new Date(r.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 4 }}>{r.reviewer_role}{r.last_visited ? ` · Last visited: ${r.last_visited}` : ""}</div>
-                        {r.text && <p style={{ fontSize: 13, color: T.textSoft, margin: "4px 0 0", lineHeight: 1.6 }}>{r.text}</p>}
-                      </div>
-                    );
-                  })}
-                  {!reviewerHistoryLoading && reviewerHistory.reviews.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "30px 0", color: T.textMuted }}>No experiences found</div>
-                  )}
-                </div>
-              </div>
-            )}
           </FadeIn>
         </div>
       )}
