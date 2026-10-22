@@ -3,35 +3,64 @@
 Three things change together: the database, the edge functions, and the
 frontend. The order below keeps the live site working at every step.
 
+## Status
+
+| Step | State |
+|---|---|
+| 1. Hardening migration | **applied to production on 2026-10-22** through the Supabase connector, as seven recorded migrations (see below) |
+| 2. Edge functions + secrets | pending (needs the CLI) |
+| 3. Merge to main (frontend deploy) | pending |
+| 4. Privacy lockdown + organizations | pending, only after step 3 |
+| 5. Dashboard settings | pending |
+
 ## 0. One-time CLI setup
 
 ```bash
 npx supabase login
 npx supabase link --project-ref ffqmbhftivmiubvtzhhr
-# The baseline migration describes what production already has. Mark it applied:
+# The baseline migration describes what production already had. Mark it applied:
 npx supabase migration repair --status applied 20261022000100
+npx supabase migration list      # local and remote must now agree
 ```
 
-## 1. Apply the hardening migration now (safe with the current site)
+`supabase/migrations/` mirrors the remote history exactly: nine placeholder
+files for migrations recorded before the schema was versioned, the baseline,
+and the seven hardening parts with the versions the connector assigned:
 
-`supabase/migrations/20261022000200_hardening.sql` only adds objects and blocks
-writes the legitimate app never performs. It closes the role self-promotion and
-score-tampering holes immediately.
-
-```bash
-npx supabase db push --dry-run     # should list 0200, 0300, 0400
+```
+20261022175121_hardening_1_role_helpers_and_protective_triggers
+20261022180042_hardening_3_review_locations_public_profiles_demographics
+20261022180600_hardening_2a_function_hygiene
+20261022181319_hardening_2b_claim_verification
+20261022181948_hardening_4_geo_search
+20261022182345_hardening_5_idx_churches_earth
+20261022182445_hardening_6_idx_churches_city_trgm
 ```
 
-`db push` applies every pending migration, so apply 0200 on its own through the
-SQL editor (paste the file) or psql, then record it:
+(Part 3 sorts before 2a/2b; nothing in it depends on them.)
 
-```bash
-psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261022000200_hardening.sql
-npx supabase migration repair --status applied 20261022000200
-```
+## 1. Hardening — done
 
-It builds the `zip_centroids` materialized view and two indexes over 270k
-churches; expect 10-30 seconds.
+Closed in production as of 2026-10-22 18:25 UTC: role self-promotion,
+self-published reviews, claimant score/billing edits, anon-callable
+internals, mutable `search_path`, readable verification codes, public
+reviewer coordinates. `churches_near()`, `geocode_zip()`,
+`verify_claim_code()`, `church_reviewer_demographics()` and
+`public_profiles` exist, so the new frontend can be deployed.
+
+Security advisor items that remain **on purpose**:
+
+- lint 0010 `public_profiles` is a SECURITY DEFINER view: it exposes four
+  safe columns of the private `profiles` table; PostgREST can only embed a
+  view or table, not a function.
+- lint 0016 `zip_centroids` is selectable by anon: it is an aggregate of
+  public church coordinates, nothing per person.
+- `is_admin()` / `is_moderator()` callable by anon: RLS policies evaluate
+  them as the calling role; they only report on the caller.
+- `verify_claim_code`, `church_reviewer_demographics`, `soft_delete_review`,
+  `recalculate_church_scores` callable by signed-in users: each gates
+  inside on `auth.uid()`.
+- `pg_trgm` in `public`: pre-existing; moving it means rebuilding the name index.
 
 ## 2. Deploy edge functions and set secrets
 
@@ -59,26 +88,34 @@ If you set `NOTIFY_WEBHOOK_SECRET`, also tell the trigger about it:
 alter database postgres set app.settings.notify_webhook_secret = '<same value>';
 ```
 
-Both sender domains must be verified in Resend.
+Both sender domains must be verified in Resend. Until
+`send-verification-email` is redeployed, new claim codes are still written
+to the old `verification_code` column and `verify_claim_code()` will report
+"expired"; deploy the functions before announcing the claim flow.
 
 ## 3. Merge to main
 
 Cloudflare Pages builds and deploys the new frontend (2-3 minutes). The new
 frontend reads `public_profiles`, calls `verify_claim_code`, `churches_near`,
 `geocode_zip` and `church_reviewer_demographics`, and writes
-`review_locations`. All of those exist after step 1.
+`review_locations`. All of those exist in production now.
 
 ## 4. Apply the privacy lockdown and tenancy migrations
 
 Only after the new frontend is live (the old one read `profiles` directly):
 
 ```bash
-npx supabase db push        # applies 0300_privacy_lockdown and 0400_organizations
+npx supabase db push        # applies 20261022200000_privacy_lockdown and 20261022200100_organizations
 ```
 
-0300 drops `reviews.reviewer_lat/lng/distance_miles` (already copied to
-`review_locations` by 0200) and `church_claims.verification_code` (replaced by
-the hash). 0400 is additive and backfills organizations from existing claims.
+The privacy migration drops `reviews.reviewer_lat/lng/distance_miles`
+(already copied to `review_locations`) and `church_claims.verification_code`
+(replaced by the hash). The organizations migration is additive and
+backfills organizations from existing claims.
+
+If `db push` is not available, the connector's migration tool works the same
+way it did for the hardening parts; record the versions it assigns and
+rename the local files to match.
 
 ## 5. Auth and Stripe settings (dashboard, not SQL)
 
@@ -93,14 +130,21 @@ the hash). 0400 is additive and backfills organizations from existing claims.
 ## 6. Verify
 
 - Open a church page: reviewer first names render (the `public_profiles` embed works).
-- `curl -s 'https://ffqmbhftivmiubvtzhhr.supabase.co/rest/v1/profiles?select=email&limit=1' -H "apikey: $ANON"` returns `[]`.
+- `curl -s 'https://ffqmbhftivmiubvtzhhr.supabase.co/rest/v1/profiles?select=email&limit=1' -H "apikey: $ANON"` returns `[]` (after step 4).
 - Discover → Near Me returns churches sorted by distance, not Florida rows.
 - Claim a church end to end: code email arrives, verification succeeds, the church shows "claimed", payment link opens in the same tab.
 - `https://bytheirfruit.church/sitemap.xml` lists ~270 church sitemaps of 1,000 URLs.
-- Supabase → Advisors → Security: the "role mutable search_path" and "anon can execute" warnings are gone.
 
 ## Rolling back
 
-- Triggers and functions can be dropped individually; nothing in 0200 destroys data.
-- 0300 drops columns. Reviewer coordinates survive in `review_locations`; verification codes are simply reissued.
-- 0400 can be dropped wholesale (`drop table subscriptions, org_members, organizations cascade`) without touching legacy columns.
+- Triggers and functions can be dropped individually; nothing in the hardening parts destroys data.
+- The privacy migration drops columns. Reviewer coordinates survive in `review_locations`; verification codes are simply reissued.
+- The organizations migration can be dropped wholesale (`drop table subscriptions, org_members, organizations cascade`) without touching legacy columns.
+
+## Applying through the connector (what happened on 2026-10-22)
+
+The connector's raw-SQL tool times out on DDL in a cloud session; its
+`apply_migration` tool works but assigns its own version. Each hardening
+part was applied as one `apply_migration` call, then the local files were
+renamed to the recorded versions. Keep doing it that way if the CLI is not
+at hand: apply, read `list_migrations`, rename.

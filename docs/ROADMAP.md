@@ -4,6 +4,8 @@ Status key: **done** (this branch), **next** (ready to start), **later**.
 
 ## Security and data integrity
 
+Everything marked done below was applied to production on 2026-10-22 (hardening migration), except the privacy lockdown items that wait for the frontend deploy.
+
 - **done** Users cannot escalate their own role; moderators cannot grant admin.
 - **done** Profile PII (email, phone, address, zip, demographics) hidden from the public API; `public_profiles` view for display names.
 - **done** Reviews pinned to `pending` on insert and on edit; flag counts and approvals cannot be forged.

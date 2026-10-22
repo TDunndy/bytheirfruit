@@ -24,7 +24,9 @@ The database schema is **only** changed through files in `supabase/migrations/`.
 
 - Row level security on every table. The anon key in the bundle is public by design.
 - `profiles` is readable only by its owner and moderators; the world reads the
-  `public_profiles` view (id, display name, avatar).
+  `public_profiles` view (id, display name, avatar). The view is intentionally
+  SECURITY DEFINER (Supabase lint 0010): PostgREST can only embed a view or
+  table, and this is the one place a private table is exposed on purpose.
 - Users cannot change their own `role`, `status` or moderation flags
   (`protect_profile_columns` trigger). Only admins change roles.
 - Reviews always enter as `pending`; authors can edit content for 7 days and the
@@ -77,7 +79,8 @@ src/lib/supabase.ts      typed client (PKCE)
 src/lib/api/             typed data-access layer shared with the future ChMS
 src/lib/database.types.ts generated from the migrated schema
 functions/               Cloudflare Pages Functions (SEO shell, sitemaps)
-supabase/migrations/     versioned schema; 0100 is the reconstructed baseline
+supabase/migrations/     versioned schema: placeholders for pre-2026-10 history, 0100 baseline,
+                         seven hardening parts (versions assigned by the connector), privacy, organizations
 supabase/tests/          RLS regression tests (plain SQL, run by scripts/db-test.sh)
 supabase/functions/      edge functions (Deno)
 docs/                    runbook, ADRs, roadmap

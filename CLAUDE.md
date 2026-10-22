@@ -16,6 +16,10 @@ built on the same database. Read `README.md`, then `docs/ROADMAP.md`.
   `auth.uid()` / `auth.role()` for gating, never `is_privileged()`.
 - New SQL functions: pin `search_path`, revoke `execute` from `anon` unless
   the public site needs it.
+- `public_profiles` is deliberately a SECURITY DEFINER view (lint 0010); keep it.
+- Migration file names must match the versions recorded in production
+  (`supabase migration list`); when the connector applies a migration, rename
+  the local file to the version it assigned.
 - `profiles` is private. Public code reads `public_profiles`. Never expose
   email, phone, address, zip, or demographics per person; aggregate only
   (see `church_reviewer_demographics`).
