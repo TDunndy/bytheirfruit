@@ -11,7 +11,9 @@
 
 -- profiles -------------------------------------------------------------------
 drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
+drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile" on public.profiles for select using (auth.uid() = id);
+drop policy if exists "Moderators can view all profiles" on public.profiles;
 create policy "Moderators can view all profiles" on public.profiles for select using (public.is_moderator());
 
 -- reviews --------------------------------------------------------------------
@@ -23,6 +25,7 @@ alter table public.reviews
 -- church_claims --------------------------------------------------------------
 alter table public.church_claims drop column if exists verification_code;
 drop policy if exists "Users can update own claims" on public.church_claims;
+drop policy if exists "Moderators can view all claims" on public.church_claims;
 create policy "Moderators can view all claims" on public.church_claims for select using (public.is_moderator());
 
 -- claim_requests: admins may already read; nothing else exposed.

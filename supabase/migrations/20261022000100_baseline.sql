@@ -291,7 +291,7 @@ create table if not exists public.subscription_events (
 -- ============================================================================
 create unique index if not exists idx_churches_unique_name_location
   on public.churches (lower(trim(name)), lower(trim(coalesce(city,''))), lower(trim(coalesce(state,''))));
-create index if not exists idx_churches_name_trgm on public.churches using gin (name extensions.gin_trgm_ops);
+create index if not exists idx_churches_name_trgm on public.churches using gin (name gin_trgm_ops);
 create index if not exists idx_churches_denomination on public.churches (denomination);
 create index if not exists idx_churches_total_reviews on public.churches (total_reviews desc);
 create index if not exists idx_churches_state_reviews on public.churches (state, total_reviews desc);

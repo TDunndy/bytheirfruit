@@ -435,8 +435,10 @@ create table if not exists public.review_locations (
   created_at timestamptz default now()
 );
 alter table public.review_locations enable row level security;
+drop policy if exists "Reviewers insert own location" on public.review_locations;
 create policy "Reviewers insert own location" on public.review_locations for insert
   with check (auth.uid() = user_id and exists (select 1 from public.reviews r where r.id = review_id and r.user_id = auth.uid()));
+drop policy if exists "Admins read locations" on public.review_locations;
 create policy "Admins read locations" on public.review_locations for select using (public.is_moderator());
 
 -- Copy whatever is already there (reviews.reviewer_lat/lng are dropped in the
@@ -555,7 +557,9 @@ grant  execute on function public.church_reviewer_demographics(uuid) to authenti
 create index if not exists idx_churches_earth
   on public.churches using gist (extensions.ll_to_earth(latitude::double precision, longitude::double precision))
   where latitude is not null and longitude is not null;
-create index if not exists idx_churches_city_trgm on public.churches using gin (city extensions.gin_trgm_ops);
+-- pg_trgm lives in `public` on the production project and in `extensions`
+-- on fresh stacks; the opclass is resolved through search_path on purpose.
+create index if not exists idx_churches_city_trgm on public.churches using gin (city gin_trgm_ops);
 create index if not exists idx_churches_zip on public.churches (zip text_pattern_ops);
 
 create or replace function public.churches_near(

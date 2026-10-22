@@ -82,18 +82,24 @@ grant execute on function public.org_role_rank(text), public.is_org_member(uuid,
 -- ----------------------------------------------------------------------------
 -- RLS: members read their tenant; only service role writes (via webhook/RPC)
 -- ----------------------------------------------------------------------------
+drop policy if exists "Members read their organization" on public.organizations;
 create policy "Members read their organization" on public.organizations for select
   using (public.is_org_member(id) or public.is_moderator());
+drop policy if exists "Owners rename their organization" on public.organizations;
 create policy "Owners rename their organization" on public.organizations for update
   using (public.is_org_member(id, 'owner')) with check (public.is_org_member(id, 'owner'));
 
+drop policy if exists "Members read membership of their org" on public.org_members;
 create policy "Members read membership of their org" on public.org_members for select
   using (user_id = auth.uid() or public.is_org_member(org_id, 'admin') or public.is_moderator());
+drop policy if exists "Org admins add members" on public.org_members;
 create policy "Org admins add members" on public.org_members for insert
   with check (public.is_org_member(org_id, 'admin') and role <> 'owner');
+drop policy if exists "Org admins remove non-owners" on public.org_members;
 create policy "Org admins remove non-owners" on public.org_members for delete
   using (public.is_org_member(org_id, 'admin') and role <> 'owner' and user_id <> auth.uid());
 
+drop policy if exists "Org admins read subscription" on public.subscriptions;
 create policy "Org admins read subscription" on public.subscriptions for select
   using (public.is_org_member(org_id, 'admin') or public.is_moderator());
 
