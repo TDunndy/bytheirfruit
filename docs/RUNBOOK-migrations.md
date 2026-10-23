@@ -38,6 +38,21 @@ and the seven hardening parts with the versions the connector assigned:
 20261023042127_site_stats_and_claim_review
 ```
 
+**Not yet in production** (the connector's migration tool timed out three
+times on 2026-10-23 and rolled back each time):
+
+```
+20261023180000_claim_insert_lockdown   # closes a live hole: claimants could insert their own claim rows
+20261023180100_claim_review_lifecycle  # reject resets the claim; profile applied on approval
+```
+
+Apply them in that order: paste each file into Dashboard → SQL Editor and run
+it (or `npx supabase db push`), then if you used the SQL Editor record them:
+
+```bash
+npx supabase migration repair --status applied 20261023180000 20261023180100
+```
+
 (Part 3 sorts before 2a/2b; nothing in it depends on them.)
 
 ## 1. Hardening — done

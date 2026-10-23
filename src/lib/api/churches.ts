@@ -55,18 +55,35 @@ export const CHURCH_CARD_SELECT =
   'score_prayer, score_kids, score_youth, score_leadership, score_service, score_finances, score_overall, ' +
   'status, claimed_by, claimed_at, subscription_status, description, pastor_name'
 
-/** Home-page spotlight: the best-rated churches that have at least one review. */
-export async function fetchFeaturedChurches(limit = 3) {
-  const { data, error } = await supabase
+/**
+ * Home-page spotlight. Churches with enough reviews to show a score
+ * (minReviews, the UI's MIN_REVIEWS_FOR_SCORE) come first, best score first;
+ * remaining slots go to the most reviewed churches below that threshold so the
+ * section is not empty on a young site.
+ */
+export async function fetchFeaturedChurches(limit = 3, minReviews = 3) {
+  const rated = await supabase
+    .from('churches')
+    .select(CHURCH_CARD_SELECT)
+    .eq('status', 'approved')
+    .gte('total_reviews', minReviews)
+    .order('score_overall', { ascending: false, nullsFirst: false })
+    .order('total_reviews', { ascending: false })
+    .limit(limit)
+  if (rated.error) throw rated.error
+  const rows = rated.data ?? []
+  if (rows.length >= limit) return rows
+  const recent = await supabase
     .from('churches')
     .select(CHURCH_CARD_SELECT)
     .eq('status', 'approved')
     .gte('total_reviews', 1)
-    .order('score_overall', { ascending: false, nullsFirst: false })
+    .lt('total_reviews', minReviews)
     .order('total_reviews', { ascending: false })
-    .limit(limit)
-  if (error) throw error
-  return data ?? []
+    .order('scores_updated_at', { ascending: false, nullsFirst: false })
+    .limit(limit - rows.length)
+  if (recent.error) throw recent.error
+  return [...rows, ...(recent.data ?? [])]
 }
 
 /** One church by id, full row (used when a deep link or a restored draft names a church). */

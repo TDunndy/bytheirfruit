@@ -292,7 +292,12 @@ export default function AdminDashboard() {
   }, []);
 
   const decideClaim = async (claim, approve) => {
-    const note = approve ? null : (window.prompt("Reason for rejecting (optional):") || null);
+    let note = null;
+    if (!approve) {
+      const answer = window.prompt("Reason for rejecting (optional):");
+      if (answer === null) return; // Cancel keeps the claim in the queue
+      note = answer.trim() || null;
+    }
     setClaimBusy(claim.id);
     const res = await reviewClaim(claim.id, approve, note || undefined);
     setClaimBusy(null);

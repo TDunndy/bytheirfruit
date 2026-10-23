@@ -59,6 +59,7 @@ export async function listClaimsForReview(): Promise<ClaimForReview[]> {
     .from('church_claims')
     .select('id, church_id, user_id, claim_email, verified, verified_at, review_note, created_at, churches(id, name, city, state, website)')
     .eq('review_status', 'pending_review')
+    .eq('verified', true) // a code was requested but never entered: nothing to review yet
     .order('verified_at', { ascending: false, nullsFirst: false })
   if (error) throw error
   const rows = data ?? []
@@ -85,4 +86,20 @@ export async function reviewClaim(claimId: string, approve: boolean, note?: stri
   const { data, error } = await supabase.rpc('review_church_claim', { p_claim_id: claimId, p_approve: approve, p_note: note ?? undefined })
   if (error) return { ok: false, error: error.message }
   return (data ?? { ok: false, error: 'Unexpected response' }) as unknown as { ok: boolean; error?: string; status?: string }
+}
+
+/** The caller's own claim that passed email verification and waits for an admin, if any. */
+export async function fetchMyPendingClaim(): Promise<{ church_id: string; verified_at: string | null } | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data, error } = await supabase
+    .from('church_claims')
+    .select('church_id, verified_at')
+    .eq('user_id', user.id)
+    .eq('review_status', 'pending_review')
+    .eq('verified', true)
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
 }

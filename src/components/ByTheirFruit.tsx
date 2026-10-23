@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import {
   churchesNear, geocodeZip as geocodeZipDb, requestClaimCode, verifyClaimCode as verifyClaimCodeRpc,
   recordReviewLocation, fetchChurchDemographics, updateChurchProfile, PUBLIC_REVIEW_SELECT,
-  fetchFeaturedChurches, fetchSiteStats, fetchChurchById,
+  fetchFeaturedChurches, fetchSiteStats, fetchChurchById, fetchMyPendingClaim,
 } from "@/lib/api";
 
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');`;
@@ -1064,7 +1064,12 @@ export default function ByTheirFruit() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showProfileComplete, setShowProfileComplete] = useState(false);
-  const [pendingReview, setPendingReview] = useState(null);
+  // Review written before signing in. The ref keeps the in-memory draft (with
+  // its File objects) for a same-tab sign-in; localStorage keeps a copy without
+  // photos for OAuth redirects. processPendingReviewRef is reassigned on every
+  // render so the once-registered auth listener always calls the current code.
+  const pendingReviewRef = useRef(null);
+  const processPendingReviewRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -1145,8 +1150,12 @@ export default function ByTheirFruit() {
           }
           return;
       }
-      if (hash === "#/discover") {
+      const [hashPath, hashQuery = ""] = hash.split("?");
+      if (hashPath === "#/discover") {
         setPage("discover");
+        // "/?q=grace#/discover" (404 page search) or "#/discover?q=grace" (SearchAction).
+        const q = new URLSearchParams(window.location.search).get("q") || new URLSearchParams(hashQuery).get("q");
+        if (q) setDiscoverSearchQuery(q.slice(0, 100));
       } else if (hash === "#/about") {
         setPage("about");
       } else if (hash === "#/rate") {
@@ -1221,6 +1230,29 @@ export default function ByTheirFruit() {
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimStatus, setClaimStatus] = useState(null); // null | 'pending' | 'approved' | 'rejected'
   const [claimManualReview, setClaimManualReview] = useState(false);
+  // Closing keeps the verify step (a stray tap outside must not throw away a
+  // code already in the inbox); a finished claim starts fresh next time.
+  const claimChurchIdRef = useRef(null);
+  const openClaimModal = (churchId) => {
+    // A code waiting for one church must not show up when claiming another.
+    if (claimChurchIdRef.current !== churchId) {
+      setClaimStep("form");
+      setVerifyCodeInput("");
+      setVerifyError("");
+      setClaimManualReview(false);
+    }
+    claimChurchIdRef.current = churchId;
+    setShowClaimModal(true);
+  };
+  const closeClaimModal = () => {
+    setShowClaimModal(false);
+    if (claimStep !== "verify") {
+      setClaimStep("form");
+      setVerifyCodeInput("");
+      setVerifyError("");
+      setClaimManualReview(false);
+    }
+  };
   const [claimStep, setClaimStep] = useState("form"); // "form" | "verify" | "done"
   const [verifyCodeInput, setVerifyCodeInput] = useState("");
   const [verifyError, setVerifyError] = useState("");
@@ -1690,6 +1722,59 @@ export default function ByTheirFruit() {
     }
   }, []);
 
+  /* --- REVIEW WRITTEN BEFORE SIGNING IN --- */
+  processPendingReviewRef.current = async (u) => {
+    // Read and clear synchronously so the getSession() and SIGNED_IN paths
+    // (and SIGNED_IN re-emitted on tab focus) never process the same draft twice.
+    const inMemory = pendingReviewRef.current;
+    const stored = localStorage.getItem("btf_pending_review");
+    if (!inMemory && !stored) return;
+    pendingReviewRef.current = null;
+    localStorage.removeItem("btf_pending_review");
+    setSubmitting(true);
+    try {
+      if (inMemory) {
+        // Signed in without leaving the page: the draft still has its photos.
+        const success = await submitReviewToDB(inMemory, u.id);
+        if (success) { setRateStep(3); setPage("rate"); }
+        return;
+      }
+      const parsed = JSON.parse(stored);
+      let draftChurch = churches.find(c => c.id === parsed.churchId) || null;
+      if (!draftChurch && parsed.churchId) {
+        // The list is empty after an OAuth redirect; fetch the church so the form and success screen know it.
+        const row = await fetchChurchById(parsed.churchId).catch(() => null);
+        if (row) draftChurch = dbChurchToLocal(row);
+      }
+      if (draftChurch) setRateChurch(draftChurch);
+      if (parsed.photosPending > 0) {
+        // Photos cannot survive a redirect: restore the draft and let the user re-attach them.
+        setRateScores(parsed.scores || {});
+        setRateComments(parsed.comments || {});
+        setRateText(parsed.text || "");
+        setRateRole(parsed.role || "");
+        setRateLastVisited(parsed.lastVisited || "");
+        setIsEditing(!!parsed.isEdit);
+        setRateStep(2);
+        setPage("rate");
+        showToast("You're signed in. Please re-attach your photos, then submit your experience.", "info");
+        return;
+      }
+      const success = await submitReviewToDB(parsed, u.id);
+      if (success) {
+        setRateStep(3);
+        setPage("rate");
+      } else {
+        showToast("Something went wrong submitting your experience. Please try again.", "error");
+      }
+    } catch (e) {
+      console.error("Failed to process pending review:", e);
+      showToast("Something went wrong submitting your experience. Please try again.", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   /* --- AUTH STATE --- */
   useEffect(() => {
     // Check current session
@@ -1712,47 +1797,8 @@ export default function ByTheirFruit() {
         const { data: claimedCheck } = await supabase.from("churches").select("id").eq("claimed_by", u.id).limit(1);
         if (claimedCheck && claimedCheck.length > 0) setHasClaimed(true);
 
-        // Process pending review from localStorage (for OAuth redirects on initial load)
-        const pending = localStorage.getItem("btf_pending_review");
-        if (pending) {
-          localStorage.removeItem("btf_pending_review");
-          setSubmitting(true);
-          try {
-            const parsed = JSON.parse(pending);
-            let draftChurch = churches.find(c => c.id === parsed.churchId) || null;
-            if (!draftChurch && parsed.churchId) {
-              // The list is empty after an OAuth redirect; fetch the church so the form and success screen know it.
-              const row = await fetchChurchById(parsed.churchId).catch(() => null);
-              if (row) draftChurch = dbChurchToLocal(row);
-            }
-            if (draftChurch) setRateChurch(draftChurch);
-            if (parsed.photosPending > 0) {
-              // Photos could not be kept across the redirect: restore the draft and let the user re-attach them.
-              setRateScores(parsed.scores || {});
-              setRateComments(parsed.comments || {});
-              setRateText(parsed.text || "");
-              setRateRole(parsed.role || "");
-              setRateLastVisited(parsed.lastVisited || "");
-              setIsEditing(!!parsed.isEdit);
-              setRateStep(2);
-              setPage("rate");
-              showToast("You're signed in. Please re-attach your photos, then submit your experience.", "info");
-            } else {
-              const success = await submitReviewToDB(parsed, u.id);
-              if (success) {
-                setRateStep(3);
-                setPage("rate");
-              } else {
-                showToast("Something went wrong submitting your experience. Please try again.", "error");
-              }
-            }
-          } catch (e) {
-            console.error("Failed to process pending review:", e);
-            showToast("Something went wrong submitting your experience. Please try again.", "error");
-          } finally {
-            setSubmitting(false);
-          }
-        }
+        // A review written before an OAuth redirect (draft kept in localStorage).
+        await processPendingReviewRef.current?.(u);
       }
     });
 
@@ -1764,6 +1810,9 @@ export default function ByTheirFruit() {
       }
       if (event === "SIGNED_IN" && session?.user) {
         const u = session.user;
+        // Defer the work: Supabase calls awaited inside this callback can stall
+        // while the client is still finishing a PKCE code exchange.
+        setTimeout(async () => {
         const { data: profileRow } = await supabase.from("profiles").select("role").eq("id", u.id).single();
         const profile = {
           id: u.id,
@@ -1793,32 +1842,9 @@ export default function ByTheirFruit() {
           }
         }
 
-        // Process pending review from localStorage (for OAuth redirects)
-        const pending = localStorage.getItem("btf_pending_review");
-        if (pending) {
-          localStorage.removeItem("btf_pending_review");
-          setSubmitting(true);
-          try {
-            const parsed = JSON.parse(pending);
-            // Restore the church context so the success screen shows the right name
-            if (parsed.churchId) {
-              const cachedChurch = churches.find(c => c.id === parsed.churchId);
-              if (cachedChurch) setRateChurch(cachedChurch);
-            }
-            const success = await submitReviewToDB(parsed, u.id);
-            if (success) {
-              setRateStep(3);
-              setPage("rate");
-            } else {
-              showToast("Something went wrong submitting your experience. Please try again.", "error");
-            }
-          } catch (e) {
-            console.error("Failed to process pending review:", e);
-            showToast("Something went wrong submitting your experience. Please try again.", "error");
-          } finally {
-            setSubmitting(false);
-          }
-        }
+        // A review written before signing in (same tab or OAuth redirect).
+        await processPendingReviewRef.current?.(u);
+        }, 0);
       }
       if (event === "SIGNED_OUT") {
         setUser(null);
@@ -2076,7 +2102,28 @@ export default function ByTheirFruit() {
     setClaimStatus(data?.status || null);
   };
 
-  // Step 1: Validate email domain and send verification code
+  // Church profile fields from the claim form. Applied right away for an
+  // auto-verified claim, or by review_church_claim() when an admin approves.
+  const claimProfilePatch = () => ({
+    service_days: claimData.serviceDays,
+    avg_attendance: claimData.avgAttendance ? parseInt(claimData.avgAttendance) : null,
+    staff_count: claimData.staffCount ? parseInt(claimData.staffCount) : null,
+    volunteer_count: claimData.volunteerCount ? parseInt(claimData.volunteerCount) : null,
+    campus_count: claimData.campusCount ? parseInt(claimData.campusCount) : null,
+    programs: claimData.programs.length > 0 ? claimData.programs : null,
+    website: claimData.website || null,
+    email: claimData.churchEmail || null,
+    phone: claimData.churchPhone || null,
+    facebook_url: claimData.facebook || null,
+    instagram_url: claimData.instagram || null,
+    youtube_url: claimData.youtube || null,
+    livestream_url: claimData.livestream || null,
+    pastor_name: claimData.pastorName || null,
+    year_founded: claimData.yearFounded ? parseInt(claimData.yearFounded) : null,
+    description: claimData.description || null,
+  });
+
+  // Step 1: send a verification code; the server decides auto vs manual review
   const sendClaimVerification = async (churchId) => {
     if (!user) { setShowAuthModal(true); return; }
     if (!claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) {
@@ -2098,8 +2145,11 @@ export default function ByTheirFruit() {
       return;
     }
 
-    // Also submit to claim_requests for record-keeping
-    await supabase.from("claim_requests").upsert({
+    setClaimManualReview(!!sent.manualReview);
+
+    // What the claimant told us, for the admin review queue. status and the
+    // review fields are reset so a previously rejected claimant can re-apply.
+    const { error: requestError } = await supabase.from("claim_requests").upsert({
       church_id: churchId,
       user_id: user.id,
       full_name: claimData.fullName,
@@ -2107,7 +2157,12 @@ export default function ByTheirFruit() {
       work_email: claimData.workEmail,
       phone: claimData.phone || null,
       message: claimData.message || null,
+      profile: claimProfilePatch(),
+      status: "pending",
+      reviewed_by: null,
+      reviewed_at: null,
     }, { onConflict: "church_id,user_id" });
+    if (requestError) console.error("claim_requests upsert failed:", requestError);
 
     setClaimSubmitting(false);
     setClaimStep("verify");
@@ -2142,24 +2197,7 @@ export default function ByTheirFruit() {
 
     // Claimants may only edit church profile fields; a DB trigger enforces the list.
     try {
-      await updateChurchProfile(churchId, {
-        service_days: claimData.serviceDays,
-        avg_attendance: claimData.avgAttendance ? parseInt(claimData.avgAttendance) : null,
-        staff_count: claimData.staffCount ? parseInt(claimData.staffCount) : null,
-        volunteer_count: claimData.volunteerCount ? parseInt(claimData.volunteerCount) : null,
-        campus_count: claimData.campusCount ? parseInt(claimData.campusCount) : null,
-        programs: claimData.programs.length > 0 ? claimData.programs : null,
-        website: claimData.website || null,
-        email: claimData.churchEmail || null,
-        phone: claimData.churchPhone || null,
-        facebook_url: claimData.facebook || null,
-        instagram_url: claimData.instagram || null,
-        youtube_url: claimData.youtube || null,
-        livestream_url: claimData.livestream || null,
-        pastor_name: claimData.pastorName || null,
-        year_founded: claimData.yearFounded ? parseInt(claimData.yearFounded) : null,
-        description: claimData.description || null,
-      });
+      await updateChurchProfile(churchId, claimProfilePatch());
     } catch (err) {
       console.error("Church profile update failed:", err);
     }
@@ -2425,7 +2463,7 @@ export default function ByTheirFruit() {
       // so photos are dropped here and the user re-attaches them afterwards.
       const { photos, ...draft } = reviewData;
       localStorage.setItem("btf_pending_review", JSON.stringify({ ...draft, photosPending: photos?.length || 0 }));
-      setPendingReview(reviewData);
+      pendingReviewRef.current = reviewData;
       setShowAuthModal(true);
       return;
     }
@@ -2501,7 +2539,7 @@ export default function ByTheirFruit() {
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.body, color: T.text }}>
       <style>{fonts}{responsiveCSS}{`html,body{margin:0;padding:0;background:${T.bg}}::selection{background:${T.accentSoft};color:${T.accent}}input::placeholder,textarea::placeholder{color:${T.textMuted}}*{box-sizing:border-box}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
-      {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); setPendingReview(null); }} onAuth={() => {}} mode="signin" />}
+      {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); pendingReviewRef.current = null; localStorage.removeItem("btf_pending_review"); }} onAuth={() => {}} mode="signin" />}
       {showResetPassword && <ResetPasswordModal onClose={() => setShowResetPassword(false)} />}
       {showProfileComplete && user && <ProfileCompleteModal userId={user.id} onClose={() => setShowProfileComplete(false)} />}
 
@@ -2659,12 +2697,14 @@ export default function ByTheirFruit() {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
                     {reviewed.map((church, i) => {
                       const overall = hasScores(church) ? avg(church.scores) : null;
+                      // Rank counts only churches with enough reviews to show a score.
+                      const rank = overall != null ? reviewed.slice(0, i + 1).filter(hasScores).length : null;
                       return (
                         <div key={church.id} onClick={() => viewChurch(church)} style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}`, cursor: "pointer", transition: "all 0.2s" }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(37,99,235,0.08)"; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: T.accent, padding: "2px 8px", borderRadius: T.radiusFull, background: T.accentSoft, border: `1px solid ${T.accentBorder}` }}>#{i + 1} Rated</div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: T.accent, padding: "2px 8px", borderRadius: T.radiusFull, background: T.accentSoft, border: `1px solid ${T.accentBorder}` }}>{rank != null ? `#${rank} Rated` : "Recently reviewed"}</div>
                             <div style={{ fontSize: 22, fontWeight: 800, fontFamily: T.heading, color: overall != null ? scoreColor(overall) : T.textMuted }}>{overall != null ? overall.toFixed(1) : "New"}</div>
                           </div>
                           <h3 style={{ fontSize: 15, fontFamily: T.heading, fontWeight: 700, margin: "0 0 3px", letterSpacing: "-0.01em" }}>{church.name}</h3>
@@ -3071,12 +3111,14 @@ export default function ByTheirFruit() {
                 <div style={{ marginTop: 16, padding: "16px 24px", borderRadius: T.radius, background: T.accentSoft, border: `1.5px solid ${T.accentBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Are you part of this church's leadership?</div>
-                    <div style={{ fontSize: 12, color: T.textSoft, marginTop: 2 }}>Claim this church to respond to experiences, access insights, and get a verified badge.</div>
+                    <div style={{ fontSize: 12, color: T.textSoft, marginTop: 2 }}>{claimStatus === "rejected"
+                      ? "Your previous claim could not be confirmed. You can apply again; adding a phone number and a short note about your role helps."
+                      : "Claim this church to respond to experiences, access insights, and get a verified badge."}</div>
                   </div>
                   {claimStatus === "pending" ? (
                     <span style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.accentSoft, color: T.accent, border: `1.5px solid ${T.accentBorder}` }}>Claim Pending Review</span>
                   ) : (
-                    <button onClick={() => { if (!user) { setShowAuthModal(true); } else { setShowClaimModal(true); } }} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, whiteSpace: "nowrap" }}>Claim This Church</button>
+                    <button onClick={() => { if (!user) { setShowAuthModal(true); } else { openClaimModal(currentChurch.id); } }} style={{ padding: "8px 18px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, whiteSpace: "nowrap" }}>Claim This Church</button>
                   )}
                 </div>
               )}
@@ -3084,11 +3126,11 @@ export default function ByTheirFruit() {
 
             {/* Claim Church Modal */}
             {showClaimModal && currentChurch && (
-              <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowClaimModal(false)}>
+              <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={closeClaimModal}>
                 <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
                   <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{claimStep === "verify" ? "Verify your email" : claimStep === "done" ? "Verified!" : `Claim ${currentChurch.name}`}</h2>
                   {claimStep === "form" && <>
-                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 16px" }}>Tell us about your role at this church. We'll email you a code to confirm your address. If the church has no website on file, our team confirms your role within 24-48 hours before you subscribe.</p>
+                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 16px" }}>Tell us about your role at this church. We'll email you a code to confirm your address. If we can't match your email to the church's website, our team confirms your role within 24-48 hours before you subscribe.</p>
                   <div style={{ padding: "12px 16px", borderRadius: T.radiusSm, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Church Subscription</div>
@@ -3200,7 +3242,7 @@ export default function ByTheirFruit() {
                   </>}
                   {claimStep === "form" && (
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-                      <button onClick={() => { setShowClaimModal(false); setClaimStep("form"); }} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
+                      <button onClick={closeClaimModal} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Cancel</button>
                       <button onClick={() => sendClaimVerification(currentChurch.id)} disabled={claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || !claimData.fullName || !claimData.roleAtChurch || !claimData.workEmail) ? 0.5 : 1 }}>{claimSubmitting ? "Sending..." : "Verify Email →"}</button>
                     </div>
                   )}
@@ -3219,7 +3261,7 @@ export default function ByTheirFruit() {
                         <button onClick={() => { setClaimStep("form"); setVerifyCodeInput(""); setVerifyError(""); }} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
                         <div style={{ display: "flex", gap: 8 }}>
                           <button onClick={() => sendClaimVerification(currentChurch.id)} disabled={claimSubmitting} style={{ padding: "10px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Resend</button>
-                          <button onClick={() => verifyClaimCode(currentChurch.id)} disabled={claimSubmitting || verifyCodeInput.length !== 6} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || verifyCodeInput.length !== 6) ? 0.5 : 1 }}>{claimSubmitting ? "Verifying..." : "Verify & Continue to Payment →"}</button>
+                          <button onClick={() => verifyClaimCode(currentChurch.id)} disabled={claimSubmitting || verifyCodeInput.length !== 6} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || verifyCodeInput.length !== 6) ? 0.5 : 1 }}>{claimSubmitting ? "Verifying..." : claimManualReview ? "Verify email →" : "Verify & Continue to Payment →"}</button>
                         </div>
                       </div>
                     </div>
@@ -3231,8 +3273,8 @@ export default function ByTheirFruit() {
                       <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading }}>Email verified!</div>
                       {claimManualReview ? (
                         <>
-                          <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4, lineHeight: 1.6, maxWidth: 380, marginLeft: "auto", marginRight: "auto" }}>This church has no website on file, so one of our team will confirm your role within 24-48 hours. Once approved, the Subscribe button appears on your dashboard.</div>
-                          <button onClick={() => { setShowClaimModal(false); setClaimStep("form"); setVerifyCodeInput(""); setClaimManualReview(false); }} style={{ marginTop: 18, padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Got it</button>
+                          <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4, lineHeight: 1.6, maxWidth: 380, marginLeft: "auto", marginRight: "auto" }}>We couldn't match your email to this church's website, so our team will confirm your role within 24-48 hours. The church details you entered are saved and go live when your claim is approved. Check back on the church page; once approved, the Subscribe button appears on your dashboard.</div>
+                          <button onClick={closeClaimModal} style={{ marginTop: 18, padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Got it</button>
                         </>
                       ) : (
                         <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4 }}>Redirecting you to set up your subscription...</div>
@@ -4265,7 +4307,7 @@ export default function ByTheirFruit() {
                   </div>
                 ))}
               </div>
-              <button onClick={() => { if (!user) { setShowAuthModal(true); return; } if (!hasClaimed) { showToast("Claim your church first, then subscribe from your dashboard.", "info"); navigate("discover"); return; } window.location.assign(`https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00?prefilled_email=${encodeURIComponent(user.email || "")}&client_reference_id=${encodeURIComponent(user.id)}`); }} style={{ padding: "14px 36px", borderRadius: T.radiusFull, fontSize: 15, fontWeight: 700, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", boxShadow: "0 2px 16px rgba(37,99,235,0.25)", transition: "all 0.2s" }}>Subscribe Now</button>
+              <button onClick={async () => { if (!user) { setShowAuthModal(true); return; } if (!hasClaimed) { const pending = await fetchMyPendingClaim().catch(() => null); if (pending) { showToast("Your claim is being reviewed. You can subscribe as soon as it is approved, usually within 24-48 hours.", "info"); return; } showToast("Claim your church first, then subscribe from your dashboard.", "info"); navigate("discover"); return; } window.location.assign(`https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00?prefilled_email=${encodeURIComponent(user.email || "")}&client_reference_id=${encodeURIComponent(user.id)}`); }} style={{ padding: "14px 36px", borderRadius: T.radiusFull, fontSize: 15, fontWeight: 700, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", boxShadow: "0 2px 16px rgba(37,99,235,0.25)", transition: "all 0.2s" }}>Subscribe Now</button>
               <div style={{ fontSize: 12, color: T.textMuted, marginTop: 12 }}>Secure payment via Stripe. Cancel anytime.</div>
             </div>
           </FadeIn>
@@ -4382,7 +4424,7 @@ export default function ByTheirFruit() {
 
               <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>3. How We Share Your Information</h2>
               <p><strong style={{ color: T.text }}>Publicly Visible Information:</strong> When you submit a review, your display name and review content are publicly visible on the Service. Your email address is not publicly displayed.</p>
-              <p><strong style={{ color: T.text }}>Service Providers:</strong> We share information with third-party service providers who assist us in operating the Service, including: Supabase (database hosting and authentication), Stripe (payment processing), Cloudflare (hosting, DNS, and content delivery), Google and Microsoft (sign-in), PostHog (product analytics such as which pages are visited), Resend (transactional email), ipapi.co (an approximate location from your IP address, only if you decline the browser location prompt), and OpenStreetMap Nominatim (converting a zip code to coordinates when our own data has no match). These providers are contractually obligated to use your information only for the purpose of providing services to us.</p>
+              <p><strong style={{ color: T.text }}>Service Providers:</strong> We share information with third-party service providers who assist us in operating the Service, including: Supabase (database hosting and authentication), Stripe (payment processing), Cloudflare (hosting, DNS, and content delivery), Google and Microsoft (sign-in), PostHog (product analytics such as which pages are visited), Resend (transactional email), ipapi.co (an approximate location from your IP address, when browser location is unavailable or you decline the prompt), and OpenStreetMap Nominatim (converting a zip code to coordinates when our own data has no match). These providers are contractually obligated to use your information only for the purpose of providing services to us.</p>
               <p><strong style={{ color: T.text }}>Legal Requirements:</strong> We may disclose your information if required by law, regulation, legal process, or governmental request, or if we believe disclosure is necessary to protect our rights, your safety, or the safety of others.</p>
               <p><strong style={{ color: T.text }}>Business Transfers:</strong> In the event of a merger, acquisition, or sale of all or a portion of our assets, your information may be transferred as part of that transaction.</p>
               <p>We do not sell your personal information to third parties. We do not share your personal information with third parties for their direct marketing purposes.</p>
