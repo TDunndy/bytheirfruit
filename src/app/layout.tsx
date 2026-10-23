@@ -9,17 +9,20 @@ export const metadata: Metadata = {
     url: 'https://bytheirfruit.church',
     siteName: 'By Their Fruit',
     type: 'website',
+    images: [{ url: 'https://bytheirfruit.church/og-image.png', width: 1200, height: 630, alt: 'By Their Fruit — church reviews from the congregation' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'By Their Fruit — Church Reviews by the Congregation',
     description: 'Real church reviews from the people who attend. Honest, structured, and built to help churches grow. Matthew 7:16.',
+    images: ['https://bytheirfruit.church/og-image.png'],
   },
   keywords: ['church reviews', 'church ratings', 'find a church', 'church near me', 'honest church reviews', 'church community', 'by their fruit', 'congregation reviews', 'best churches near me', 'church recommendations', 'rate my church', 'church feedback', 'church search', 'church directory', 'church comparison'],
   robots: { index: true, follow: true },
   alternates: { canonical: 'https://bytheirfruit.church' },
   verification: {},
   icons: {
+    apple: '/apple-touch-icon.png',
     icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%2318181b'/><path d='M16 6C16 6 10 13 10 18C10 21.3 12.7 24 16 24C19.3 24 22 21.3 22 18C22 13 16 6 16 6Z' fill='%232563eb'/></svg>",
   },
 }
@@ -54,7 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         ` }} />
       </head>
       <body suppressHydrationWarning style={{ margin: 0, padding: 0 }}>
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var d=window.matchMedia('(prefers-color-scheme:dark)').matches;document.documentElement.style.backgroundColor=d?'#0a0a0b':'#fafafa';document.body.style.backgroundColor=d?'#0a0a0b':'#fafafa'}catch(e){}})()` }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var m=null;try{m=localStorage.getItem('btf-theme')}catch(e){}var d=m==='dark'||(m!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);var c=d?'#0a0a0b':'#fafafa';document.documentElement.style.backgroundColor=c;document.body.style.backgroundColor=c}catch(e){}})()` }} />
         {children}
       </body>
     </html>
