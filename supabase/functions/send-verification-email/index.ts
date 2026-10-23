@@ -26,6 +26,9 @@ const FROM_ADDRESS = Deno.env.get("VERIFY_FROM_ADDRESS") ?? "By Their Fruit <ver
 
 const CODE_TTL_MS = 60 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
+// Codes can now go to any address, so cap how many churches one account can
+// request codes for at the same time (each live code lasts CODE_TTL_MS).
+const MAX_LIVE_CODES_PER_USER = 3;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -105,13 +108,21 @@ Deno.serve(async (req) => {
     const freeMail = FREE_MAIL.has(emailDomain);
 
     const { data: existing } = await admin
-      .from("church_claims").select("id, user_id, verified, code_expires_at, created_at").eq("church_id", churchId).maybeSingle();
+      .from("church_claims").select("id, user_id, verified, code_expires_at, review_status, created_at").eq("church_id", churchId).maybeSingle();
     const now = Date.now();
-    if (existing && existing.user_id !== user.id) {
+    // A rejected claim never blocks the next claimant; review_church_claim()
+    // also clears its verification, this is belt and braces.
+    if (existing && existing.user_id !== user.id && existing.review_status !== "rejected") {
       const stillPending = existing.code_expires_at && new Date(existing.code_expires_at).getTime() > now;
       if (existing.verified || stillPending) {
         return reply({ error: "Another person is already verifying this church. Please try again later." }, 409);
       }
+    }
+    const { count: liveCodes } = await admin
+      .from("church_claims").select("id", { count: "exact", head: true })
+      .eq("user_id", user.id).neq("church_id", churchId).gt("code_expires_at", new Date(now).toISOString());
+    if ((liveCodes ?? 0) >= MAX_LIVE_CODES_PER_USER) {
+      return reply({ error: "You have several verification codes waiting. Please use one, or try again in an hour." }, 429);
     }
     if (existing && existing.user_id === user.id && existing.code_expires_at) {
       const issuedAt = new Date(existing.code_expires_at).getTime() - CODE_TTL_MS;
