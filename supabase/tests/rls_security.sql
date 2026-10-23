@@ -339,6 +339,17 @@ select pg_temp.as_postgres();
 select pg_temp.ok((select reviews from public.site_stats()) = (select count(*) from public.reviews where status = 'published' and deleted_at is null), 'site_stats counts published reviews only');
 
 -- Alice claims Far Church Seattle, which has no website on file: the code proves the email, not ownership.
+select pg_temp.ok(
+  pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+    $$insert into public.claim_requests (church_id, user_id, full_name, role_at_church, work_email, profile)
+      values ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000a', 'Alice Anderson', 'Pastor', 'alice@gmail.com',
+              '{"pastor_name":"Alice Anderson","avg_attendance":"120","year_founded":"1987","programs":["Youth","Choir"],"description":"Small church","staff_count":"not a number"}')$$) = '',
+  'claimant can submit a claim request with profile details');
+select pg_temp.ok(
+  pg_temp.try_as('00000000-0000-0000-0000-00000000000b',
+    $$insert into public.claim_requests (church_id, user_id, full_name, role_at_church, work_email, status)
+      values ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000b', 'Bob', 'Pastor', 'bob@x.org', 'approved')$$) = '42501',
+  'claimant cannot submit a claim request as approved');
 insert into public.church_claims (church_id, user_id, claim_email, verification_code_hash, code_expires_at, review_status)
 values ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000a', 'alice@gmail.com',
         encode(extensions.digest('654321', 'sha256'), 'hex'), now() + interval '1 hour', 'pending_review');
@@ -359,13 +370,32 @@ select pg_temp.ok((public.review_church_claim((select id from public.church_clai
 select pg_temp.as_postgres();
 select pg_temp.ok((select claimed_by is null from public.churches where id = '10000000-0000-0000-0000-000000000003'), 'rejected claim leaves the church unclaimed');
 select pg_temp.ok((select review_status = 'rejected' and reviewed_by = '00000000-0000-0000-0000-00000000000d' and review_note = 'not convinced' from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), 'rejection is recorded');
+select pg_temp.ok((select not verified and verified_at is null and code_expires_at is null and verification_code_hash is null from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), 'rejection clears the verification so others can claim');
+select pg_temp.ok((select status = 'rejected' from public.claim_requests where church_id = '10000000-0000-0000-0000-000000000003' and user_id = '00000000-0000-0000-0000-00000000000a'), 'rejection is mirrored to claim_requests');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+select pg_temp.ok((public.verify_claim_code('10000000-0000-0000-0000-000000000003', '654321')->>'ok') = 'false', 'a rejected claim cannot be verified again');
+select pg_temp.as_postgres();
+select pg_temp.ok(
+  pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+    $$update public.claim_requests set status = 'approved' where church_id = '10000000-0000-0000-0000-000000000003'$$) = '42501',
+  'rejected claimant cannot mark own request approved');
+select pg_temp.ok(
+  pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+    $$update public.claim_requests set status = 'pending', reviewed_by = null, reviewed_at = null where church_id = '10000000-0000-0000-0000-000000000003'$$) = '',
+  'rejected claimant can re-apply');
+select pg_temp.as_postgres();
+select pg_temp.ok((select status = 'pending' from public.claim_requests where church_id = '10000000-0000-0000-0000-000000000003' and user_id = '00000000-0000-0000-0000-00000000000a'), 're-application resets the request to pending');
 
-update public.church_claims set review_status = 'pending_review' where church_id = '10000000-0000-0000-0000-000000000003';
+-- The edge function (service role) issues a fresh code and Alice verifies it again.
+update public.church_claims set review_status = 'pending_review', verified = true, verified_at = now() where church_id = '10000000-0000-0000-0000-000000000003';
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');
 select pg_temp.ok((public.review_church_claim((select id from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), true, null)->>'ok') = 'true', 'admin can approve a claim');
 select pg_temp.as_postgres();
 select pg_temp.ok((select claimed_by = '00000000-0000-0000-0000-00000000000a' and claim_verified from public.churches where id = '10000000-0000-0000-0000-000000000003'), 'approval claims the church for the claimant');
 select pg_temp.ok((select review_status = 'approved' from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), 'approval is recorded');
+select pg_temp.ok((select status = 'approved' from public.claim_requests where church_id = '10000000-0000-0000-0000-000000000003' and user_id = '00000000-0000-0000-0000-00000000000a'), 'approval is mirrored to claim_requests');
+select pg_temp.ok((select pastor_name = 'Alice Anderson' and avg_attendance = 120 and year_founded = 1987 and programs = array['Youth','Choir'] and description = 'Small church' and staff_count is null
+  from public.churches where id = '10000000-0000-0000-0000-000000000003'), 'approval applies valid profile fields and skips invalid ones');
 
 -- A claim cannot be approved once someone else holds the church.
 update public.church_claims set review_status = 'pending_review' where church_id = '10000000-0000-0000-0000-000000000003';
@@ -380,6 +410,25 @@ select pg_temp.ok((select count(*) from public.church_claims) >= 2, 'moderator r
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
 select pg_temp.ok((select count(*) from public.church_claims) = 1, 'claimant reads only own claim');
 select pg_temp.as_postgres();
+
+-- Claimants cannot write church_claims at all: no self-issued codes, no forged "verified" rows.
+insert into public.churches (id, name, city, state, status) values
+  ('10000000-0000-0000-0000-000000000009', 'Unclaimed Chapel', 'Austin', 'TX', 'approved');
+select pg_temp.ok(
+  pg_temp.try_as('00000000-0000-0000-0000-00000000000b',
+    $$insert into public.church_claims (church_id, user_id, claim_email, verified, verified_at, review_status)
+      values ('10000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-00000000000b', 'pastor@unclaimed.org', true, now(), 'pending_review')$$) <> '',
+  'claimant cannot insert a forged verified claim');
+select pg_temp.ok(
+  pg_temp.try_as('00000000-0000-0000-0000-00000000000b',
+    $$insert into public.church_claims (church_id, user_id, claim_email, verification_code_hash, code_expires_at, review_status)
+      values ('10000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-00000000000b', 'me@x.org', encode(extensions.digest('111111', 'sha256'), 'hex'), now() + interval '1 hour', 'auto')$$) <> '',
+  'claimant cannot insert a claim with a self-chosen code');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000b');
+select pg_temp.ok((public.verify_claim_code('10000000-0000-0000-0000-000000000009', '111111')->>'ok') = 'false', 'self-issued code does not verify');
+select pg_temp.as_postgres();
+select pg_temp.ok((select claimed_by is null from public.churches where id = '10000000-0000-0000-0000-000000000009'), 'unclaimed church stays unclaimed');
+select pg_temp.ok(not exists (select 1 from public.church_claims where church_id = '10000000-0000-0000-0000-000000000009'), 'no claim row was created');
 
 \echo
 \echo 'All tests passed.'
