@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import {
   churchesNear, geocodeZip as geocodeZipDb, requestClaimCode, verifyClaimCode as verifyClaimCodeRpc,
   recordReviewLocation, fetchChurchDemographics, updateChurchProfile, PUBLIC_REVIEW_SELECT,
+  fetchFeaturedChurches, fetchSiteStats, fetchChurchById,
 } from "@/lib/api";
 
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');`;
@@ -15,7 +16,7 @@ const SHARED = {
   heading: "'Sora', sans-serif", body: "'Plus Jakarta Sans', sans-serif",
   radius: 12, radiusSm: 8, radiusFull: 9999,
   accent: "#2563eb", accentSoft: "#eff4ff", accentBorder: "#bfdbfe",
-  green: "#16a34a", greenSoft: "#f0fdf4", grheenBorder: "#bbf7d0",
+  green: "#16a34a", greenSoft: "#f0fdf4", greenBorder: "#bbf7d0",
   amber: "#d97706", amberSoft: "#fffbeb", amberBorder: "#fde68a",
   red: "#dc2626", redSoft: "#fef2f2", redBorder: "#fecaca",
 };
@@ -1088,6 +1089,8 @@ export default function ByTheirFruit() {
 
   // Platform stats for social proof
   const [platformStats, setPlatformStats] = useState({ churches: 0, reviews: 0, users: 0 });
+  const [featuredChurches, setFeaturedChurches] = useState([]);
+  const demographicsPromptedFor = useRef(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -1163,6 +1166,11 @@ export default function ByTheirFruit() {
       } else if (hash.startsWith("#/blog")) {
         /* Blog temporarily disabled — redirect to home */
         setPage("home");
+      } else {
+        // Empty hash (back button to "/" or a hash we don't know): home.
+        setPage("home");
+        setSelectedChurch(null);
+        updateSEOForPage("home");
       }
     };
     handleHash();
@@ -1212,6 +1220,7 @@ export default function ByTheirFruit() {
   });
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimStatus, setClaimStatus] = useState(null); // null | 'pending' | 'approved' | 'rejected'
+  const [claimManualReview, setClaimManualReview] = useState(false);
   const [claimStep, setClaimStep] = useState("form"); // "form" | "verify" | "done"
   const [verifyCodeInput, setVerifyCodeInput] = useState("");
   const [verifyError, setVerifyError] = useState("");
@@ -1251,19 +1260,10 @@ export default function ByTheirFruit() {
 
   const fetchChurches = useCallback(async () => {
     try {
-      const { count, error } = await supabase
-        .from("churches")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "approved"); // public stat = approved churches only
-      if (error) console.error("fetchChurches error:", error);
-      setTotalChurchCount(count || 0);
-
-      // Fetch platform stats for social proof
-      const [reviewRes, userRes] = await Promise.all([
-        supabase.from("reviews").select("*", { count: "exact", head: true }).eq("status", "published"),
-        supabase.from("profiles").select("*", { count: "exact", head: true }),
-      ]);
-      setPlatformStats({ churches: count || 0, reviews: reviewRes.count || 0, users: userRes.count || 0 });
+      // One cheap RPC instead of three exact counts over 270k rows.
+      const stats = await fetchSiteStats();
+      setTotalChurchCount(stats.churches);
+      setPlatformStats({ churches: stats.churches, reviews: stats.reviews, users: stats.members });
     } catch (err) {
       console.error("fetchChurches exception:", err);
       setTotalChurchCount(0);
@@ -1595,7 +1595,6 @@ export default function ByTheirFruit() {
       setMyChurchesData({ reviewed: reviewedChurches, claimed: claimedChurches });
       // Auto-select "owned" tab if user has claimed churches
       if (claimedChurches.length > 0) {
-        setMyChurchesTab("owned");
         fetchOwnerDashboard(claimedChurches[0].id);
       }
     } catch (e) {
@@ -1720,16 +1719,32 @@ export default function ByTheirFruit() {
           setSubmitting(true);
           try {
             const parsed = JSON.parse(pending);
-            if (parsed.churchId) {
-              const cachedChurch = churches.find(c => c.id === parsed.churchId);
-              if (cachedChurch) setRateChurch(cachedChurch);
+            let draftChurch = churches.find(c => c.id === parsed.churchId) || null;
+            if (!draftChurch && parsed.churchId) {
+              // The list is empty after an OAuth redirect; fetch the church so the form and success screen know it.
+              const row = await fetchChurchById(parsed.churchId).catch(() => null);
+              if (row) draftChurch = dbChurchToLocal(row);
             }
-            const success = await submitReviewToDB(parsed, u.id);
-            if (success) {
-              setRateStep(3);
+            if (draftChurch) setRateChurch(draftChurch);
+            if (parsed.photosPending > 0) {
+              // Photos could not be kept across the redirect: restore the draft and let the user re-attach them.
+              setRateScores(parsed.scores || {});
+              setRateComments(parsed.comments || {});
+              setRateText(parsed.text || "");
+              setRateRole(parsed.role || "");
+              setRateLastVisited(parsed.lastVisited || "");
+              setIsEditing(!!parsed.isEdit);
+              setRateStep(2);
               setPage("rate");
+              showToast("You're signed in. Please re-attach your photos, then submit your experience.", "info");
             } else {
-              showToast("Something went wrong submitting your experience. Please try again.", "error");
+              const success = await submitReviewToDB(parsed, u.id);
+              if (success) {
+                setRateStep(3);
+                setPage("rate");
+              } else {
+                showToast("Something went wrong submitting your experience. Please try again.", "error");
+              }
             }
           } catch (e) {
             console.error("Failed to process pending review:", e);
@@ -1767,10 +1782,15 @@ export default function ByTheirFruit() {
         const { data: claimedCheck } = await supabase.from("churches").select("id").eq("claimed_by", u.id).limit(1);
         if (claimedCheck && claimedCheck.length > 0) setHasClaimed(true);
 
-        // Check if user has filled demographics, if not show the profile complete modal
-        const { data: profileData } = await supabase.from("profiles").select("gender,age_range,income_bracket").eq("id", u.id).single();
-        if (profileData && !profileData.gender && !profileData.age_range && !profileData.income_bracket) {
-          setShowProfileComplete(true);
+        // Ask for demographics once per page load. Supabase re-emits SIGNED_IN
+        // whenever the tab regains focus, so without this guard the modal
+        // reopened every time someone who skipped it came back to the tab.
+        if (demographicsPromptedFor.current !== u.id) {
+          demographicsPromptedFor.current = u.id;
+          const { data: profileData } = await supabase.from("profiles").select("gender,age_range,income_bracket").eq("id", u.id).single();
+          if (profileData && !profileData.gender && !profileData.age_range && !profileData.income_bracket) {
+            setShowProfileComplete(true);
+          }
         }
 
         // Process pending review from localStorage (for OAuth redirects)
@@ -1813,7 +1833,10 @@ export default function ByTheirFruit() {
 
   /* --- INITIAL DATA LOAD --- */
   useEffect(() => {
-    if (mounted) fetchChurches();
+    if (!mounted) return;
+    fetchChurches();
+    // Home-page spotlight: best-rated churches with at least one review.
+    fetchFeaturedChurches().then((rows) => setFeaturedChurches(rows.map(dbChurchToLocal))).catch((e) => console.error("featured churches:", e));
   }, [mounted, fetchChurches]);
 
   /* --- AUTO-LOAD CHURCH DASHBOARD on direct navigation/refresh ---
@@ -2061,20 +2084,8 @@ export default function ByTheirFruit() {
       return;
     }
 
-    // Client-side domain check
-    const church = churches.find(c => c.id === churchId);
-    if (church?.website) {
-      try {
-        const websiteDomain = new URL(
-          church.website.startsWith("http") ? church.website : `https://${church.website}`
-        ).hostname.replace(/^www\./, "");
-        const emailDomain = claimData.workEmail.split("@")[1]?.toLowerCase();
-        if (emailDomain !== websiteDomain) {
-          showToast(`Your email must match the church website domain (@${websiteDomain})`, "error");
-          return;
-        }
-      } catch { /* skip domain check if URL parse fails */ }
-    }
+    // The edge function decides whether the email proves ownership (church
+    // website domain) or the claim needs a human look (no website on file).
 
     setClaimSubmitting(true);
     setVerifyError("");
@@ -2117,6 +2128,17 @@ export default function ByTheirFruit() {
       setVerifyError(result.error || "Verification failed. Please try again.");
       return;
     }
+
+    if (result.manual_review) {
+      // Email proven, ownership not: an admin approves it in review_church_claim(). No payment yet.
+      setClaimManualReview(true);
+      setClaimSubmitting(false);
+      setClaimStep("done");
+      setClaimStatus("pending");
+      showToast("Email verified! We'll confirm your role within 24-48 hours.", "success");
+      return;
+    }
+    setClaimManualReview(false);
 
     // Claimants may only edit church profile fields; a DB trigger enforces the list.
     try {
@@ -2399,8 +2421,10 @@ export default function ByTheirFruit() {
     };
 
     if (!user) {
-      // Store pending review for after auth
-      localStorage.setItem("btf_pending_review", JSON.stringify(reviewData));
+      // Store the draft for after sign-in. File objects do not survive JSON,
+      // so photos are dropped here and the user re-attaches them afterwards.
+      const { photos, ...draft } = reviewData;
+      localStorage.setItem("btf_pending_review", JSON.stringify({ ...draft, photosPending: photos?.length || 0 }));
       setPendingReview(reviewData);
       setShowAuthModal(true);
       return;
@@ -2630,18 +2654,18 @@ export default function ByTheirFruit() {
                 <button onClick={() => navigate("discover")} style={{ fontSize: 12, fontWeight: 600, color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.body }}>Browse all →</button>
               </div>
               {(() => {
-                const reviewed = churches.filter(c => c.totalReviews > 0 && hasScores(c)).sort((a, b) => avg(b.scores) - avg(a.scores)).slice(0, 3);
+                const reviewed = featuredChurches.slice(0, 3);
                 if (reviewed.length > 0) return (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
                     {reviewed.map((church, i) => {
-                      const overall = avg(church.scores);
+                      const overall = hasScores(church) ? avg(church.scores) : null;
                       return (
                         <div key={church.id} onClick={() => viewChurch(church)} style={{ padding: "20px", borderRadius: T.radius, background: T.surface, border: `1.5px solid ${T.border}`, cursor: "pointer", transition: "all 0.2s" }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(37,99,235,0.08)"; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                             <div style={{ fontSize: 11, fontWeight: 600, color: T.accent, padding: "2px 8px", borderRadius: T.radiusFull, background: T.accentSoft, border: `1px solid ${T.accentBorder}` }}>#{i + 1} Rated</div>
-                            <div style={{ fontSize: 22, fontWeight: 800, fontFamily: T.heading, color: scoreColor(overall) }}>{overall.toFixed(1)}</div>
+                            <div style={{ fontSize: 22, fontWeight: 800, fontFamily: T.heading, color: overall != null ? scoreColor(overall) : T.textMuted }}>{overall != null ? overall.toFixed(1) : "New"}</div>
                           </div>
                           <h3 style={{ fontSize: 15, fontFamily: T.heading, fontWeight: 700, margin: "0 0 3px", letterSpacing: "-0.01em" }}>{church.name}</h3>
                           <div style={{ fontSize: 12, color: T.textMuted }}>{church.city}, {church.state}</div>
@@ -3064,7 +3088,7 @@ export default function ByTheirFruit() {
                 <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
                   <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{claimStep === "verify" ? "Verify your email" : claimStep === "done" ? "Verified!" : `Claim ${currentChurch.name}`}</h2>
                   {claimStep === "form" && <>
-                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 16px" }}>Tell us about your role at this church. We'll verify your church email, then direct you to set up your subscription.</p>
+                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 16px" }}>Tell us about your role at this church. We'll email you a code to confirm your address. If the church has no website on file, our team confirms your role within 24-48 hours before you subscribe.</p>
                   <div style={{ padding: "12px 16px", borderRadius: T.radiusSm, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Church Subscription</div>
@@ -3205,7 +3229,14 @@ export default function ByTheirFruit() {
                     <div style={{ marginTop: 24, textAlign: "center", padding: "20px 0" }}>
                       <div style={{ width: 56, height: 56, borderRadius: 28, background: T.greenSoft, border: `2px solid ${T.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 16px" }}>✔</div>
                       <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading }}>Email verified!</div>
-                      <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4 }}>Redirecting you to set up your subscription...</div>
+                      {claimManualReview ? (
+                        <>
+                          <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4, lineHeight: 1.6, maxWidth: 380, marginLeft: "auto", marginRight: "auto" }}>This church has no website on file, so one of our team will confirm your role within 24-48 hours. Once approved, the Subscribe button appears on your dashboard.</div>
+                          <button onClick={() => { setShowClaimModal(false); setClaimStep("form"); setVerifyCodeInput(""); setClaimManualReview(false); }} style={{ marginTop: 18, padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Got it</button>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4 }}>Redirecting you to set up your subscription...</div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -3590,7 +3621,7 @@ export default function ByTheirFruit() {
                 <p style={{ fontSize: 14, color: T.textSoft, margin: "0 0 4px" }}>Your experience with <strong>{rateChurch?.name}</strong> has been submitted and will be visible after admin approval.</p>
                 <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 32px" }}>Our team reviews every submission to ensure quality and authenticity. This usually takes less than 24 hours.</p>
                 <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                  <button onClick={() => { const c = churches.find(ch => ch.id === rateChurch?.id); if (c) viewChurch(c); }} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>View Church Profile</button>
+                  <button onClick={() => { if (rateChurch) viewChurch(rateChurch); }} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.text, color: T.bg, border: "none", cursor: "pointer", fontFamily: T.body }}>View Church Profile</button>
                   <button onClick={() => startRateFlow()} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Share Another Experience</button>
                 </div>
               </div>
@@ -4234,7 +4265,7 @@ export default function ByTheirFruit() {
                   </div>
                 ))}
               </div>
-              <button onClick={() => { window.open("https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00", "_blank"); }} style={{ padding: "14px 36px", borderRadius: T.radiusFull, fontSize: 15, fontWeight: 700, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", boxShadow: "0 2px 16px rgba(37,99,235,0.25)", transition: "all 0.2s" }}>Subscribe Now</button>
+              <button onClick={() => { if (!user) { setShowAuthModal(true); return; } if (!hasClaimed) { showToast("Claim your church first, then subscribe from your dashboard.", "info"); navigate("discover"); return; } window.location.assign(`https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00?prefilled_email=${encodeURIComponent(user.email || "")}&client_reference_id=${encodeURIComponent(user.id)}`); }} style={{ padding: "14px 36px", borderRadius: T.radiusFull, fontSize: 15, fontWeight: 700, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", boxShadow: "0 2px 16px rgba(37,99,235,0.25)", transition: "all 0.2s" }}>Subscribe Now</button>
               <div style={{ fontSize: 12, color: T.textMuted, marginTop: 12 }}>Secure payment via Stripe. Cancel anytime.</div>
             </div>
           </FadeIn>
@@ -4351,7 +4382,7 @@ export default function ByTheirFruit() {
 
               <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>3. How We Share Your Information</h2>
               <p><strong style={{ color: T.text }}>Publicly Visible Information:</strong> When you submit a review, your display name and review content are publicly visible on the Service. Your email address is not publicly displayed.</p>
-              <p><strong style={{ color: T.text }}>Service Providers:</strong> We share information with third-party service providers who assist us in operating the Service, including: Supabase (database hosting and authentication), Stripe (payment processing), Cloudflare (hosting, DNS, and content delivery), and Google (authentication via Google Sign-In). These providers are contractually obligated to use your information only for the purpose of providing services to us.</p>
+              <p><strong style={{ color: T.text }}>Service Providers:</strong> We share information with third-party service providers who assist us in operating the Service, including: Supabase (database hosting and authentication), Stripe (payment processing), Cloudflare (hosting, DNS, and content delivery), Google and Microsoft (sign-in), PostHog (product analytics such as which pages are visited), Resend (transactional email), ipapi.co (an approximate location from your IP address, only if you decline the browser location prompt), and OpenStreetMap Nominatim (converting a zip code to coordinates when our own data has no match). These providers are contractually obligated to use your information only for the purpose of providing services to us.</p>
               <p><strong style={{ color: T.text }}>Legal Requirements:</strong> We may disclose your information if required by law, regulation, legal process, or governmental request, or if we believe disclosure is necessary to protect our rights, your safety, or the safety of others.</p>
               <p><strong style={{ color: T.text }}>Business Transfers:</strong> In the event of a merger, acquisition, or sale of all or a portion of our assets, your information may be transferred as part of that transaction.</p>
               <p>We do not sell your personal information to third parties. We do not share your personal information with third parties for their direct marketing purposes.</p>

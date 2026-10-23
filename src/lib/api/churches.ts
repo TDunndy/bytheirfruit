@@ -47,3 +47,41 @@ export async function updateChurchProfile(churchId: string, patch: ChurchProfile
   const { error } = await supabase.from('churches').update(patch).eq('id', churchId)
   if (error) throw error
 }
+
+/** Columns the public cards need; never `select *` on churches (it carries billing columns). */
+export const CHURCH_CARD_SELECT =
+  'id, name, denomination, city, state, zip, address, website, phone, size, service_style, service_times, ' +
+  'latitude, longitude, total_reviews, score_teaching, score_welcome, score_community, score_worship, ' +
+  'score_prayer, score_kids, score_youth, score_leadership, score_service, score_finances, score_overall, ' +
+  'status, claimed_by, claimed_at, subscription_status, description, pastor_name'
+
+/** Home-page spotlight: the best-rated churches that have at least one review. */
+export async function fetchFeaturedChurches(limit = 3) {
+  const { data, error } = await supabase
+    .from('churches')
+    .select(CHURCH_CARD_SELECT)
+    .eq('status', 'approved')
+    .gte('total_reviews', 1)
+    .order('score_overall', { ascending: false, nullsFirst: false })
+    .order('total_reviews', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data ?? []
+}
+
+/** One church by id, full row (used when a deep link or a restored draft names a church). */
+export async function fetchChurchById(id: string): Promise<ChurchRow | null> {
+  const { data, error } = await supabase.from('churches').select('*').eq('id', id).maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export interface SiteStats { churches: number; reviews: number; members: number }
+
+/** Social-proof counters from site_stats(); one cheap RPC instead of three full-table counts. */
+export async function fetchSiteStats(): Promise<SiteStats> {
+  const { data, error } = await supabase.rpc('site_stats')
+  if (error) throw error
+  const row = (data ?? [])[0]
+  return { churches: Number(row?.churches ?? 0), reviews: Number(row?.reviews ?? 0), members: Number(row?.members ?? 0) }
+}
