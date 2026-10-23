@@ -35,6 +35,7 @@ and the seven hardening parts with the versions the connector assigned:
 20261022181948_hardening_4_geo_search
 20261022182345_hardening_5_idx_churches_earth
 20261022182445_hardening_6_idx_churches_city_trgm
+20261023042127_site_stats_and_claim_review
 ```
 
 (Part 3 sorts before 2a/2b; nothing in it depends on them.)
@@ -61,6 +62,14 @@ Security advisor items that remain **on purpose**:
   `recalculate_church_scores` callable by signed-in users: each gates
   inside on `auth.uid()`.
 - `pg_trgm` in `public`: pre-existing; moving it means rebuilding the name index.
+
+### Claim review (added 2026-10-23)
+
+`send-verification-email` now sends a code to any address. When the address
+is on the church's website domain the claim completes on its own; otherwise
+(no website on file, which is 92 % of listings) the claim lands in the admin
+dashboard's **Claims** tab after the code is verified. Approve there to make
+the claimant the owner; they subscribe from their dashboard afterwards.
 
 ## 2. Deploy edge functions and set secrets
 

@@ -10,7 +10,7 @@ Everything marked done below was applied to production on 2026-10-22 (hardening 
 - **done** Profile PII (email, phone, address, zip, demographics) hidden from the public API; `public_profiles` view for display names.
 - **done** Reviews pinned to `pending` on insert and on edit; flag counts and approvals cannot be forged.
 - **done** Claimants restricted to profile fields; billing and scores frozen.
-- **done** Hashed, expiring claim codes verified server-side; claim hijack closed; free-mail domains rejected when no website exists.
+- **done** Hashed, expiring claim codes verified server-side; claim hijack closed; claims that cannot be proven by email domain go to an admin review queue instead of being rejected.
 - **done** Reviewer coordinates moved to a moderator-only table; distance and anti-abuse holds computed in the DB.
 - **done** JSON-LD XSS on church pages fixed; UUID validation on the SSR route.
 - **done** Internal functions no longer callable by anon; `search_path` pinned.
@@ -22,6 +22,7 @@ Everything marked done below was applied to production on 2026-10-22 (hardening 
 
 - **done** Edit window aligned to the 7-day RLS rule.
 - **done** Near Me and zip search use a true radius query (`churches_near`); zips geocode from our own data.
+- **done** Home-page counters come from `site_stats()` (one RPC) instead of three exact counts; Featured Churches loads its own query; back button returns home; church dashboard loads for claimed churches; Subscribe links carry the user id; review drafts survive the sign-in redirect.
 - **done** Sitemaps sized to the API row cap; hash URLs removed.
 - **done** Dead "browse" route, missing pending badge, admin score column, bulk updates, CSV escaping.
 - **done** Stripe redirect no longer blocked by popup blockers.

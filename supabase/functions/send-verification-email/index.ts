@@ -6,8 +6,9 @@
 //     SHA-256 hash is stored; verification happens in verify_claim_code()
 //   * a claim that belongs to someone else cannot be overwritten while it is
 //     verified or still within its code window
-//   * the work email must match the church website's domain; churches with
-//     no website must use a non-free-mail domain (manual review still applies)
+//   * a work email on the church website's domain is verified automatically;
+//     any other address gets a code too, but the claim waits for an admin
+//     (church_claims.review_status = 'pending_review')
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -93,15 +94,15 @@ Deno.serve(async (req) => {
     if (churchError || !church) return reply({ error: "Church not found." }, 404);
     if (church.claimed_by && church.claimed_by !== user.id) return reply({ error: "This church has already been claimed." }, 409);
 
+    // Ownership proof. A work email on the church's own website domain is
+    // verified automatically. Everything else (no website on file, which is
+    // 92 % of listings; a free-mail address; a different domain) still gets
+    // a code, but the claim waits for an admin in review_church_claim().
     const emailDomain = claimEmail.split("@")[1];
     const siteDomain = websiteDomain(church.website);
-    if (siteDomain) {
-      if (emailDomain !== siteDomain && !emailDomain.endsWith("." + siteDomain)) {
-        return reply({ error: `Your email must match the church website domain (@${siteDomain}).` }, 400);
-      }
-    } else if (FREE_MAIL.has(emailDomain)) {
-      return reply({ error: "Please use your church's own email domain, not a personal email address." }, 400);
-    }
+    const autoVerify = !!siteDomain && (emailDomain === siteDomain || emailDomain.endsWith("." + siteDomain));
+    const reviewStatus = autoVerify ? "auto" : "pending_review";
+    const freeMail = FREE_MAIL.has(emailDomain);
 
     const { data: existing } = await admin
       .from("church_claims").select("id, user_id, verified, code_expires_at, created_at").eq("church_id", churchId).maybeSingle();
@@ -128,6 +129,10 @@ Deno.serve(async (req) => {
       verified: false,
       verified_at: null,
       subscription_status: "pending",
+      review_status: reviewStatus,
+      reviewed_by: null,
+      reviewed_at: null,
+      review_note: autoVerify ? null : (siteDomain ? `email domain does not match website (${siteDomain})` : freeMail ? "no website on file; personal email address" : "no website on file"),
     }, { onConflict: "church_id" });
     if (claimError) {
       console.error("church_claims upsert failed", claimError);
@@ -161,7 +166,7 @@ Deno.serve(async (req) => {
       return reply({ error: "Could not send the verification email. Please try again." }, 502);
     }
 
-    return reply({ success: true, message: "Verification code sent" });
+    return reply({ success: true, message: "Verification code sent", manual_review: !autoVerify });
   } catch (err) {
     console.error(err);
     return reply({ error: "Unexpected error." }, 500);

@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { listClaimsForReview, reviewClaim } from "@/lib/api";
 
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');`;
 
@@ -232,6 +233,9 @@ export default function AdminDashboard() {
   const [churchReviewsList, setChurchReviewsList] = useState([]);
   const [toast, setToast] = useState(null);
   const [churchReports, setChurchReports] = useState([]);
+  // Verified claims for churches we could not auto-verify (no website on file).
+  const [pendingClaims, setPendingClaims] = useState([]);
+  const [claimBusy, setClaimBusy] = useState(null);
   const [reportFilter, setReportFilter] = useState("pending");
 
   const showToast = (msg, color = T.green) => {
@@ -283,8 +287,18 @@ export default function AdminDashboard() {
     if (reviewsRes.data) setReviews(reviewsRes.data);
     if (flagsRes.data) setReviewFlags(flagsRes.data);
     if (reportsRes.data) setChurchReports(reportsRes.data);
+    try { setPendingClaims(await listClaimsForReview()); } catch (e) { console.error("claims for review:", e); }
     setLoadingData(false);
   }, []);
+
+  const decideClaim = async (claim, approve) => {
+    const note = approve ? null : (window.prompt("Reason for rejecting (optional):") || null);
+    setClaimBusy(claim.id);
+    const res = await reviewClaim(claim.id, approve, note || undefined);
+    setClaimBusy(null);
+    if (!res.ok) { window.alert(res.error || "Could not update the claim."); return; }
+    setPendingClaims(prev => prev.filter(c => c.id !== claim.id));
+  };
 
   useEffect(() => {
     if (!loadingAuth && isAdmin) fetchData();
@@ -578,6 +592,7 @@ export default function AdminDashboard() {
     { id: "reviews", label: "Reviews" },
     { id: "churches", label: "Churches" },
     { id: "users", label: "Users" },
+    { id: "claims", label: "Claims" },
     { id: "settings", label: "Settings" },
   ];
   const [showDemographics, setShowDemographics] = useState(false);
@@ -921,6 +936,39 @@ export default function AdminDashboard() {
         )}
 
         {/* === USERS === */}
+        {!loadingData && tab === "claims" && (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Claims awaiting review ({pendingClaims.length})</h1>
+            </div>
+            <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px", maxWidth: 640, lineHeight: 1.6 }}>These claimants proved they own the email address, but the church has no website on file (or the address is on another domain), so ownership could not be verified automatically. Call the church or check its public listings, then approve or reject. Approving makes them the verified owner; they subscribe from their dashboard.</p>
+            {pendingClaims.length === 0 ? (
+              <div style={{ padding: "32px 24px", borderRadius: T.radius, background: T.surface, border: `1px dashed ${T.border}`, textAlign: "center", color: T.textSoft, fontSize: 13 }}>Nothing waiting. Verified claims that need a human show up here.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {pendingClaims.map(c => (
+                  <div key={c.id} style={{ padding: "16px 18px", borderRadius: T.radius, background: T.surface, border: `1px solid ${T.border}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                      <div style={{ minWidth: 240 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.heading, color: T.text }}>{c.church?.name || c.church_id}</div>
+                        <div style={{ fontSize: 12, color: T.textSoft, marginTop: 2 }}>{[c.church?.city, c.church?.state].filter(Boolean).join(", ")}{c.church?.website ? ` · ${c.church.website}` : " · no website on file"}</div>
+                        <div style={{ fontSize: 13, color: T.text, marginTop: 10 }}><strong>{c.request?.full_name || "(no name given)"}</strong>{c.request?.role_at_church ? ` · ${c.request.role_at_church}` : ""}</div>
+                        <div style={{ fontSize: 12, color: T.textSoft, marginTop: 2 }}>{c.claim_email}{c.request?.phone ? ` · ${c.request.phone}` : ""}</div>
+                        {c.request?.message && <div style={{ fontSize: 12, color: T.textSoft, marginTop: 8, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{c.request.message}</div>}
+                        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>Email verified {c.verified_at ? new Date(c.verified_at).toLocaleString() : "—"}{c.review_note ? ` · ${c.review_note}` : ""}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <button disabled={claimBusy === c.id} onClick={() => decideClaim(c, true)} style={{ padding: "8px 16px", borderRadius: T.radiusSm, fontSize: 12, fontWeight: 700, background: T.green, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: claimBusy === c.id ? 0.6 : 1 }}>Approve</button>
+                        <button disabled={claimBusy === c.id} onClick={() => decideClaim(c, false)} style={{ padding: "8px 16px", borderRadius: T.radiusSm, fontSize: 12, fontWeight: 700, background: "transparent", color: T.red, border: `1px solid ${T.red}`, cursor: "pointer", fontFamily: T.body, opacity: claimBusy === c.id ? 0.6 : 1 }}>Reject</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
         {!loadingData && tab === "users" && (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>

@@ -21,14 +21,14 @@ export type Database = {
                   ]
                 },"church_claims": {
                   Row: {
-                    "church_id": string,"claim_email": string,"code_expires_at": string | null,"created_at": string | null,"id": string,"stripe_customer_id": string | null,"stripe_payment_id": string | null,"stripe_subscription_id": string | null,"subscription_status": string | null,"user_id": string,"verification_code_hash": string | null,"verified": boolean | null,"verified_at": string | null,"verify_attempts": number
+                    "church_id": string,"claim_email": string,"code_expires_at": string | null,"created_at": string | null,"id": string,"review_note": string | null,"review_status": string,"reviewed_at": string | null,"reviewed_by": string | null,"stripe_customer_id": string | null,"stripe_payment_id": string | null,"stripe_subscription_id": string | null,"subscription_status": string | null,"user_id": string,"verification_code_hash": string | null,"verified": boolean | null,"verified_at": string | null,"verify_attempts": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "church_id": string,"claim_email": string,"code_expires_at"?: string | null,"created_at"?: string | null,"id"?: string,"stripe_customer_id"?: string | null,"stripe_payment_id"?: string | null,"stripe_subscription_id"?: string | null,"subscription_status"?: string | null,"user_id": string,"verification_code_hash"?: string | null,"verified"?: boolean | null,"verified_at"?: string | null,"verify_attempts"?: number
+                    "church_id": string,"claim_email": string,"code_expires_at"?: string | null,"created_at"?: string | null,"id"?: string,"review_note"?: string | null,"review_status"?: string,"reviewed_at"?: string | null,"reviewed_by"?: string | null,"stripe_customer_id"?: string | null,"stripe_payment_id"?: string | null,"stripe_subscription_id"?: string | null,"subscription_status"?: string | null,"user_id": string,"verification_code_hash"?: string | null,"verified"?: boolean | null,"verified_at"?: string | null,"verify_attempts"?: number
                   }
                   Update: {
-                    "church_id"?: string,"claim_email"?: string,"code_expires_at"?: string | null,"created_at"?: string | null,"id"?: string,"stripe_customer_id"?: string | null,"stripe_payment_id"?: string | null,"stripe_subscription_id"?: string | null,"subscription_status"?: string | null,"user_id"?: string,"verification_code_hash"?: string | null,"verified"?: boolean | null,"verified_at"?: string | null,"verify_attempts"?: number
+                    "church_id"?: string,"claim_email"?: string,"code_expires_at"?: string | null,"created_at"?: string | null,"id"?: string,"review_note"?: string | null,"review_status"?: string,"reviewed_at"?: string | null,"reviewed_by"?: string | null,"stripe_customer_id"?: string | null,"stripe_payment_id"?: string | null,"stripe_subscription_id"?: string | null,"subscription_status"?: string | null,"user_id"?: string,"verification_code_hash"?: string | null,"verified"?: boolean | null,"verified_at"?: string | null,"verify_attempts"?: number
                   }
                   Relationships: [
                     {
@@ -36,6 +36,18 @@ export type Database = {
       columns: ["church_id"]
 isOneToOne: true
       referencedRelation: "churches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "church_claims_reviewed_by_fkey"
+      columns: ["reviewed_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "church_claims_reviewed_by_fkey"
+      columns: ["reviewed_by"]
+isOneToOne: false
+      referencedRelation: "public_profiles"
       referencedColumns: ["id"]
     }
                   ]
@@ -590,6 +602,14 @@ isOneToOne: true
                            },
 "refresh_zip_centroids":
 { Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"review_church_claim":
+{ Args: { "p_approve": boolean,"p_claim_id": string,"p_note"?: string }; Returns: Json
+                           },
+"site_stats":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "churches": number,"members": number,"reviews": number
+            }[]
                            },
 "slugify":
 { Args: { "p": string }; Returns: string

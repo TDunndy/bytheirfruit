@@ -330,5 +330,57 @@ select pg_temp.ok(
   'every SECURITY DEFINER function pins search_path');
 
 \echo
+\echo '== site stats and claim review ===================================='
+
+select pg_temp.as_user(null, 'anon');
+select pg_temp.ok(has_function_privilege('anon', 'public.site_stats()', 'execute'), 'anon can call site_stats');
+select pg_temp.ok((select churches >= 3 and members = 4 from public.site_stats()), 'site_stats returns church and member counts');
+select pg_temp.as_postgres();
+select pg_temp.ok((select reviews from public.site_stats()) = (select count(*) from public.reviews where status = 'published' and deleted_at is null), 'site_stats counts published reviews only');
+
+-- Alice claims Far Church Seattle, which has no website on file: the code proves the email, not ownership.
+insert into public.church_claims (church_id, user_id, claim_email, verification_code_hash, code_expires_at, review_status)
+values ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000a', 'alice@gmail.com',
+        encode(extensions.digest('654321', 'sha256'), 'hex'), now() + interval '1 hour', 'pending_review');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+select pg_temp.ok((select (r->>'ok') = 'true' and (r->>'manual_review') = 'true' from public.verify_claim_code('10000000-0000-0000-0000-000000000003', '654321') r), 'pending-review code verifies but flags manual review');
+select pg_temp.as_postgres();
+select pg_temp.ok((select claimed_by is null from public.churches where id = '10000000-0000-0000-0000-000000000003'), 'pending-review claim does not claim the church');
+select pg_temp.ok((select verified from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), 'pending-review claim marks the email verified');
+
+select pg_temp.ok(
+  pg_temp.try_as('00000000-0000-0000-0000-00000000000b',
+    $$select public.review_church_claim((select id from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), true, null)$$) = '42501',
+  'regular user cannot review claims');
+select pg_temp.ok(not has_function_privilege('anon', 'public.review_church_claim(uuid,boolean,text)', 'execute'), 'anon cannot call review_church_claim');
+
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000d');
+select pg_temp.ok((public.review_church_claim((select id from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), false, 'not convinced')->>'status') = 'rejected', 'moderator can reject a claim');
+select pg_temp.as_postgres();
+select pg_temp.ok((select claimed_by is null from public.churches where id = '10000000-0000-0000-0000-000000000003'), 'rejected claim leaves the church unclaimed');
+select pg_temp.ok((select review_status = 'rejected' and reviewed_by = '00000000-0000-0000-0000-00000000000d' and review_note = 'not convinced' from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), 'rejection is recorded');
+
+update public.church_claims set review_status = 'pending_review' where church_id = '10000000-0000-0000-0000-000000000003';
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');
+select pg_temp.ok((public.review_church_claim((select id from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), true, null)->>'ok') = 'true', 'admin can approve a claim');
+select pg_temp.as_postgres();
+select pg_temp.ok((select claimed_by = '00000000-0000-0000-0000-00000000000a' and claim_verified from public.churches where id = '10000000-0000-0000-0000-000000000003'), 'approval claims the church for the claimant');
+select pg_temp.ok((select review_status = 'approved' from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), 'approval is recorded');
+
+-- A claim cannot be approved once someone else holds the church.
+update public.church_claims set review_status = 'pending_review' where church_id = '10000000-0000-0000-0000-000000000003';
+update public.churches set claimed_by = '00000000-0000-0000-0000-00000000000d' where id = '10000000-0000-0000-0000-000000000003';
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');
+select pg_temp.ok((public.review_church_claim((select id from public.church_claims where church_id = '10000000-0000-0000-0000-000000000003'), true, null)->>'ok') = 'false', 'approval refuses a church claimed by someone else');
+select pg_temp.as_postgres();
+
+-- Moderators see every claim; claimants only their own.
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000d');
+select pg_temp.ok((select count(*) from public.church_claims) >= 2, 'moderator reads all claims');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+select pg_temp.ok((select count(*) from public.church_claims) = 1, 'claimant reads only own claim');
+select pg_temp.as_postgres();
+
+\echo
 \echo 'All tests passed.'
 rollback;
