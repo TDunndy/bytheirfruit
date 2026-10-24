@@ -81,7 +81,8 @@ Security advisor items that remain **on purpose**:
 is on the church's website domain the claim completes on its own; otherwise
 (no website on file, which is 92 % of listings) the claim lands in the admin
 dashboard's **Claims** tab after the code is verified. Approve there to make
-the claimant the owner; they subscribe from their dashboard afterwards.
+the claimant the owner and opens their dashboard (free while billing is
+paused, ADR-0003).
 
 ## 2. Deploy edge functions and set secrets
 
@@ -146,7 +147,8 @@ rename the local files to match.
 - Authentication → URL configuration: add `https://bytheirfruit.church` and
   `https://bytheirfruit.church/**` to redirect URLs (PKCE flow).
 - Stripe: billing is paused for the beta (ADR-0003). Deactivate the Payment
-  Link (Stripe → Payment Links). If a webhook endpoint stays, it should be only
+  Link (Stripe → Payment Links) and cancel any active subscription (Stripe →
+  Subscriptions), telling that church. If a webhook endpoint stays, it should be only
   `https://ffqmbhftivmiubvtzhhr.supabase.co/functions/v1/stripe-webhook`; the
   legacy Cloudflare handler `/api/stripe-webhook` is deleted.
 

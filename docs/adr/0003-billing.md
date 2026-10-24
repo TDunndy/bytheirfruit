@@ -4,7 +4,7 @@
 
 ## Paused for the beta (2026-10-24)
 
-No payments are taken. Every claimed church gets the full dashboard, replies
+No new payments are taken. Every claimed church gets the full dashboard, replies
 and the weekly digest for free. Nothing in the database gates on payment, so
 the switch is client-side plus one function secret:
 
@@ -16,7 +16,12 @@ the switch is client-side plus one function secret:
 - The legacy Cloudflare webhook handler is deleted. The `stripe-webhook` edge
   function stays deployed (it acts only on signed Stripe events), and billing
   columns, `subscriptions` and `has_active_subscription()` stay.
-- The Stripe Payment Link should be deactivated in the Stripe dashboard.
+- The Stripe Payment Link should be deactivated in the Stripe dashboard, and
+  any active subscription in Stripe → Subscriptions cancelled (and that church
+  told). Deactivating a link does not stop subscriptions created from it.
+- Production check on 2026-10-24: one claimed church (the admin's test
+  listing), no Stripe customer or subscription IDs, no `subscription_events`.
+  Stripe itself is the authority if a webhook was ever missed.
 
 To turn billing back on: set both flags to true, reactivate (or replace) the
 Payment Link, and decide what happens to churches claimed for free during the

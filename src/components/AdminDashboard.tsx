@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
-import { listClaimsForReview, reviewClaim } from "@/lib/api";
+import { listClaimsForReview, reviewClaim, BILLING_ENABLED } from "@/lib/api";
 
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');`;
 
@@ -946,7 +946,7 @@ export default function AdminDashboard() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <h1 style={{ fontSize: 24, fontFamily: T.heading, fontWeight: 800, margin: 0, letterSpacing: "-0.03em" }}>Claims awaiting review ({pendingClaims.length})</h1>
             </div>
-            <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px", maxWidth: 640, lineHeight: 1.6 }}>These claimants proved they own the email address, but the church has no website on file (or the address is on another domain), so ownership could not be verified automatically. Call the church or check its public listings, then approve or reject. Approving makes them the verified owner; they subscribe from their dashboard.</p>
+            <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 20px", maxWidth: 640, lineHeight: 1.6 }}>These claimants proved they own the email address, but the church has no website on file (or the address is on another domain), so ownership could not be verified automatically. Call the church or check its public listings, then approve or reject. Approving makes them the verified owner{BILLING_ENABLED ? "; they subscribe from their dashboard" : " and opens their dashboard (free during beta)"}.</p>
             {pendingClaims.length === 0 ? (
               <div style={{ padding: "32px 24px", borderRadius: T.radius, background: T.surface, border: `1px dashed ${T.border}`, textAlign: "center", color: T.textSoft, fontSize: 13 }}>Nothing waiting. Verified claims that need a human show up here.</div>
             ) : (

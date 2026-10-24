@@ -1101,10 +1101,18 @@ export default function ByTheirFruit() {
   useEffect(() => { setMounted(true); }, []);
 
   // Hash-based routing for shareable URLs and back button
+  // Leaving a page closes the claim modal; a finished claim starts over next
+  // time, a code waiting in the inbox ("verify") is kept like closeClaimModal does.
+  const dismissClaimModal = () => {
+    setShowClaimModal(false);
+    setClaimStep(s => s === "done" ? "form" : s);
+  };
+
   const navigate = useCallback((newPage, church = null) => {
     setPage(newPage);
     setSelectedChurch(church);
     setMobileMenuOpen(false);
+    dismissClaimModal();
     if (church) {
       const slug = church.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
       // Use real path for church pages (SSR-friendly for crawlers + OG tags)
@@ -1126,6 +1134,7 @@ export default function ByTheirFruit() {
       const path = window.location.pathname;
       // Skip if hash contains Supabase auth tokens (email confirmation redirect)
       if (hash.includes("access_token=") || hash.includes("type=signup") || hash.includes("type=recovery")) return;
+      dismissClaimModal();
 
       // Support real path: /church/[id]/[slug]
       const pathMatch = path.match(/^\/church\/([^/]+)/);
@@ -2224,8 +2233,11 @@ export default function ByTheirFruit() {
     setClaimManualReview(false);
 
     // Claimants may only edit church profile fields; a DB trigger enforces the list.
+    // Blank form fields keep what is on file, as review_church_claim() does.
     try {
-      await updateChurchProfile(churchId, claimProfilePatch());
+      const patch = Object.fromEntries(Object.entries(claimProfilePatch())
+        .filter(([, v]) => v != null && !(Array.isArray(v) && v.length === 0)));
+      await updateChurchProfile(churchId, patch);
     } catch (err) {
       console.error("Church profile update failed:", err);
     }
@@ -2237,7 +2249,12 @@ export default function ByTheirFruit() {
     if (!BILLING_ENABLED) {
       // Free during beta: the church is claimed and the dashboard is open now.
       setClaimStatus("approved");
-      const markClaimed = (ch) => ch && ch.id === churchId ? { ...ch, claimedBy: user.id } : ch;
+      // Show what was just saved (profile fields, owner) without a reload.
+      const row = await fetchChurchById(churchId).catch(() => null);
+      const fresh = row ? dbChurchToLocal(row) : {};
+      const markClaimed = (ch) => ch && ch.id === churchId
+        ? { ...ch, ...fresh, claimedBy: user.id, recentReviews: ch.recentReviews }
+        : ch;
       setChurches(prev => prev.map(markClaimed));
       setSelectedChurch(markClaimed);
       showToast("Your church is verified!", "success");
@@ -3163,7 +3180,7 @@ export default function ByTheirFruit() {
             </FadeIn>
 
             {/* Claim Church Modal */}
-            {showClaimModal && currentChurch && (
+            {showClaimModal && currentChurch && claimChurchIdRef.current === currentChurch.id && (
               <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={closeClaimModal}>
                 <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
                   <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{claimStep === "verify" ? "Verify your email" : claimStep === "done" ? "Verified!" : `Claim ${currentChurch.name}`}</h2>
