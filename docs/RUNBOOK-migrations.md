@@ -9,7 +9,7 @@ frontend. The order below keeps the live site working at every step.
 |---|---|
 | 1. Hardening migration | **applied to production on 2026-10-22** through the Supabase connector, as seven recorded migrations (see below) |
 | 2. Edge functions + secrets | pending (needs the CLI) |
-| 2b. Claim lockdown + review lifecycle migrations (20261023180000, 20261023180100) | **pending, required before step 3**; apply by hand, see below |
+| 2b. Claim lockdown + review lifecycle migrations | **applied to production on 2026-10-24** (20261024011258, 20261024011342) |
 | 3. Merge to main (frontend deploy) | pending |
 | 4. Privacy lockdown + organizations | pending, only after step 3 |
 | 5. Dashboard settings | pending |
@@ -37,29 +37,18 @@ and the seven hardening parts with the versions the connector assigned:
 20261022182345_hardening_5_idx_churches_earth
 20261022182445_hardening_6_idx_churches_city_trgm
 20261023042127_site_stats_and_claim_review
+20261024011258_claim_insert_lockdown
+20261024011342_claim_review_lifecycle
 ```
 
-**Not yet in production** (the connector's migration tool timed out three
-times on 2026-10-23 and rolled back each time):
+Applied 2026-10-24 (the Supabase connector asks the account owner to confirm
+any statement that drops something; earlier attempts timed out only because
+that prompt went unanswered):
 
 ```
-20261023180000_claim_insert_lockdown   # closes a live hole: claimants could insert their own claim rows
-20261023180100_claim_review_lifecycle  # reject resets the claim; profile applied on approval
+20261024011258_claim_insert_lockdown   # claimants can no longer insert their own claim rows
+20261024011342_claim_review_lifecycle  # reject resets the claim; profile applied on approval
 ```
-
-Apply them in that order: paste each file into Dashboard → SQL Editor and run
-it. Do **not** use `npx supabase db push` for these: it would also apply
-`20261022200000_privacy_lockdown`, which must wait until the new frontend is
-live (step 4). Then record them:
-
-```bash
-npx supabase migration repair --status applied 20261023180000 20261023180100
-```
-
-**Both must be applied before step 3 (merge to main).** The new claim form
-writes `claim_requests.status/reviewed_*` under the new policies and stores
-the church details in `claim_requests.profile`; the admin Claims tab and the
-approve/reject flow rely on the new `review_church_claim()`.
 
 (Part 3 sorts before 2a/2b; nothing in it depends on them.)
 
