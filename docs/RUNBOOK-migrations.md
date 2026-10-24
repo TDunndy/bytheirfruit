@@ -80,7 +80,7 @@ Security advisor items that remain **on purpose**:
 `send-verification-email` now sends a code to any address. When the address
 is on the church's website domain the claim completes on its own; otherwise
 (no website on file, which is 92 % of listings) the claim lands in the admin
-dashboard's **Claims** tab after the code is verified. Approve there to make
+dashboard's **Claims** tab after the code is verified. Approving there makes
 the claimant the owner and opens their dashboard (free while billing is
 paused, ADR-0003).
 

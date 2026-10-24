@@ -2226,6 +2226,7 @@ export default function ByTheirFruit() {
       setClaimManualReview(true);
       setClaimSubmitting(false);
       setClaimStep("done");
+      setVerifyCodeInput(""); setVerifyError(""); // the code is used up
       setClaimStatus("pending");
       showToast("Email verified! We'll confirm your role within 24-48 hours.", "success");
       return;
@@ -2245,6 +2246,7 @@ export default function ByTheirFruit() {
 
     setClaimSubmitting(false);
     setClaimStep("done");
+    setVerifyCodeInput(""); setVerifyError(""); // the code is used up
 
     if (!BILLING_ENABLED) {
       // Free during beta: the church is claimed and the dashboard is open now.
