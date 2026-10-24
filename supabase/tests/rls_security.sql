@@ -375,6 +375,14 @@ select pg_temp.ok((select status = 'rejected' from public.claim_requests where c
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
 select pg_temp.ok((public.verify_claim_code('10000000-0000-0000-0000-000000000003', '654321')->>'ok') = 'false', 'a rejected claim cannot be verified again');
 select pg_temp.as_postgres();
+-- Even with a fresh, valid code on the row, a rejected claim must not verify (guards the review_status check itself).
+update public.church_claims set verification_code_hash = encode(extensions.digest('222222', 'sha256'), 'hex'), code_expires_at = now() + interval '1 hour'
+  where church_id = '10000000-0000-0000-0000-000000000003';
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+select pg_temp.ok((select (r->>'ok') = 'false' and r->>'error' like '%not approved%' from public.verify_claim_code('10000000-0000-0000-0000-000000000003', '222222') r), 'a rejected claim with a valid code is still refused');
+select pg_temp.as_postgres();
+select pg_temp.ok((select claimed_by is null from public.churches where id = '10000000-0000-0000-0000-000000000003'), 'refused verification leaves the church unclaimed');
+update public.church_claims set verification_code_hash = null, code_expires_at = null where church_id = '10000000-0000-0000-0000-000000000003';
 select pg_temp.ok(
   pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
     $$update public.claim_requests set status = 'approved' where church_id = '10000000-0000-0000-0000-000000000003'$$) = '42501',

@@ -120,7 +120,8 @@ Deno.serve(async (req) => {
     }
     const { count: liveCodes } = await admin
       .from("church_claims").select("id", { count: "exact", head: true })
-      .eq("user_id", user.id).neq("church_id", churchId).gt("code_expires_at", new Date(now).toISOString());
+      .eq("user_id", user.id).neq("church_id", churchId).eq("verified", false)
+      .gt("code_expires_at", new Date(now).toISOString());
     if ((liveCodes ?? 0) >= MAX_LIVE_CODES_PER_USER) {
       return reply({ error: "You have several verification codes waiting. Please use one, or try again in an hour." }, 429);
     }

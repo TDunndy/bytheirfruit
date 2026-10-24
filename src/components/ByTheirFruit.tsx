@@ -1154,8 +1154,12 @@ export default function ByTheirFruit() {
       if (hashPath === "#/discover") {
         setPage("discover");
         // "/?q=grace#/discover" (404 page search) or "#/discover?q=grace" (SearchAction).
-        const q = new URLSearchParams(window.location.search).get("q") || new URLSearchParams(hashQuery).get("q");
-        if (q) setDiscoverSearchQuery(q.slice(0, 100));
+        const q = (new URLSearchParams(window.location.search).get("q") || new URLSearchParams(hashQuery).get("q") || "").trim().slice(0, 100);
+        if (q) {
+          if (/^\d{5}$/.test(q)) setFilterZip(q); else setDiscoverSearchQuery(q);
+          // Apply once: drop ?q so Back/Forward and reloads keep the user's later edits.
+          window.history.replaceState(window.history.state, "", window.location.pathname + "#/discover");
+        }
       } else if (hash === "#/about") {
         setPage("about");
       } else if (hash === "#/rate") {
@@ -1218,7 +1222,7 @@ export default function ByTheirFruit() {
 
   // Church claiming
   const [showClaimModal, setShowClaimModal] = useState(false);
-  const [claimData, setClaimData] = useState({
+  const emptyClaimData = () => ({
     fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "",
     serviceDays: [{ day: "Sunday", times: "9:00 AM, 11:00 AM" }],
     avgAttendance: "", staffCount: "", volunteerCount: "", campusCount: "1",
@@ -1227,15 +1231,18 @@ export default function ByTheirFruit() {
     facebook: "", instagram: "", youtube: "", livestream: "",
     pastorName: "", yearFounded: "", description: ""
   });
+  const [claimData, setClaimData] = useState(emptyClaimData);
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimStatus, setClaimStatus] = useState(null); // null | 'pending' | 'approved' | 'rejected'
   const [claimManualReview, setClaimManualReview] = useState(false);
+  const [claimProfileSaved, setClaimProfileSaved] = useState(false);
   // Closing keeps the verify step (a stray tap outside must not throw away a
   // code already in the inbox); a finished claim starts fresh next time.
   const claimChurchIdRef = useRef(null);
   const openClaimModal = (churchId) => {
     // A code waiting for one church must not show up when claiming another.
     if (claimChurchIdRef.current !== churchId) {
+      setClaimData(emptyClaimData());
       setClaimStep("form");
       setVerifyCodeInput("");
       setVerifyError("");
@@ -1723,13 +1730,16 @@ export default function ByTheirFruit() {
   }, []);
 
   /* --- REVIEW WRITTEN BEFORE SIGNING IN --- */
+  const DRAFT_TTL_MS = 24 * 60 * 60 * 1000; // long enough for an email confirmation
   processPendingReviewRef.current = async (u) => {
-    // Read and clear synchronously so the getSession() and SIGNED_IN paths
-    // (and SIGNED_IN re-emitted on tab focus) never process the same draft twice.
+    // The stored entry is the lock, shared by every tab: whoever removes it
+    // owns the draft. Read and remove it synchronously, before any await, so
+    // the getSession() and SIGNED_IN paths, SIGNED_IN re-emitted on tab focus,
+    // and a second tab (e.g. the email-confirmation tab) never handle it twice.
     const inMemory = pendingReviewRef.current;
     const stored = localStorage.getItem("btf_pending_review");
-    if (!inMemory && !stored) return;
     pendingReviewRef.current = null;
+    if (!stored) return;
     localStorage.removeItem("btf_pending_review");
     setSubmitting(true);
     try {
@@ -1740,6 +1750,7 @@ export default function ByTheirFruit() {
         return;
       }
       const parsed = JSON.parse(stored);
+      if (!parsed.savedAt || Date.now() - parsed.savedAt > DRAFT_TTL_MS) return; // stale draft
       let draftChurch = churches.find(c => c.id === parsed.churchId) || null;
       if (!draftChurch && parsed.churchId) {
         // The list is empty after an OAuth redirect; fetch the church so the form and success screen know it.
@@ -1747,8 +1758,9 @@ export default function ByTheirFruit() {
         if (row) draftChurch = dbChurchToLocal(row);
       }
       if (draftChurch) setRateChurch(draftChurch);
-      if (parsed.photosPending > 0) {
-        // Photos cannot survive a redirect: restore the draft and let the user re-attach them.
+      if (parsed.photosPending > 0 || parsed.restoreOnly) {
+        // Photos cannot survive a redirect, and a draft whose sign-in dialog was
+        // dismissed should not post on its own: restore it for the user to submit.
         setRateScores(parsed.scores || {});
         setRateComments(parsed.comments || {});
         setRateText(parsed.text || "");
@@ -1757,7 +1769,9 @@ export default function ByTheirFruit() {
         setIsEditing(!!parsed.isEdit);
         setRateStep(2);
         setPage("rate");
-        showToast("You're signed in. Please re-attach your photos, then submit your experience.", "info");
+        showToast(parsed.photosPending > 0
+          ? "You're signed in. Please re-attach your photos, then submit your experience."
+          : "You're signed in. Your draft is restored; review it and submit when ready.", "info");
         return;
       }
       const success = await submitReviewToDB(parsed, u.id);
@@ -2157,12 +2171,25 @@ export default function ByTheirFruit() {
       work_email: claimData.workEmail,
       phone: claimData.phone || null,
       message: claimData.message || null,
-      profile: claimProfilePatch(),
       status: "pending",
       reviewed_by: null,
       reviewed_at: null,
     }, { onConflict: "church_id,user_id" });
-    if (requestError) console.error("claim_requests upsert failed:", requestError);
+    if (requestError) {
+      console.error("claim_requests upsert failed:", requestError);
+      showToast("Your code was sent, but we couldn't save your claim details. If verification fails, please try again in a minute.", "warning");
+    }
+    // Church details are applied by an admin on approval. Written separately so
+    // a missing column (migration not yet applied) cannot lose the request itself.
+    let profileSaved = false;
+    if (!requestError) {
+      const { error: profileError } = await supabase.from("claim_requests")
+        .update({ profile: claimProfilePatch() })
+        .eq("church_id", churchId).eq("user_id", user.id);
+      if (profileError) console.error("claim profile save failed:", profileError);
+      else profileSaved = true;
+    }
+    setClaimProfileSaved(profileSaved);
 
     setClaimSubmitting(false);
     setClaimStep("verify");
@@ -2216,15 +2243,7 @@ export default function ByTheirFruit() {
       setShowClaimModal(false);
       setClaimStep("form");
       setVerifyCodeInput("");
-      setClaimData({
-        fullName: "", roleAtChurch: "", workEmail: "", phone: "", message: "",
-        serviceDays: [{ day: "Sunday", times: "9:00 AM, 11:00 AM" }],
-        avgAttendance: "", staffCount: "", volunteerCount: "", campusCount: "1",
-        programs: [],
-        website: "", churchEmail: "", churchPhone: "",
-        facebook: "", instagram: "", youtube: "", livestream: "",
-        pastorName: "", yearFounded: "", description: ""
-      });
+      setClaimData(emptyClaimData());
     }, 1500);
   };
 
@@ -2462,7 +2481,7 @@ export default function ByTheirFruit() {
       // Store the draft for after sign-in. File objects do not survive JSON,
       // so photos are dropped here and the user re-attaches them afterwards.
       const { photos, ...draft } = reviewData;
-      localStorage.setItem("btf_pending_review", JSON.stringify({ ...draft, photosPending: photos?.length || 0 }));
+      localStorage.setItem("btf_pending_review", JSON.stringify({ ...draft, photosPending: photos?.length || 0, savedAt: Date.now() }));
       pendingReviewRef.current = reviewData;
       setShowAuthModal(true);
       return;
@@ -2539,7 +2558,16 @@ export default function ByTheirFruit() {
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.body, color: T.text }}>
       <style>{fonts}{responsiveCSS}{`html,body{margin:0;padding:0;background:${T.bg}}::selection{background:${T.accentSoft};color:${T.accent}}input::placeholder,textarea::placeholder{color:${T.textMuted}}*{box-sizing:border-box}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
-      {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); pendingReviewRef.current = null; localStorage.removeItem("btf_pending_review"); }} onAuth={() => {}} mode="signin" />}
+      {showAuthModal && <AuthModal onClose={() => {
+        setShowAuthModal(false);
+        pendingReviewRef.current = null;
+        // Keep the stored draft (the user may confirm their email in another tab
+        // or sign in later), but only restore it then; never post it unseen.
+        try {
+          const stored = localStorage.getItem("btf_pending_review");
+          if (stored) localStorage.setItem("btf_pending_review", JSON.stringify({ ...JSON.parse(stored), restoreOnly: true }));
+        } catch { localStorage.removeItem("btf_pending_review"); }
+      }} onAuth={() => {}} mode="signin" />}
       {showResetPassword && <ResetPasswordModal onClose={() => setShowResetPassword(false)} />}
       {showProfileComplete && user && <ProfileCompleteModal userId={user.id} onClose={() => setShowProfileComplete(false)} />}
 
@@ -3273,7 +3301,7 @@ export default function ByTheirFruit() {
                       <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading }}>Email verified!</div>
                       {claimManualReview ? (
                         <>
-                          <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4, lineHeight: 1.6, maxWidth: 380, marginLeft: "auto", marginRight: "auto" }}>We couldn't match your email to this church's website, so our team will confirm your role within 24-48 hours. The church details you entered are saved and go live when your claim is approved. Check back on the church page; once approved, the Subscribe button appears on your dashboard.</div>
+                          <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4, lineHeight: 1.6, maxWidth: 380, marginLeft: "auto", marginRight: "auto" }}>{"We couldn't confirm your role from your email address alone (the church has no website on file, or your address is on a different domain), so our team will confirm it within 24-48 hours. "}{claimProfileSaved ? "The church details you entered are saved and go live when your claim is approved. " : ""}{"Once approved, the Subscribe button appears on your dashboard."}</div>
                           <button onClick={closeClaimModal} style={{ marginTop: 18, padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Got it</button>
                         </>
                       ) : (

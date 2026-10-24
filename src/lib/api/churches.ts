@@ -58,7 +58,7 @@ export const CHURCH_CARD_SELECT =
 /**
  * Home-page spotlight. Churches with enough reviews to show a score
  * (minReviews, the UI's MIN_REVIEWS_FOR_SCORE) come first, best score first;
- * remaining slots go to the most reviewed churches below that threshold so the
+ * remaining slots go to the most recently reviewed churches below that threshold so the
  * section is not empty on a young site.
  */
 export async function fetchFeaturedChurches(limit = 3, minReviews = 3) {
@@ -79,8 +79,8 @@ export async function fetchFeaturedChurches(limit = 3, minReviews = 3) {
     .eq('status', 'approved')
     .gte('total_reviews', 1)
     .lt('total_reviews', minReviews)
-    .order('total_reviews', { ascending: false })
     .order('scores_updated_at', { ascending: false, nullsFirst: false })
+    .order('total_reviews', { ascending: false })
     .limit(limit - rows.length)
   if (recent.error) throw recent.error
   return [...rows, ...(recent.data ?? [])]

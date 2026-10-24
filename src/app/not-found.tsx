@@ -37,7 +37,7 @@ export default function NotFound() {
           <h1>We couldn&apos;t find that page</h1>
           <p>The link may be old, or the church may have been removed. Try searching for it instead.</p>
           <form action="/#/discover" method="get">
-            <input type="search" name="q" placeholder="Church name, city, or zip" aria-label="Search churches" />
+            <input type="search" name="q" placeholder="Church name or zip code" aria-label="Search churches" />
             <button type="submit">Search</button>
           </form>
           <a className="home" href="/">← Back to By Their Fruit</a>

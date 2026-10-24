@@ -9,6 +9,7 @@ frontend. The order below keeps the live site working at every step.
 |---|---|
 | 1. Hardening migration | **applied to production on 2026-10-22** through the Supabase connector, as seven recorded migrations (see below) |
 | 2. Edge functions + secrets | pending (needs the CLI) |
+| 2b. Claim lockdown + review lifecycle migrations (20261023180000, 20261023180100) | **pending, required before step 3**; apply by hand, see below |
 | 3. Merge to main (frontend deploy) | pending |
 | 4. Privacy lockdown + organizations | pending, only after step 3 |
 | 5. Dashboard settings | pending |
@@ -47,11 +48,18 @@ times on 2026-10-23 and rolled back each time):
 ```
 
 Apply them in that order: paste each file into Dashboard → SQL Editor and run
-it (or `npx supabase db push`), then if you used the SQL Editor record them:
+it. Do **not** use `npx supabase db push` for these: it would also apply
+`20261022200000_privacy_lockdown`, which must wait until the new frontend is
+live (step 4). Then record them:
 
 ```bash
 npx supabase migration repair --status applied 20261023180000 20261023180100
 ```
+
+**Both must be applied before step 3 (merge to main).** The new claim form
+writes `claim_requests.status/reviewed_*` under the new policies and stores
+the church details in `claim_requests.profile`; the admin Claims tab and the
+approve/reject flow rely on the new `review_church_claim()`.
 
 (Part 3 sorts before 2a/2b; nothing in it depends on them.)
 
