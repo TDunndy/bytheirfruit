@@ -41,7 +41,8 @@ Everything marked done below was applied to production on 2026-10-22 (hardening 
 
 - **done** Tenancy foundation: `organizations`, `org_members` (owner/admin/staff/volunteer), `subscriptions`, `is_org_member()`, `has_active_subscription()`, auto-synced from claims.
 - **next** Auth hook that embeds org roles in the JWT so RLS checks avoid a join.
-- **next** Server-created Stripe Checkout sessions and Customer Portal; `subscriptions` becomes the single source of truth (ADR-0003).
+- **done** Billing paused for the beta (2026-10-24): church accounts are free; no prices or payment buttons on the site (ADR-0003).
+- **later** When billing returns: server-created Stripe Checkout sessions and Customer Portal; `subscriptions` becomes the single source of truth (ADR-0003).
 - **next** Core ChMS tables with `org_id` + the two helper checks on every policy: `people`, `households`, `groups`, `group_memberships`, `events`, `attendance`, `giving`, `visitor_followups`, `prayer_requests`.
 - **next** Nightly rollups (`church_metrics_daily`) via pg_cron; formalize `score_snapshots` and `regional_benchmarks` as views over them.
 - **later** Correlations that make the review data valuable to churches: welcome score vs first-time-visitor return rate, kids score vs kids check-in growth, leadership score vs volunteer retention.

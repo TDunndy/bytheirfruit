@@ -1,7 +1,8 @@
 // weekly-digest — cron-triggered Monday mornings (pg_cron job
 // "weekly-digest-job", see migrations/20261022000100_baseline.sql).
-// Iterates churches with active subscriptions, gathers last-7-day reviews and
-// score deltas, sends a digest email via Resend.
+// Iterates claimed churches (only those with active subscriptions when
+// BILLING_ENABLED=true; billing is off during the beta), gathers last-7-day
+// reviews and score deltas, sends a digest email via Resend.
 //
 // Auth: invoked from pg_cron with a shared secret in the Authorization header.
 // Set DIGEST_CRON_SECRET in Edge Function secrets and
@@ -18,6 +19,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DIGEST_CRON_SECRET = Deno.env.get("DIGEST_CRON_SECRET");
 const FROM_ADDRESS = Deno.env.get("NOTIFY_FROM_ADDRESS") ?? "By Their Fruit <notifications@bytheirfruit.church>";
+const BILLING_ENABLED = Deno.env.get("BILLING_ENABLED") === "true";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
@@ -151,9 +153,11 @@ Deno.serve(async (req: Request) => {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { data: churches, error } = await supabase.from("churches")
+  let query = supabase.from("churches")
     .select("id, name, claim_email, email, subscription_status")
-    .in("subscription_status", ["active", "trialing"]).not("claimed_by", "is", null);
+    .not("claimed_by", "is", null);
+  if (BILLING_ENABLED) query = query.in("subscription_status", ["active", "trialing"]);
+  const { data: churches, error } = await query;
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
 
   const results: Array<{ church: string; ok: boolean; reason?: string }> = [];

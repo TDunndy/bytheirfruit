@@ -12,7 +12,7 @@ Live at https://bytheirfruit.church.
 | Sitemaps | Cloudflare Pages Functions | `functions/sitemap*.ts` |
 | Database, auth, storage | Supabase project `ffqmbhftivmiubvtzhhr` | `supabase/migrations/` |
 | Server-side logic | Supabase Edge Functions (Deno) | `supabase/functions/` |
-| Billing | Stripe Payment Link → `stripe-webhook` edge function → `churches.subscription_status` + `subscriptions` | `supabase/functions/stripe-webhook` |
+| Billing | Paused during the beta: church accounts are free (`BILLING_ENABLED` in `src/lib/billing.ts`). When on: Stripe Payment Link → `stripe-webhook` edge function → `churches.subscription_status` + `subscriptions` | `supabase/functions/stripe-webhook` |
 | Email | Resend | edge functions |
 | Analytics | PostHog | `src/app/layout.tsx` |
 

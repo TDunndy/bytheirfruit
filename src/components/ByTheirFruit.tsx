@@ -8,6 +8,7 @@ import {
   churchesNear, geocodeZip as geocodeZipDb, requestClaimCode, verifyClaimCode as verifyClaimCodeRpc,
   recordReviewLocation, fetchChurchDemographics, updateChurchProfile, PUBLIC_REVIEW_SELECT,
   fetchFeaturedChurches, fetchSiteStats, fetchChurchById, fetchMyPendingClaim,
+  BILLING_ENABLED, paymentUrl,
 } from "@/lib/api";
 
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');`;
@@ -2196,7 +2197,7 @@ export default function ByTheirFruit() {
     showToast("Verification code sent to " + claimData.workEmail, "success");
   };
 
-  // Step 2: Verify the code and proceed to payment
+  // Step 2: Verify the code; with billing on, continue to payment
   const verifyClaimCode = async (churchId) => {
     if (!verifyCodeInput.trim()) return;
     setClaimSubmitting(true);
@@ -2232,14 +2233,23 @@ export default function ByTheirFruit() {
 
     setClaimSubmitting(false);
     setClaimStep("done");
+
+    if (!BILLING_ENABLED) {
+      // Free during beta: the church is claimed and the dashboard is open now.
+      setClaimStatus("approved");
+      const markClaimed = (ch) => ch && ch.id === churchId ? { ...ch, claimedBy: user.id } : ch;
+      setChurches(prev => prev.map(markClaimed));
+      setSelectedChurch(markClaimed);
+      showToast("Your church is verified!", "success");
+      return;
+    }
+
     setClaimStatus("pending");
     showToast("Email verified! Redirecting to payment...", "success");
 
-    // Redirect to Stripe for $39/month subscription payment
     setTimeout(() => {
-      const stripePaymentUrl = `https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00?prefilled_email=${encodeURIComponent(claimData.workEmail)}&client_reference_id=${encodeURIComponent(user.id)}`;
       // Same-tab navigation: window.open() inside a timer is blocked by popup blockers.
-      window.location.assign(stripePaymentUrl);
+      window.location.assign(paymentUrl(claimData.workEmail, user.id));
       setShowClaimModal(false);
       setClaimStep("form");
       setVerifyCodeInput("");
@@ -3158,13 +3168,15 @@ export default function ByTheirFruit() {
                 <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius + 4, padding: "32px 28px", maxWidth: 480, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
                   <h2 style={{ fontSize: 22, fontFamily: T.heading, fontWeight: 800, margin: "0 0 4px", letterSpacing: "-0.03em" }}>{claimStep === "verify" ? "Verify your email" : claimStep === "done" ? "Verified!" : `Claim ${currentChurch.name}`}</h2>
                   {claimStep === "form" && <>
-                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 16px" }}>Tell us about your role at this church. We'll email you a code to confirm your address. If we can't match your email to the church's website, our team confirms your role within 24-48 hours before you subscribe.</p>
+                  <p style={{ fontSize: 13, color: T.textSoft, margin: "0 0 16px" }}>Tell us about your role at this church. We'll email you a code to confirm your address. If we can't match your email to the church's website, our team confirms your role within 24-48 hours{BILLING_ENABLED ? " before you subscribe" : ""}.</p>
                   <div style={{ padding: "12px 16px", borderRadius: T.radiusSm, background: T.accentSoft, border: `1px solid ${T.accentBorder}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Church Subscription</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{BILLING_ENABLED ? "Church Subscription" : "Church Account"}</div>
                       <div style={{ fontSize: 11, color: T.textSoft, marginTop: 1 }}>Verified badge, respond to experiences, insights dashboard</div>
                     </div>
-                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: T.heading, color: T.accent }}>$39<span style={{ fontSize: 12, fontWeight: 500, color: T.textMuted }}>/mo</span></div>
+                    {BILLING_ENABLED
+                      ? <div style={{ fontSize: 20, fontWeight: 800, fontFamily: T.heading, color: T.accent }}>$39<span style={{ fontSize: 12, fontWeight: 500, color: T.textMuted }}>/mo</span></div>
+                      : <div style={{ fontSize: 20, fontWeight: 800, fontFamily: T.heading, color: T.accent, textAlign: "right" }}>Free<div style={{ fontSize: 11, fontWeight: 500, color: T.textMuted }}>during beta</div></div>}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                     {/* Your Information */}
@@ -3289,7 +3301,7 @@ export default function ByTheirFruit() {
                         <button onClick={() => { setClaimStep("form"); setVerifyCodeInput(""); setVerifyError(""); }} style={{ padding: "10px 20px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>← Back</button>
                         <div style={{ display: "flex", gap: 8 }}>
                           <button onClick={() => sendClaimVerification(currentChurch.id)} disabled={claimSubmitting} style={{ padding: "10px 16px", borderRadius: T.radiusFull, fontSize: 12, fontWeight: 600, background: T.surface, color: T.textSoft, border: `1.5px solid ${T.border}`, cursor: "pointer", fontFamily: T.body }}>Resend</button>
-                          <button onClick={() => verifyClaimCode(currentChurch.id)} disabled={claimSubmitting || verifyCodeInput.length !== 6} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || verifyCodeInput.length !== 6) ? 0.5 : 1 }}>{claimSubmitting ? "Verifying..." : claimManualReview ? "Verify email →" : "Verify & Continue to Payment →"}</button>
+                          <button onClick={() => verifyClaimCode(currentChurch.id)} disabled={claimSubmitting || verifyCodeInput.length !== 6} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body, opacity: (claimSubmitting || verifyCodeInput.length !== 6) ? 0.5 : 1 }}>{claimSubmitting ? "Verifying..." : (claimManualReview || !BILLING_ENABLED) ? "Verify email →" : "Verify & Continue to Payment →"}</button>
                         </div>
                       </div>
                     </div>
@@ -3301,11 +3313,16 @@ export default function ByTheirFruit() {
                       <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.heading }}>Email verified!</div>
                       {claimManualReview ? (
                         <>
-                          <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4, lineHeight: 1.6, maxWidth: 380, marginLeft: "auto", marginRight: "auto" }}>{"We couldn't confirm your role from your email address alone (the church has no website on file, or your address is on a different domain), so our team will confirm it within 24-48 hours. "}{claimProfileSaved ? "The church details you entered are saved and go live when your claim is approved. " : ""}{"Once approved, the Subscribe button appears on your dashboard."}</div>
+                          <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4, lineHeight: 1.6, maxWidth: 380, marginLeft: "auto", marginRight: "auto" }}>{"We couldn't confirm your role from your email address alone (the church has no website on file, or your address is on a different domain), so our team will confirm it within 24-48 hours. "}{claimProfileSaved ? "The church details you entered are saved and go live when your claim is approved. " : ""}{BILLING_ENABLED ? "Once approved, the Subscribe button appears on your dashboard." : "Once approved, open Church Dashboard from the menu. It's free during beta."}</div>
                           <button onClick={closeClaimModal} style={{ marginTop: 18, padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Got it</button>
                         </>
-                      ) : (
+                      ) : BILLING_ENABLED ? (
                         <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4 }}>Redirecting you to set up your subscription...</div>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 13, color: T.textSoft, marginTop: 4, lineHeight: 1.6 }}>{currentChurch.name} is now yours to manage. Your dashboard is ready, free during beta.</div>
+                          <button onClick={() => { closeClaimModal(); setClaimData(emptyClaimData()); navigate("dashboard"); fetchMyChurches(user.id); }} style={{ marginTop: 18, padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}>Open dashboard →</button>
+                        </>
                       )}
                     </div>
                   )}
@@ -3795,8 +3812,8 @@ export default function ByTheirFruit() {
             )}
 
             {/* Subscription gate: claimed but no active subscription. Admins
-                bypass this gate via user.role === 'admin'. */}
-            {!myChurchesLoading && myChurchesData.claimed.length > 0
+                bypass this gate via user.role === 'admin'. Off while billing is. */}
+            {BILLING_ENABLED && !myChurchesLoading && myChurchesData.claimed.length > 0
               && myChurchesData.claimed[0].subscriptionStatus !== "active"
               && user?.role !== "admin" && (
               <div style={{ textAlign: "center", padding: "80px 24px", maxWidth: 560, margin: "0 auto" }}>
@@ -3816,9 +3833,7 @@ export default function ByTheirFruit() {
                 </p>
                 <button
                   onClick={() => {
-                    const email = user?.email || "";
-                    const url = `https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00?prefilled_email=${encodeURIComponent(email)}&client_reference_id=${encodeURIComponent(user?.id || "")}`;
-                    window.open(url, "_blank");
+                    window.open(paymentUrl(user?.email || "", user?.id || ""), "_blank");
                   }}
                   style={{ padding: "12px 24px", borderRadius: T.radiusFull, fontSize: 14, fontWeight: 600, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontFamily: T.body }}
                 >
@@ -3831,7 +3846,7 @@ export default function ByTheirFruit() {
             )}
 
             {!myChurchesLoading && myChurchesData.claimed.length > 0
-              && (myChurchesData.claimed[0].subscriptionStatus === "active" || user?.role === "admin")
+              && (!BILLING_ENABLED || myChurchesData.claimed[0].subscriptionStatus === "active" || user?.role === "admin")
               && (() => {
               const oc = myChurchesData.claimed[0];
               // dbChurchToLocal stores per-category scores in oc.scores ({ teaching: 4.2, ... }),
@@ -4321,22 +4336,33 @@ export default function ByTheirFruit() {
 
           <FadeIn delay={160}>
             <div style={{ padding: "32px", borderRadius: T.radius + 4, background: T.surface, border: `2px solid ${T.accentBorder}`, textAlign: "center", marginBottom: 40 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Church Subscription</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.accent, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>{BILLING_ENABLED ? "Church Subscription" : "Church Account"}</div>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4, marginBottom: 4 }}>
-                <span style={{ fontSize: 48, fontFamily: T.heading, fontWeight: 800, letterSpacing: "-0.03em" }}>$39</span>
-                <span style={{ fontSize: 16, color: T.textMuted }}>/month</span>
+                <span style={{ fontSize: 48, fontFamily: T.heading, fontWeight: 800, letterSpacing: "-0.03em" }}>{BILLING_ENABLED ? "$39" : "Free"}</span>
+                <span style={{ fontSize: 16, color: T.textMuted }}>{BILLING_ENABLED ? "/month" : "during beta"}</span>
               </div>
               <p style={{ fontSize: 14, color: T.textSoft, marginBottom: 24, maxWidth: 400, margin: "0 auto 24px" }}>Everything you need to listen, respond, and grow your church with real feedback from real people.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 340, margin: "0 auto 24px", textAlign: "left" }}>
-                {["Verified Owner badge on your profile", "Respond publicly to all experiences", "Full insights dashboard with score breakdowns", "Demographic analytics (age, gender, role, income)", "Priority placement in search results", "Email alerts for new experiences", "Cancel anytime — no contracts"].map((item, i) => (
+                {["Verified Owner badge on your profile", "Respond publicly to all experiences", "Full insights dashboard with score breakdowns", "Demographic analytics (age, gender, role, income)", "Priority placement in search results", "Email alerts for new experiences", BILLING_ENABLED ? "Cancel anytime — no contracts" : "No credit card needed"].map((item, i) => (
                   <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    <span style={{ color: T.green, fontSize: 14, lineHeight: 1.6 }}>\u2713</span>
+                    <span style={{ color: T.green, fontSize: 14, lineHeight: 1.6 }}>{"\u2713"}</span>
                     <span style={{ fontSize: 13, color: T.textSoft, lineHeight: 1.6 }}>{item}</span>
                   </div>
                 ))}
               </div>
-              <button onClick={async () => { if (!user) { setShowAuthModal(true); return; } if (!hasClaimed) { const pending = await fetchMyPendingClaim().catch(() => null); if (pending) { showToast("Your claim is being reviewed. You can subscribe as soon as it is approved, usually within 24-48 hours.", "info"); return; } showToast("Claim your church first, then subscribe from your dashboard.", "info"); navigate("discover"); return; } window.location.assign(`https://buy.stripe.com/14A7sL0wA03Ggr9epO4ow00?prefilled_email=${encodeURIComponent(user.email || "")}&client_reference_id=${encodeURIComponent(user.id)}`); }} style={{ padding: "14px 36px", borderRadius: T.radiusFull, fontSize: 15, fontWeight: 700, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", boxShadow: "0 2px 16px rgba(37,99,235,0.25)", transition: "all 0.2s" }}>Subscribe Now</button>
-              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 12 }}>Secure payment via Stripe. Cancel anytime.</div>
+              <button onClick={async () => {
+                if (!user) { setShowAuthModal(true); return; }
+                if (!hasClaimed) {
+                  const pending = await fetchMyPendingClaim().catch(() => null);
+                  if (pending) { showToast(BILLING_ENABLED ? "Your claim is being reviewed. You can subscribe as soon as it is approved, usually within 24-48 hours." : "Your claim is being reviewed, usually within 24-48 hours.", "info"); return; }
+                  showToast(BILLING_ENABLED ? "Claim your church first, then subscribe from your dashboard." : "Find your church, open its page and tap Claim This Church.", "info");
+                  navigate("discover");
+                  return;
+                }
+                if (!BILLING_ENABLED) { navigate("dashboard"); fetchMyChurches(user.id); return; }
+                window.location.assign(paymentUrl(user.email || "", user.id));
+              }} style={{ padding: "14px 36px", borderRadius: T.radiusFull, fontSize: 15, fontWeight: 700, fontFamily: T.body, cursor: "pointer", background: T.accent, color: "#fff", border: "none", boxShadow: "0 2px 16px rgba(37,99,235,0.25)", transition: "all 0.2s" }}>{BILLING_ENABLED ? "Subscribe Now" : hasClaimed ? "Open Your Dashboard" : "Claim Your Church"}</button>
+              <div style={{ fontSize: 12, color: T.textMuted, marginTop: 12 }}>{BILLING_ENABLED ? "Secure payment via Stripe. Cancel anytime." : "Free while we're in beta. If paid plans come later, you'll hear from us first."}</div>
             </div>
           </FadeIn>
 
@@ -4347,7 +4373,9 @@ export default function ByTheirFruit() {
                 {[
                   { step: "1", title: "Claim Your Church", desc: "Search for your church in our directory and submit a claim request with your church email." },
                   { step: "2", title: "Get Verified", desc: "Our team reviews your claim and verifies your ownership — typically within 24–48 hours." },
-                  { step: "3", title: "Subscribe", desc: "Activate your subscription to unlock the full dashboard, response tools, and analytics." },
+                  BILLING_ENABLED
+                    ? { step: "3", title: "Subscribe", desc: "Activate your subscription to unlock the full dashboard, response tools, and analytics." }
+                    : { step: "3", title: "Open Your Dashboard", desc: "Respond to experiences and see your insights and analytics, free during beta." },
                   { step: "4", title: "Engage & Grow", desc: "Read experiences, respond to feedback, and use insights to strengthen your ministry." }
                 ].map((s, i) => (
                   <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
@@ -4364,7 +4392,7 @@ export default function ByTheirFruit() {
 
           <FadeIn delay={320}>
             <div style={{ textAlign: "center" }}>
-              <p style={{ fontSize: 14, color: T.textSoft, marginBottom: 16 }}>Already claimed your church? Go to your dashboard to manage your profile and subscription.</p>
+              <p style={{ fontSize: 14, color: T.textSoft, marginBottom: 16 }}>Already claimed your church? Go to your dashboard to manage your profile{BILLING_ENABLED ? " and subscription" : ""}.</p>
               <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
                 <button onClick={() => navigate("dashboard")} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: T.surfaceAlt, color: T.text, border: `1px solid ${T.border}` }}>Go to Dashboard</button>
                 <button onClick={() => navigate("discover")} style={{ padding: "10px 24px", borderRadius: T.radiusFull, fontSize: 13, fontWeight: 600, fontFamily: T.body, cursor: "pointer", background: "transparent", color: T.accent, border: `1px solid ${T.accentBorder}` }}>Find Your Church</button>
@@ -4379,7 +4407,7 @@ export default function ByTheirFruit() {
         <div style={{ maxWidth: 700, margin: "0 auto", padding: "56px 24px" }}>
           <FadeIn>
             <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.15, margin: "0 0 8px", letterSpacing: "-0.03em" }}>Terms of Service</h1>
-            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 32 }}>Effective Date: March 13, 2026 &middot; Last Updated: March 13, 2026</div>
+            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 32 }}>Effective Date: March 13, 2026 &middot; Last Updated: October 24, 2026</div>
             <div style={{ fontSize: 14.5, color: T.textSoft, lineHeight: 1.8 }}>
               <p>Welcome to By Their Fruit ("we," "us," or "our"), operated at bytheirfruit.church. These Terms of Service ("Terms") govern your access to and use of our website, services, and any related applications (collectively, the "Service"). By accessing or using the Service, you agree to be bound by these Terms. If you do not agree, do not use the Service.</p>
 
@@ -4397,10 +4425,12 @@ export default function ByTheirFruit() {
               <p>All experiences are subject to automated and manual moderation. We reserve the right to remove, edit, or flag any content that violates these Terms, our community guidelines, or applicable law. Experiences must reflect genuine personal experience with the church being reviewed. You may submit one experience per church. You may submit up to three experiences per day across the platform.</p>
               <p>Prohibited content includes but is not limited to: spam or duplicate reviews, reviews submitted for a church you have not attended, content that is primarily doctrinal argument rather than experiential feedback, coordinated review campaigns, and content that contains personally identifiable information about third parties without their consent.</p>
 
-              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>5. Church Claiming and Paid Subscriptions</h2>
-              <p>Church leaders may submit a claim request to manage their church's listing. Claiming a church listing requires identity verification and a paid subscription processed through Stripe. Subscription fees are billed on a recurring basis. By subscribing, you authorize us to charge your chosen payment method at the applicable rate.</p>
+              <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>{BILLING_ENABLED ? "5. Church Claiming and Paid Subscriptions" : "5. Church Claiming"}</h2>
+              {BILLING_ENABLED
+                ? <p>Church leaders may submit a claim request to manage their church's listing. Claiming a church listing requires identity verification and a paid subscription processed through Stripe. Subscription fees are billed on a recurring basis. By subscribing, you authorize us to charge your chosen payment method at the applicable rate.</p>
+                : <p>Church leaders may submit a claim request to manage their church's listing. Claiming a church listing requires verification of your role at the church. Church accounts are free during our beta. If we introduce paid plans, we will tell you in advance and you will choose whether to subscribe; we will not charge you without your consent.</p>}
               <p>Claimed church listings grant the ability to respond to reviews, update church information, and access analytics. Claiming a church does not grant the ability to remove, suppress, or alter user-submitted reviews or ratings.</p>
-              <p>Refunds may be issued at our sole discretion. You may cancel your subscription at any time through your Stripe account. Upon cancellation, your claimed listing features will remain active until the end of your current billing period.</p>
+              {BILLING_ENABLED && <p>Refunds may be issued at our sole discretion. You may cancel your subscription at any time through your Stripe account. Upon cancellation, your claimed listing features will remain active until the end of your current billing period.</p>}
 
               <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>6. Prohibited Conduct</h2>
               <p>You agree not to: (a) use the Service for any unlawful purpose; (b) attempt to circumvent rate limits, moderation, or security measures; (c) impersonate another person or entity; (d) create multiple accounts to circumvent restrictions; (e) use automated tools, bots, or scripts to interact with the Service without our express written consent; (f) interfere with the operation or security of the Service; or (g) harvest, scrape, or collect data from the Service in bulk.</p>
@@ -4438,21 +4468,21 @@ export default function ByTheirFruit() {
         <div style={{ maxWidth: 700, margin: "0 auto", padding: "56px 24px" }}>
           <FadeIn>
             <h1 style={{ fontSize: 30, fontFamily: T.heading, fontWeight: 800, lineHeight: 1.15, margin: "0 0 8px", letterSpacing: "-0.03em" }}>Privacy Policy</h1>
-            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 32 }}>Effective Date: March 13, 2026 &middot; Last Updated: March 13, 2026</div>
+            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 32 }}>Effective Date: March 13, 2026 &middot; Last Updated: October 24, 2026</div>
             <div style={{ fontSize: 14.5, color: T.textSoft, lineHeight: 1.8 }}>
               <p>By Their Fruit ("we," "us," or "our") operates the website bytheirfruit.church (the "Service"). This Privacy Policy explains how we collect, use, disclose, and protect your personal information when you use the Service.</p>
 
               <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>1. Information We Collect</h2>
               <p><strong style={{ color: T.text }}>Information You Provide Directly:</strong> When you create an account, we collect your name, email address, and profile photo as provided by your authentication provider (e.g., Google). When you submit a review, we collect the content of your review, your ratings, and your stated relationship to the church. When you submit a church claim request, we collect your full name, role at the church, work email, phone number, and any message you provide.</p>
-              <p><strong style={{ color: T.text }}>Payment Information:</strong> If you subscribe to a paid plan, payment is processed by Stripe, Inc. We do not store your credit card number, bank account details, or other sensitive payment information on our servers. We receive and store your Stripe customer ID, subscription ID, payment status, and transaction amounts for record-keeping purposes.</p>
+              {BILLING_ENABLED && <p><strong style={{ color: T.text }}>Payment Information:</strong> If you subscribe to a paid plan, payment is processed by Stripe, Inc. We do not store your credit card number, bank account details, or other sensitive payment information on our servers. We receive and store your Stripe customer ID, subscription ID, payment status, and transaction amounts for record-keeping purposes.</p>}
               <p><strong style={{ color: T.text }}>Automatically Collected Information:</strong> When you use the Service, we may automatically collect your IP address, browser type and version, operating system, referring URLs, pages visited, and the dates and times of your visits. This information is collected through standard server logs and analytics tools.</p>
 
               <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>2. How We Use Your Information</h2>
-              <p>We use the information we collect to: provide, operate, and maintain the Service; process and manage your account, reviews, and church claims; process payments and manage subscriptions; enforce our Terms of Service and community guidelines; detect and prevent fraud, abuse, and security incidents; communicate with you about your account, reviews, and the Service; comply with legal obligations; and improve and develop new features for the Service.</p>
+              <p>We use the information we collect to: provide, operate, and maintain the Service; process and manage your account, reviews, and church claims; {BILLING_ENABLED ? "process payments and manage subscriptions; " : ""}enforce our Terms of Service and community guidelines; detect and prevent fraud, abuse, and security incidents; communicate with you about your account, reviews, and the Service; comply with legal obligations; and improve and develop new features for the Service.</p>
 
               <h2 style={{ fontSize: 20, fontFamily: T.heading, fontWeight: 700, margin: "32px 0 12px", color: T.text, letterSpacing: "-0.02em" }}>3. How We Share Your Information</h2>
               <p><strong style={{ color: T.text }}>Publicly Visible Information:</strong> When you submit a review, your display name and review content are publicly visible on the Service. Your email address is not publicly displayed.</p>
-              <p><strong style={{ color: T.text }}>Service Providers:</strong> We share information with third-party service providers who assist us in operating the Service, including: Supabase (database hosting and authentication), Stripe (payment processing), Cloudflare (hosting, DNS, and content delivery), Google and Microsoft (sign-in), PostHog (product analytics such as which pages are visited), Resend (transactional email), ipapi.co (an approximate location from your IP address, when browser location is unavailable or you decline the prompt), and OpenStreetMap Nominatim (converting a zip code to coordinates when our own data has no match). These providers are contractually obligated to use your information only for the purpose of providing services to us.</p>
+              <p><strong style={{ color: T.text }}>Service Providers:</strong> We share information with third-party service providers who assist us in operating the Service, including: Supabase (database hosting and authentication), {BILLING_ENABLED ? "Stripe (payment processing), " : ""}Cloudflare (hosting, DNS, and content delivery), Google and Microsoft (sign-in), PostHog (product analytics such as which pages are visited), Resend (transactional email), ipapi.co (an approximate location from your IP address, when browser location is unavailable or you decline the prompt), and OpenStreetMap Nominatim (converting a zip code to coordinates when our own data has no match). These providers are contractually obligated to use your information only for the purpose of providing services to us.</p>
               <p><strong style={{ color: T.text }}>Legal Requirements:</strong> We may disclose your information if required by law, regulation, legal process, or governmental request, or if we believe disclosure is necessary to protect our rights, your safety, or the safety of others.</p>
               <p><strong style={{ color: T.text }}>Business Transfers:</strong> In the event of a merger, acquisition, or sale of all or a portion of our assets, your information may be transferred as part of that transaction.</p>
               <p>We do not sell your personal information to third parties. We do not share your personal information with third parties for their direct marketing purposes.</p>

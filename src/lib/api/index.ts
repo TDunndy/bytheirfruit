@@ -4,3 +4,4 @@
 export * from './churches'
 export * from './claims'
 export * from './reviews'
+export * from '../billing'

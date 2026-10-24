@@ -102,6 +102,7 @@ Secrets (Dashboard → Edge Functions → Secrets). Existing: `RESEND_API_KEY`,
 | `VERIFY_FROM_ADDRESS` | sender for claim codes | `verify@bytheirfruit.church` |
 | `NOTIFY_FROM_ADDRESS` | sender for notifications and digests | `notifications@bytheirfruit.church` |
 | `NOTIFY_WEBHOOK_SECRET` | lets `notify-new-review` reject callers that are not the DB trigger | unset (accepts all) |
+| `BILLING_ENABLED` | `true` limits `weekly-digest` to paying churches | unset (every claimed church, beta) |
 
 If you set `NOTIFY_WEBHOOK_SECRET`, also tell the trigger about it:
 
@@ -144,17 +145,17 @@ rename the local files to match.
 - Authentication → Settings: enable **Leaked password protection**.
 - Authentication → URL configuration: add `https://bytheirfruit.church` and
   `https://bytheirfruit.church/**` to redirect URLs (PKCE flow).
-- Stripe → Developers → Webhooks: the only endpoint should be
-  `https://ffqmbhftivmiubvtzhhr.supabase.co/functions/v1/stripe-webhook`.
-  The legacy Cloudflare handler `functions/api/stripe-webhook.js` is kept
-  until that is confirmed; delete it afterwards.
+- Stripe: billing is paused for the beta (ADR-0003). Deactivate the Payment
+  Link (Stripe → Payment Links). If a webhook endpoint stays, it should be only
+  `https://ffqmbhftivmiubvtzhhr.supabase.co/functions/v1/stripe-webhook`; the
+  legacy Cloudflare handler `/api/stripe-webhook` is deleted.
 
 ## 6. Verify
 
 - Open a church page: reviewer first names render (the `public_profiles` embed works).
 - `curl -s 'https://ffqmbhftivmiubvtzhhr.supabase.co/rest/v1/profiles?select=email&limit=1' -H "apikey: $ANON"` returns `[]` (after step 4).
 - Discover → Near Me returns churches sorted by distance, not Florida rows.
-- Claim a church end to end: code email arrives, verification succeeds, the church shows "claimed", payment link opens in the same tab.
+- Claim a church end to end: code email arrives, verification succeeds, the church shows "claimed", "Open dashboard" opens the full dashboard (no payment step while billing is paused).
 - `https://bytheirfruit.church/sitemap.xml` lists ~270 church sitemaps of 1,000 URLs.
 
 ## Rolling back
