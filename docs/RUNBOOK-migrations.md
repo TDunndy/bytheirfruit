@@ -10,8 +10,9 @@ frontend. The order below keeps the live site working at every step.
 | 1. Hardening migration | **applied to production on 2026-10-22** through the Supabase connector, as seven recorded migrations (see below) |
 | 2. Edge functions + secrets | pending (needs the CLI) |
 | 2b. Claim lockdown + review lifecycle migrations | **applied to production on 2026-10-24** (20261024011258, 20261024011342) |
-| 3. Merge to main (frontend deploy) | pending |
-| 4. Privacy lockdown + organizations | pending, only after step 3 |
+| 3. Merge to main (frontend deploy) | **done** (main deploys to Cloudflare Pages) |
+| 4a. Profiles private (restrictive policy) | **applied to production on 2026-10-27** (20261027190746); anon reads 0 profiles, users their own row, admins all. The one review carrying reviewer coordinates was cleared (copy kept in `review_locations`) |
+| 4. Privacy lockdown + organizations | pending: the lockdown's policy and column drops need the owner to approve Supabase's confirmation prompt within 60 s; profiles are already private via 4a |
 | 5. Dashboard settings | pending |
 
 ## 0. One-time CLI setup

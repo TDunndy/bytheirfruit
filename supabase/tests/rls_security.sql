@@ -128,6 +128,18 @@ select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');
 select pg_temp.ok((select count(*) from public.profiles) = 4, 'admin sees all profiles');
 select pg_temp.as_postgres();
 
+-- Production state before the lockdown: the old public policy is still there.
+-- The restrictive policy must keep profiles private regardless.
+create policy "Public profiles are viewable by everyone" on public.profiles for select using (true);
+select pg_temp.as_user(null, 'anon');
+select pg_temp.ok((select count(*) from public.profiles) = 0, 'restrictive policy: anon sees no profiles despite a public policy');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000b');
+select pg_temp.ok((select count(*) from public.profiles) = 1, 'restrictive policy: user sees only own profile despite a public policy');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');
+select pg_temp.ok((select count(*) from public.profiles) = 4, 'restrictive policy: admin still sees all profiles');
+select pg_temp.as_postgres();
+drop policy "Public profiles are viewable by everyone" on public.profiles;
+
 \echo
 \echo '== reviews ========================================================'
 
