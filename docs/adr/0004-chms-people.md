@@ -50,11 +50,18 @@ and the phone app.
   the oversight chart (`person_overseers`) records who answers to whom. A
   person can answer to another person or to everyone holding a role, which is
   how a board works (at the pilot church the Lead Pastor answers to the
-  Elders, and pastors are elders too). Several overseers are allowed; the
-  chart can never form a loop. For everyone except owners and admins, the
-  chart adds: nobody changes their own roles or chart line, or those of
-  anyone over them; nobody archives or unlinks someone over them; nobody
-  grants a role, or edits a role, beyond the permissions they hold.
+  Elders, and pastors are elders too). Several overseers are allowed. Person
+  lines never loop; a board may hold its own members accountable, and a
+  board member who answers to someone through person lines does not oversee
+  them through the board. For everyone except owners and admins, the chart
+  adds: nobody changes their own roles or chart line, or those of anyone
+  over them; nobody archives someone over them; nobody grants, edits or
+  removes a role beyond the permissions they hold; people are placed only
+  under yourself or someone under you; board lines are drawn by admins.
+- **Logins and invitations:** only church admins (owners and admins) invite
+  a login onto a person record or remove one; an invitation dies if its
+  sender stops being an admin. Memberships are created only by invitations
+  and claims, never by a direct insert.
 - **Notes have three levels:** `care` (everyone with `people.notes`),
   `oversight` (only those over the person in the chart) and `private` (the
   author). Nobody reads notes written about themselves.

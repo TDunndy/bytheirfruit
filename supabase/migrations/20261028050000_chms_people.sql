@@ -13,19 +13,26 @@
 --                      (e.g. the Lead Pastor answers to the Elders)
 --   person_notes       pastoral notes: care / oversight / private
 --   people_audit       every insert/update/archive of a person, by person id
---   org_invitations    leader invites; accepting links a login to a person
---   has_org_permission(org_id, permission)   the check every policy uses
+--   org_invitations    leader invites (church admins only); accepting links a
+--                      login to a person record
 --
--- Hierarchy: access comes from roles (flat). For everyone except owners and
--- admins the oversight chart adds: nobody changes their own roles or chart
--- line or those of anyone over them, nobody archives or unlinks someone over
--- them, and nobody grants, edits or removes a role beyond the permissions
--- they hold. "Oversight" notes go up the chart only; nobody reads notes about
--- themselves. A board member who answers (through person lines) to someone
--- does not oversee that someone through the board.
+-- Access comes from roles (flat). For everyone except owners and admins the
+-- oversight chart adds: nobody changes their own roles or chart line or those
+-- of anyone over them, nobody archives someone over them, nobody grants,
+-- edits or removes a role beyond the permissions they hold, and people are
+-- placed only under yourself or someone under you. Person lines never loop;
+-- a board (role) may hold its own members accountable. A board member who
+-- answers through person lines to someone does not oversee them through the
+-- board. "Oversight" notes go up the chart only; nobody reads notes about
+-- themselves. Only church admins invite or remove logins.
 --
--- Also: only the claim functions may change who claimed a church, and a
--- transfer or un-claim removes the previous claimant as owner.
+-- Also: memberships are created only by invitations and claims; only the
+-- claim process changes who claimed a church, nobody approves their own
+-- claim, a transfer or un-claim removes the previous claimant as owner, and an
+-- organization stays bound to its church listing.
+--
+-- RLS checks are set-based (computed once per statement) so a 2,000-person
+-- church stays fast.
 --
 -- Guardrail: nothing here references reviews or profiles.
 -- Written without drop/revoke statements so the connector applies it without
@@ -173,6 +180,7 @@ create table public.person_notes (
   foreign key (person_id, org_id) references public.people (id, org_id) on delete cascade
 );
 create index idx_person_notes_person on public.person_notes (person_id, created_at desc);
+create index idx_person_notes_org on public.person_notes (org_id, created_at desc);
 
 create table public.people_audit (
   id bigint generated always as identity primary key,
@@ -190,18 +198,24 @@ create table public.org_invitations (
   id uuid primary key default gen_random_uuid(),
   org_id uuid not null references public.organizations(id) on delete cascade,
   email text not null check (length(email) <= 254 and email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
-  person_id uuid,
+  person_id uuid not null,
   member_role text not null default 'staff' check (member_role in ('admin', 'staff', 'volunteer')),
   token_hash text not null unique,
   expires_at timestamptz not null default now() + interval '14 days',
   invited_by_person_id uuid references public.people(id) on delete set null,
-  invited_by_admin boolean not null default false,
   created_at timestamptz not null default now(),
   accepted_at timestamptz,
   revoked_at timestamptz,
   foreign key (person_id, org_id) references public.people (id, org_id) on delete cascade
 );
 create index idx_org_invitations_org on public.org_invitations (org_id, created_at desc);
+
+-- Who sent an invitation, kept out of every table a church user can read.
+create table chms_private.invitation_inviters (
+  invitation_id uuid primary key references public.org_invitations(id) on delete cascade,
+  user_id uuid not null
+);
+create index idx_invitation_inviters_user on chms_private.invitation_inviters (user_id);
 
 alter table public.org_roles         enable row level security;
 alter table public.people            enable row level security;
@@ -213,6 +227,7 @@ alter table public.person_overseers  enable row level security;
 alter table public.person_notes      enable row level security;
 alter table public.people_audit      enable row level security;
 alter table public.org_invitations   enable row level security;
+alter table chms_private.invitation_inviters enable row level security;
 
 -- --------------------------------------------------------- private helpers --
 create or replace function chms_private.is_church_admin(p_org_id uuid)
@@ -242,7 +257,32 @@ returns text[] language sql stable security definer set search_path = public as 
   end;
 $$;
 
--- Permissions carried by a person's roles (used to vet invitations).
+-- Every church where the signed-in user holds a permission. Policies call it
+-- inside (select ...) so it runs once per statement, not once per row.
+create or replace function chms_private.orgs_with_permission(p_permission text)
+returns uuid[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(distinct s.org_id), '{}')
+  from (
+    select m.org_id from public.org_members m
+    where m.user_id = auth.uid() and m.role in ('owner', 'admin')
+    union
+    select m.org_id
+    from public.org_members m
+    join public.person_logins pl on pl.org_id = m.org_id and pl.user_id = m.user_id
+    join public.people p on p.id = pl.person_id and p.archived_at is null
+    join public.person_roles pr on pr.person_id = p.id
+    join public.org_roles r on r.id = pr.role_id
+    where m.user_id = auth.uid() and p_permission = any (r.permissions)
+  ) s;
+$$;
+
+-- Churches the signed-in user belongs to.
+create or replace function chms_private.my_orgs()
+returns uuid[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(org_id), '{}') from public.org_members where user_id = auth.uid();
+$$;
+
+-- Permissions carried by a person's roles.
 create or replace function chms_private.person_role_permissions(p_person_id uuid)
 returns text[] language sql stable security definer set search_path = public as $$
   select coalesce(array_agg(distinct perm order by perm), '{}')
@@ -268,7 +308,17 @@ returns uuid language sql stable security definer set search_path = public as $$
   limit 1;
 $$;
 
--- People a person answers to through person lines only (raw, archived included).
+-- The signed-in user's person records in every church they belong to.
+create or replace function chms_private.my_person_ids()
+returns uuid[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(pl.person_id), '{}')
+  from public.person_logins pl
+  join public.people p on p.id = pl.person_id and p.archived_at is null
+  join public.org_members m on m.org_id = pl.org_id and m.user_id = pl.user_id
+  where pl.user_id = auth.uid();
+$$;
+
+-- People a person answers to through person lines only (archived included).
 create or replace function chms_private.person_line_ids(p_person_id uuid)
 returns uuid[] language plpgsql stable security definer set search_path = public as $$
 declare
@@ -289,10 +339,9 @@ begin
 end;
 $$;
 
--- Everyone reachable upward from a person, archived people included. Holders
--- of a board role are skipped when they themselves answer, through person
--- lines, to the person being expanded. The result contains the start person
--- only when the chart loops back to them.
+-- Everyone reachable upward from a person (archived included). A board edge
+-- from X to a holder h is skipped when h is X or answers to X through person
+-- lines. Cycle-safe.
 create or replace function chms_private.overseer_ids_raw(p_person_id uuid)
 returns uuid[] language plpgsql stable security definer set search_path = public as $$
 declare
@@ -326,7 +375,7 @@ begin
 end;
 $$;
 
--- Everyone over a person (active people only).
+-- Everyone over a person (active people only, never the person themselves).
 create or replace function chms_private.overseer_ids(p_person_id uuid)
 returns uuid[] language sql stable security definer set search_path = public as $$
   select coalesce(array_agg(p.id), '{}')
@@ -335,9 +384,45 @@ returns uuid[] language sql stable security definer set search_path = public as 
     and p.id <> p_person_id and p.archived_at is null;
 $$;
 
-create or replace function chms_private.chart_loops_at(p_person_id uuid)
+-- Everyone under the signed-in user, in every church (the same edges walked
+-- downward). Policies call it once per statement.
+create or replace function chms_private.people_i_oversee()
+returns uuid[] language plpgsql stable security definer set search_path = public as $$
+declare
+  v_seen uuid[] := '{}';
+  v_frontier uuid[] := chms_private.my_person_ids();
+  v_next uuid[];
+begin
+  if cardinality(v_frontier) = 0 then
+    return '{}';
+  end if;
+  loop
+    select coalesce(array_agg(distinct s.x), '{}') into v_next
+    from (
+      select o.person_id as x
+      from public.person_overseers o
+      where o.overseer_person_id = any (v_frontier)
+      union
+      select o.person_id
+      from public.person_roles pr
+      join public.person_overseers o on o.overseer_role_id = pr.role_id
+      where pr.person_id = any (v_frontier)
+        and o.person_id <> pr.person_id
+        and not o.person_id = any (chms_private.person_line_ids(pr.person_id))
+    ) s
+    where not s.x = any (v_seen);
+    exit when cardinality(v_next) = 0;
+    v_seen := v_seen || v_next;
+    v_frontier := v_next;
+  end loop;
+  return v_seen;
+end;
+$$;
+
+-- Person lines never loop back.
+create or replace function chms_private.person_lines_loop_at(p_person_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
-  select p_person_id = any (chms_private.overseer_ids_raw(p_person_id));
+  select p_person_id = any (chms_private.person_line_ids(p_person_id));
 $$;
 
 create or replace function chms_private.is_over_me(p_org_id uuid, p_person_id uuid)
@@ -365,9 +450,9 @@ returns boolean language sql stable security definer set search_path = public as
   select exists (select 1 from public.person_overseers where overseer_role_id = p_role_id);
 $$;
 
-create or replace function chms_private.people_answering_to_role(p_role_id uuid)
-returns setof uuid language sql stable security definer set search_path = public as $$
-  select person_id from public.person_overseers where overseer_role_id = p_role_id;
+create or replace function chms_private.has_chart_line(p_person_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.person_overseers where person_id = p_person_id);
 $$;
 
 -- Default roles for every church; editable afterwards.
@@ -396,10 +481,13 @@ returns text[] language sql stable security definer set search_path = public as 
   select chms_private.user_permissions(p_org_id, auth.uid());
 $$;
 
--- Which people in a church have a login, as person ids only (never account ids).
+-- The church's team: people with a login and their membership role, by
+-- person id only (never account ids).
 create or replace function public.people_with_logins(p_org_id uuid)
-returns setof uuid language sql stable security definer set search_path = public as $$
-  select pl.person_id from public.person_logins pl
+returns table (person_id uuid, member_role text) language sql stable security definer set search_path = public as $$
+  select pl.person_id, m.role
+  from public.person_logins pl
+  join public.org_members m on m.org_id = pl.org_id and m.user_id = pl.user_id
   where pl.org_id = p_org_id and public.has_org_permission(p_org_id, 'people.view');
 $$;
 
@@ -502,18 +590,33 @@ $$;
 create trigger trg_protect_org_roles before insert or update or delete on public.org_roles
   for each row execute function public.protect_org_roles();
 
--- Chart edits: never your own place or that of someone over you.
+-- Chart edits by non-admins: board lines are admin-only; a person line may only
+-- place someone who is under you (or not yet placed) under yourself or someone
+-- under you, and only lines below you can be removed.
 create or replace function public.protect_person_overseers()
 returns trigger language plpgsql set search_path = public as $$
 declare
   v_row public.person_overseers%rowtype;
+  v_me uuid;
 begin
   if tg_op = 'DELETE' then v_row := old; else v_row := new; end if;
   if public.is_privileged() or chms_private.is_church_admin(v_row.org_id) then
     return v_row;
   end if;
-  if v_row.person_id = chms_private.my_person_id(v_row.org_id) or chms_private.is_over_me(v_row.org_id, v_row.person_id) then
-    raise exception 'you cannot change who you or someone over you answers to' using errcode = '42501';
+  v_me := chms_private.my_person_id(v_row.org_id);
+  if v_me is null or v_row.overseer_role_id is not null then
+    raise exception 'only a church admin can change board lines' using errcode = '42501';
+  end if;
+  if v_row.overseer_person_id <> v_me and not chms_private.i_oversee(v_row.org_id, v_row.overseer_person_id) then
+    raise exception 'you can only place people under yourself or someone under you' using errcode = '42501';
+  end if;
+  if tg_op = 'DELETE' then
+    if not chms_private.i_oversee(v_row.org_id, v_row.person_id) then
+      raise exception 'you can only change lines below you' using errcode = '42501';
+    end if;
+  elsif not (chms_private.i_oversee(v_row.org_id, v_row.person_id) or not chms_private.has_chart_line(v_row.person_id))
+        or v_row.person_id = v_me then
+    raise exception 'you can only place people who are under you or not yet placed' using errcode = '42501';
   end if;
   return v_row;
 end;
@@ -521,25 +624,19 @@ $$;
 create trigger trg_protect_person_overseers before insert or update or delete on public.person_overseers
   for each row execute function public.protect_person_overseers();
 
--- The chart never loops, for anyone (owners included). Checked after the row
--- exists, for new chart lines and for new holders of a board role.
+-- Person lines never loop, for anyone (owners included). Chart writes for a
+-- church run one at a time so two concurrent edits cannot form a loop.
 create or replace function public.check_chart_loops()
 returns trigger language plpgsql set search_path = public as $$
 begin
-  if tg_table_name = 'person_overseers' then
-    if chms_private.chart_loops_at(new.person_id) then
-      raise exception 'that would make the chart go in a circle' using errcode = '23514';
-    end if;
-  elsif exists (select 1 from chms_private.people_answering_to_role(new.role_id) x
-                where chms_private.chart_loops_at(x)) then
+  perform pg_advisory_xact_lock(hashtext('chms_chart:' || new.org_id::text));
+  if new.overseer_person_id is not null and chms_private.person_lines_loop_at(new.person_id) then
     raise exception 'that would make the chart go in a circle' using errcode = '23514';
   end if;
   return null;
 end;
 $$;
-create trigger trg_chart_loops_lines after insert or update on public.person_overseers
-  for each row execute function public.check_chart_loops();
-create trigger trg_chart_loops_roles after insert on public.person_roles
+create trigger trg_chart_loops after insert or update on public.person_overseers
   for each row execute function public.check_chart_loops();
 
 -- Notes are attributed to the writer's person record; leaders must be in the
@@ -617,16 +714,20 @@ create trigger trg_seed_org_roles after insert on public.organizations
 
 select chms_private.seed_default_org_roles(id) from public.organizations;
 
--- Leaving a church unlinks the login from its person record.
-create or replace function public.unlink_logins_on_member_removed()
+-- Leaving a church unlinks the login and cancels invitations that member sent.
+create or replace function public.cleanup_on_member_removed()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   delete from public.person_logins where org_id = old.org_id and user_id = old.user_id;
+  update public.org_invitations i set revoked_at = now()
+  from chms_private.invitation_inviters ii
+  where ii.invitation_id = i.id and ii.user_id = old.user_id
+    and i.org_id = old.org_id and i.accepted_at is null and i.revoked_at is null;
   return old;
 end;
 $$;
-create trigger trg_unlink_logins_on_member_removed after delete on public.org_members
-  for each row execute function public.unlink_logins_on_member_removed();
+create trigger trg_cleanup_on_member_removed after delete on public.org_members
+  for each row execute function public.cleanup_on_member_removed();
 
 -- ------------------------------------------------------------ ownership --
 -- Claim columns change only through the claim functions (verify_claim_code,
@@ -701,7 +802,40 @@ begin
 end;
 $$;
 
--- A transfer or un-claim removes the previous claimant as owner.
+-- Nobody approves their own claim (review_church_claim records the reviewer).
+create or replace function public.protect_claim_self_review()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if new.review_status = 'approved' and new.review_status is distinct from old.review_status
+     and new.reviewed_by is not null and new.reviewed_by = new.user_id then
+    raise exception 'a claim cannot be approved by the claimant' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+create trigger trg_protect_claim_self_review before update of review_status on public.church_claims
+  for each row execute function public.protect_claim_self_review();
+
+-- An organization stays bound to its church listing; only the name and slug
+-- can be edited.
+create or replace function public.protect_organization_columns()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if public.is_privileged() then
+    return new;
+  end if;
+  if new.id is distinct from old.id or new.church_id is distinct from old.church_id
+     or new.created_by is distinct from old.created_by or new.created_at is distinct from old.created_at then
+    raise exception 'only the name of a church organization can be edited' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+create trigger trg_protect_organization_columns before update on public.organizations
+  for each row execute function public.protect_organization_columns();
+
+-- A transfer or un-claim removes the previous claimant as owner. The claimant's
+-- account id is not kept on the organization (members can read that row).
 create or replace function public.sync_org_from_church()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
@@ -719,8 +853,8 @@ begin
 
   select id into v_org_id from public.organizations where church_id = new.id;
   if v_org_id is null then
-    insert into public.organizations (church_id, name, slug, created_by)
-    values (new.id, new.name, public.slugify(new.name) || '-' || left(new.id::text, 8), new.claimed_by)
+    insert into public.organizations (church_id, name, slug)
+    values (new.id, new.name, public.slugify(new.name) || '-' || left(new.id::text, 8))
     returning id into v_org_id;
   end if;
 
@@ -741,49 +875,40 @@ begin
 end;
 $$;
 
+update public.organizations set created_by = null where created_by is not null;
+
 -- ------------------------------------------------------------ invitations --
--- Returns the plain token once; only its hash is stored. Non-admins may only
--- invite a login onto a record whose roles they could have granted themselves.
+-- Church admins invite a login onto a person record. Returns the plain token
+-- once; only its hash is stored.
 create or replace function public.create_org_invitation(
-  p_org_id uuid, p_email text, p_person_id uuid default null, p_member_role text default 'staff'
+  p_org_id uuid, p_email text, p_person_id uuid, p_member_role text default 'staff'
 ) returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_token text := encode(extensions.gen_random_bytes(24), 'hex');
-  v_admin boolean := chms_private.is_church_admin(p_org_id);
   v_id uuid;
 begin
-  if not public.has_org_permission(p_org_id, 'org.manage') then
-    raise exception 'not allowed' using errcode = '42501';
+  if auth.uid() is null or not chms_private.is_church_admin(p_org_id) then
+    raise exception 'only church admins can invite leaders' using errcode = '42501';
   end if;
-  if p_member_role = 'admin' and not v_admin then
-    raise exception 'only owners and admins can invite admins' using errcode = '42501';
+  if not exists (select 1 from public.people where id = p_person_id and org_id = p_org_id and archived_at is null) then
+    raise exception 'no such person in this church' using errcode = '22023';
   end if;
-  if p_person_id is not null then
-    if not exists (select 1 from public.people where id = p_person_id and org_id = p_org_id and archived_at is null) then
-      raise exception 'no such person in this church' using errcode = '22023';
-    end if;
-    if exists (select 1 from public.person_logins where person_id = p_person_id) then
-      raise exception 'this person already has a login' using errcode = '23505';
-    end if;
-    if not v_admin and (
-      p_person_id = chms_private.my_person_id(p_org_id)
-      or chms_private.is_over_me(p_org_id, p_person_id)
-      or not (chms_private.person_role_permissions(p_person_id) <@ public.my_org_permissions(p_org_id))
-    ) then
-      raise exception 'you cannot invite a login for that person' using errcode = '42501';
-    end if;
+  if exists (select 1 from public.person_logins where person_id = p_person_id) then
+    raise exception 'this person already has a login' using errcode = '23505';
   end if;
-  insert into public.org_invitations (org_id, email, person_id, member_role, token_hash, invited_by_person_id, invited_by_admin)
+  insert into public.org_invitations (org_id, email, person_id, member_role, token_hash, invited_by_person_id)
   values (p_org_id, lower(btrim(p_email)), p_person_id, p_member_role,
-          encode(extensions.digest(v_token, 'sha256'), 'hex'), chms_private.my_person_id(p_org_id), v_admin)
+          encode(extensions.digest(v_token, 'sha256'), 'hex'), chms_private.my_person_id(p_org_id))
   returning id into v_id;
+  insert into chms_private.invitation_inviters (invitation_id, user_id) values (v_id, auth.uid());
   return jsonb_build_object('id', v_id, 'token', v_token);
 end;
 $$;
 
 -- The invited user accepts with the token from their email. The invitation
--- must be addressed to the email on their account. Checks that can fail run
--- before anything is written; races end in an error that rolls back.
+-- must be addressed to the email on their account, and its sender must still
+-- be an admin of the church. Checks that can fail run before anything is
+-- written; races end in an error that rolls back.
 create or replace function public.accept_org_invitation(p_token text)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 declare
@@ -812,23 +937,23 @@ begin
   if v_email is distinct from v_inv.email then
     return jsonb_build_object('ok', false, 'error', 'This invitation was sent to a different email address.');
   end if;
+  if not exists (
+    select 1 from chms_private.invitation_inviters ii
+    join public.org_members m on m.user_id = ii.user_id and m.org_id = v_inv.org_id and m.role in ('owner', 'admin')
+    where ii.invitation_id = v_inv.id
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'This invitation needs to be sent again by a church admin.');
+  end if;
 
-  if v_inv.person_id is not null then
-    perform 1 from public.people where id = v_inv.person_id for update;
-    if exists (select 1 from public.person_logins where person_id = v_inv.person_id) then
-      return jsonb_build_object('ok', false, 'error', 'That person already has a login.');
-    end if;
-    if exists (select 1 from public.person_logins where org_id = v_inv.org_id and user_id = v_uid) then
-      return jsonb_build_object('ok', false, 'error', 'Your login is already linked to another person at this church.');
-    end if;
-    -- Roles may have changed since the invite: a non-admin inviter must still
-    -- hold everything the record's roles carry.
-    if not v_inv.invited_by_admin and (
-      v_inv.invited_by_person_id is null
-      or not (chms_private.person_role_permissions(v_inv.person_id) <@ chms_private.person_role_permissions(v_inv.invited_by_person_id))
-    ) then
-      return jsonb_build_object('ok', false, 'error', 'This invitation needs to be sent again by a church admin.');
-    end if;
+  perform 1 from public.people where id = v_inv.person_id for update;
+  if exists (select 1 from public.people where id = v_inv.person_id and archived_at is not null) then
+    return jsonb_build_object('ok', false, 'error', 'This invitation is not valid.');
+  end if;
+  if exists (select 1 from public.person_logins where person_id = v_inv.person_id) then
+    return jsonb_build_object('ok', false, 'error', 'That person already has a login.');
+  end if;
+  if exists (select 1 from public.person_logins where org_id = v_inv.org_id and user_id = v_uid) then
+    return jsonb_build_object('ok', false, 'error', 'Your login is already linked to another person at this church.');
   end if;
 
   insert into public.org_members (org_id, user_id, role)
@@ -836,10 +961,7 @@ begin
   on conflict (org_id, user_id) do update
     set role = case when public.org_role_rank(excluded.role) > public.org_role_rank(public.org_members.role)
                     then excluded.role else public.org_members.role end;
-
-  if v_inv.person_id is not null then
-    insert into public.person_logins (person_id, org_id, user_id) values (v_inv.person_id, v_inv.org_id, v_uid);
-  end if;
+  insert into public.person_logins (person_id, org_id, user_id) values (v_inv.person_id, v_inv.org_id, v_uid);
 
   update public.org_invitations set accepted_at = now() where id = v_inv.id;
   return jsonb_build_object('ok', true, 'org_id', v_inv.org_id);
@@ -851,15 +973,15 @@ returns void language plpgsql security definer set search_path = public as $$
 declare v_org uuid;
 begin
   select org_id into v_org from public.org_invitations where id = p_invitation_id;
-  if v_org is null or not public.has_org_permission(v_org, 'org.manage') then
+  if v_org is null or auth.uid() is null or not chms_private.is_church_admin(v_org) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
   update public.org_invitations set revoked_at = now() where id = p_invitation_id and accepted_at is null;
 end;
 $$;
 
--- Remove a person's login (and their membership) from a church. Owners stay;
--- non-admins cannot unlink themselves or anyone over them.
+-- Church admins remove a person's login and membership. Owners change only
+-- through the church claim.
 create or replace function public.unlink_person_login(p_person_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -869,12 +991,8 @@ begin
   if not found then
     return;
   end if;
-  if not public.has_org_permission(v_login.org_id, 'org.manage') then
-    raise exception 'not allowed' using errcode = '42501';
-  end if;
-  if not chms_private.is_church_admin(v_login.org_id)
-     and (p_person_id = chms_private.my_person_id(v_login.org_id) or chms_private.is_over_me(v_login.org_id, p_person_id)) then
-    raise exception 'you cannot unlink yourself or someone over you' using errcode = '42501';
+  if auth.uid() is null or not chms_private.is_church_admin(v_login.org_id) then
+    raise exception 'only church admins can remove a login' using errcode = '42501';
   end if;
   if exists (select 1 from public.org_members where org_id = v_login.org_id and user_id = v_login.user_id and role = 'owner') then
     raise exception 'owners are changed through the church claim' using errcode = '42501';
@@ -890,78 +1008,94 @@ grant execute on function public.has_org_permission(uuid, text), public.my_org_p
   to authenticated, service_role;
 
 -- ------------------------------------------------------------------- RLS --
--- Membership rows carry account ids: each user reads only their own (church
--- admins see their team through people_with_logins instead).
+-- Membership rows carry account ids: each user reads only their own, and
+-- clients never write them (invitations and claims do, as definer code).
 create policy "Members read only their own membership row" on public.org_members
   as restrictive for select
   using (user_id = auth.uid() or public.is_moderator());
+create policy "Memberships come only from invitations and claims" on public.org_members
+  as restrictive for insert to anon, authenticated
+  with check (false);
+create policy "Memberships are removed only through the app" on public.org_members
+  as restrictive for delete to anon, authenticated
+  using (false);
 
 create policy "Members read their church's roles" on public.org_roles for select
-  using (public.is_org_member(org_id));
+  using (org_id = any ((select chms_private.my_orgs())::uuid[]));
 create policy "Role managers add roles" on public.org_roles for insert
-  with check (public.has_org_permission(org_id, 'roles.manage'));
+  with check (org_id = any ((select chms_private.orgs_with_permission('roles.manage'))::uuid[]));
 create policy "Role managers edit roles" on public.org_roles for update
-  using (public.has_org_permission(org_id, 'roles.manage')) with check (public.has_org_permission(org_id, 'roles.manage'));
+  using (org_id = any ((select chms_private.orgs_with_permission('roles.manage'))::uuid[]))
+  with check (org_id = any ((select chms_private.orgs_with_permission('roles.manage'))::uuid[]));
 create policy "Role managers delete roles" on public.org_roles for delete
-  using (public.has_org_permission(org_id, 'roles.manage'));
+  using (org_id = any ((select chms_private.orgs_with_permission('roles.manage'))::uuid[]));
 
 create policy "Viewers read people; leaders read themselves" on public.people for select
-  using (public.has_org_permission(org_id, 'people.view') or id = chms_private.my_person_id(org_id));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.view'))::uuid[])
+         or id = any ((select chms_private.my_person_ids())::uuid[]));
 create policy "Editors add people" on public.people for insert
-  with check (public.has_org_permission(org_id, 'people.edit'));
+  with check (org_id = any ((select chms_private.orgs_with_permission('people.edit'))::uuid[]));
 create policy "Editors edit people" on public.people for update
-  using (public.has_org_permission(org_id, 'people.edit')) with check (public.has_org_permission(org_id, 'people.edit'));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.edit'))::uuid[]))
+  with check (org_id = any ((select chms_private.orgs_with_permission('people.edit'))::uuid[]));
 
 create policy "Users read their own login link" on public.person_logins for select
-  using (user_id = auth.uid() and public.is_org_member(org_id));
+  using (user_id = auth.uid() and org_id = any ((select chms_private.my_orgs())::uuid[]));
 
 create policy "Viewers read households" on public.households for select
-  using (public.has_org_permission(org_id, 'people.view'));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.view'))::uuid[]));
 create policy "Editors add households" on public.households for insert
-  with check (public.has_org_permission(org_id, 'people.edit'));
+  with check (org_id = any ((select chms_private.orgs_with_permission('people.edit'))::uuid[]));
 create policy "Editors edit households" on public.households for update
-  using (public.has_org_permission(org_id, 'people.edit')) with check (public.has_org_permission(org_id, 'people.edit'));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.edit'))::uuid[]))
+  with check (org_id = any ((select chms_private.orgs_with_permission('people.edit'))::uuid[]));
 
 create policy "Viewers read household members" on public.household_members for select
-  using (public.has_org_permission(org_id, 'people.view'));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.view'))::uuid[]));
 create policy "Editors add household members" on public.household_members for insert
-  with check (public.has_org_permission(org_id, 'people.edit'));
+  with check (org_id = any ((select chms_private.orgs_with_permission('people.edit'))::uuid[]));
 create policy "Editors edit household members" on public.household_members for update
-  using (public.has_org_permission(org_id, 'people.edit')) with check (public.has_org_permission(org_id, 'people.edit'));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.edit'))::uuid[]))
+  with check (org_id = any ((select chms_private.orgs_with_permission('people.edit'))::uuid[]));
 create policy "Editors remove household members" on public.household_members for delete
-  using (public.has_org_permission(org_id, 'people.edit'));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.edit'))::uuid[]));
 
 create policy "Viewers read role holders; leaders read their own" on public.person_roles for select
-  using (public.has_org_permission(org_id, 'people.view') or person_id = chms_private.my_person_id(org_id));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.view'))::uuid[])
+         or person_id = any ((select chms_private.my_person_ids())::uuid[]));
 create policy "Role managers assign roles" on public.person_roles for insert
-  with check (public.has_org_permission(org_id, 'roles.manage'));
+  with check (org_id = any ((select chms_private.orgs_with_permission('roles.manage'))::uuid[]));
 create policy "Role managers remove roles" on public.person_roles for delete
-  using (public.has_org_permission(org_id, 'roles.manage'));
+  using (org_id = any ((select chms_private.orgs_with_permission('roles.manage'))::uuid[]));
 
 create policy "Viewers read the chart" on public.person_overseers for select
-  using (public.has_org_permission(org_id, 'people.view'));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.view'))::uuid[]));
 create policy "Role managers edit the chart" on public.person_overseers for insert
-  with check (public.has_org_permission(org_id, 'roles.manage'));
+  with check (org_id = any ((select chms_private.orgs_with_permission('roles.manage'))::uuid[]));
 create policy "Role managers remove chart lines" on public.person_overseers for delete
-  using (public.has_org_permission(org_id, 'roles.manage'));
+  using (org_id = any ((select chms_private.orgs_with_permission('roles.manage'))::uuid[]));
 
 create policy "Note keepers read notes they may see" on public.person_notes for select
-  using (public.has_org_permission(org_id, 'people.notes') and (
-    author_person_id = chms_private.my_person_id(org_id)
-    or (person_id is distinct from chms_private.my_person_id(org_id)
-        and (visibility = 'care' or (visibility = 'oversight' and chms_private.i_oversee(org_id, person_id))))
+  using (org_id = any ((select chms_private.orgs_with_permission('people.notes'))::uuid[]) and (
+    author_person_id = any ((select chms_private.my_person_ids())::uuid[])
+    or (not person_id = any ((select chms_private.my_person_ids())::uuid[])
+        and (visibility = 'care'
+             or (visibility = 'oversight' and person_id = any ((select chms_private.people_i_oversee())::uuid[]))))
   ));
 create policy "Note keepers write notes" on public.person_notes for insert
-  with check (public.has_org_permission(org_id, 'people.notes'));
+  with check (org_id = any ((select chms_private.orgs_with_permission('people.notes'))::uuid[]));
 create policy "Authors edit their notes" on public.person_notes for update
-  using (public.has_org_permission(org_id, 'people.notes') and author_person_id = chms_private.my_person_id(org_id))
-  with check (public.has_org_permission(org_id, 'people.notes') and author_person_id = chms_private.my_person_id(org_id));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.notes'))::uuid[])
+         and author_person_id = any ((select chms_private.my_person_ids())::uuid[]))
+  with check (org_id = any ((select chms_private.orgs_with_permission('people.notes'))::uuid[])
+              and author_person_id = any ((select chms_private.my_person_ids())::uuid[]));
 create policy "Authors or church managers delete notes" on public.person_notes for delete
-  using (public.has_org_permission(org_id, 'people.notes')
-         and (author_person_id = chms_private.my_person_id(org_id) or public.has_org_permission(org_id, 'org.manage')));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.notes'))::uuid[])
+         and (author_person_id = any ((select chms_private.my_person_ids())::uuid[])
+              or org_id = any ((select chms_private.orgs_with_permission('org.manage'))::uuid[])));
 
 create policy "Viewers read people history" on public.people_audit for select
-  using (public.has_org_permission(org_id, 'people.view'));
+  using (org_id = any ((select chms_private.orgs_with_permission('people.view'))::uuid[]));
 
-create policy "Church managers read invitations" on public.org_invitations for select
-  using (public.has_org_permission(org_id, 'org.manage'));
+create policy "Church admins read invitations" on public.org_invitations for select
+  using (chms_private.is_church_admin(org_id));
