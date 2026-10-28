@@ -467,7 +467,11 @@ insert into public.people (id, org_id, first_name, last_name, email, membership_
   ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'Paul', 'Pilot', 'paul@pilot.org', 'member'),
   ('30000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', 'Eve', 'Deacon', 'eve@example.com', 'member'),
   ('30000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000001', 'Kid', 'Pilot', null, 'regular'),
+  ('30000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000001', 'Alice', 'Owner', 'alice@example.com', 'member'),
   ('30000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000002', 'Quinn', 'Other', 'quinn@other.org', 'member');
+-- The owner is in the directory (needed to write notes).
+insert into public.person_logins (person_id, org_id, user_id) values
+  ('30000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a');
 insert into public.households (id, org_id, name) values
   ('40000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'Pilot family'),
   ('40000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000002', 'Other family');
@@ -479,6 +483,9 @@ grant all on _chms to authenticated, anon;
 
 select pg_temp.ok((select count(*) from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001') = 6, 'new church gets the six default roles');
 select pg_temp.ok((select cardinality(permissions) from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Pastor') = 6, 'Pastor holds every permission');
+select pg_temp.ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                              where n.nspname = 'public' and p.proname = 'seed_default_org_roles'),
+  'role seeding is not callable through the API');
 
 -- anonymous and outsiders
 select pg_temp.as_user(null, 'anon');
@@ -489,31 +496,50 @@ select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');
 select pg_temp.ok((select count(*) from public.people) = 0, 'site admin of By Their Fruit sees no church people');
 select pg_temp.as_postgres();
 
+-- account ids never reach church users
+select pg_temp.ok(not exists (
+  select 1 from information_schema.columns
+  where table_schema = 'public'
+    and table_name in ('people', 'people_audit', 'person_notes', 'org_invitations', 'households', 'person_roles', 'person_overseers', 'org_roles')
+    and (column_name in ('user_id', 'created_by', 'accepted_by', 'actor') or column_name like '%user%')),
+  'no church table a leader can read carries an account id');
+
 -- church owner
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
-select pg_temp.ok((select count(*) from public.people) = 3, 'owner sees their church''s people only');
+select pg_temp.ok((select count(*) from public.people) = 4, 'owner sees their church''s people only');
 select pg_temp.ok(cardinality(public.my_org_permissions('20000000-0000-0000-0000-000000000001')) = 6, 'owner holds every permission');
 select pg_temp.ok((select count(*) from public.people where search_text like '%pilot%') = 2, 'search text finds people by name');
+select pg_temp.ok(not exists (select 1 from public.org_members where user_id <> auth.uid()), 'even an owner reads only their own membership rows');
+select pg_temp.ok((select count(*) from public.person_logins) = 1, 'an owner reads only their own login link');
+select pg_temp.ok((select array_agg(x) from public.people_with_logins('20000000-0000-0000-0000-000000000001') x) = array['30000000-0000-0000-0000-000000000004']::uuid[],
+  'leaders with a login are listed by person id');
 update public.people set phone = '555-0101' where id = '30000000-0000-0000-0000-000000000001';
 select pg_temp.ok((select count(*) from public.people_audit where person_id = '30000000-0000-0000-0000-000000000001' and action = 'update'
-                   and actor = '00000000-0000-0000-0000-00000000000a' and changes ? 'phone') = 1, 'edits are audited with the actor and the change');
+                   and actor_person_id = '30000000-0000-0000-0000-000000000004' and actor_kind = 'leader' and changes ? 'phone') = 1,
+  'edits are audited with the actor''s person record and the change');
 update public.people set archived_at = now() where id = '30000000-0000-0000-0000-000000000003';
 select pg_temp.ok((select count(*) from public.people_audit where person_id = '30000000-0000-0000-0000-000000000003' and action = 'archive') = 1, 'archiving is audited');
 insert into public.person_notes (person_id, org_id, body) values ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'Asked for prayer for his mother.');
+select pg_temp.ok((select author_person_id from public.person_notes limit 1) = '30000000-0000-0000-0000-000000000004', 'notes are attributed to the writer''s person record');
 select pg_temp.as_postgres();
 
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
-  $$update public.people set user_id = '00000000-0000-0000-0000-00000000000f' where id = '30000000-0000-0000-0000-000000000001'$$) = '42501',
-  'owner cannot link a login to a person directly');
+  $$insert into public.person_logins (person_id, org_id, user_id) values ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000f')$$) = '42501',
+  'an owner cannot link a login to a person directly');
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
-  $$insert into public.people (org_id, first_name, user_id) values ('20000000-0000-0000-0000-000000000001', 'X', '00000000-0000-0000-0000-00000000000f')$$) = '42501',
-  'a new person cannot be created already linked to a login');
-select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
-  $$update public.people set org_id = '20000000-0000-0000-0000-000000000002' where id = '30000000-0000-0000-0000-000000000001'$$) <> '',
-  'a person cannot be moved to another church');
+  $$update public.person_notes set author_person_id = '30000000-0000-0000-0000-000000000001'$$) = '42501',
+  'a note''s author cannot be changed');
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
   $$insert into public.household_members (household_id, person_id, org_id) values ('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000001')$$) <> '',
   'a household cannot include a person from another church');
+
+-- moving a record between churches fails even for someone who can edit both
+insert into public.org_members (org_id, user_id, role) values ('20000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000a', 'admin');
+insert into public.people (id, org_id, first_name) values ('30000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000001', 'Mover');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+  $$update public.people set org_id = '20000000-0000-0000-0000-000000000002' where id = '30000000-0000-0000-0000-000000000005'$$) = '42501',
+  'a person cannot be moved to another church');
+delete from public.org_members where org_id = '20000000-0000-0000-0000-000000000002' and user_id = '00000000-0000-0000-0000-00000000000a';
 
 -- another church's owner
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000b',
@@ -545,7 +571,7 @@ select pg_temp.ok((public.accept_org_invitation((select v from _chms where k = '
 select pg_temp.ok(public.is_org_member('20000000-0000-0000-0000-000000000001', 'staff'), 'accepting makes them a staff member');
 select pg_temp.ok((select count(*) from public.people) = 1, 'with no roles yet, a leader sees only their own person record');
 select pg_temp.as_postgres();
-select pg_temp.ok((select user_id from public.people where id = '30000000-0000-0000-0000-000000000002') = '00000000-0000-0000-0000-00000000000e', 'accepting links the login to the person');
+select pg_temp.ok((select user_id from public.person_logins where person_id = '30000000-0000-0000-0000-000000000002') = '00000000-0000-0000-0000-00000000000e', 'accepting links the login to the person');
 
 -- roles grant permissions
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
@@ -553,8 +579,8 @@ insert into public.person_roles (person_id, role_id, org_id)
   select '30000000-0000-0000-0000-000000000002', id, org_id from public.org_roles
   where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Deacon';
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000e');
-select pg_temp.ok((select count(*) from public.people) = 3, 'a Deacon sees the church directory');
-select pg_temp.ok((select count(*) from public.person_notes) = 1, 'a Deacon reads pastoral notes');
+select pg_temp.ok((select count(*) from public.people) = 5, 'a Deacon sees the church directory');
+select pg_temp.ok((select count(*) from public.person_notes) = 1, 'a Deacon reads care notes');
 update public.people set last_name = 'Edited' where id = '30000000-0000-0000-0000-000000000001';
 select pg_temp.as_postgres();
 select pg_temp.ok((select last_name from public.people where id = '30000000-0000-0000-0000-000000000001') = 'Pilot', 'a Deacon cannot edit people');
@@ -568,23 +594,19 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000e',
 update public.person_roles set role_id = (select id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Group Leader')
   where person_id = '30000000-0000-0000-0000-000000000002';
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000e');
-select pg_temp.ok((select count(*) from public.people) = 3, 'a Group Leader sees the directory');
+select pg_temp.ok((select count(*) from public.people) = 5, 'a Group Leader sees the directory');
 select pg_temp.ok((select count(*) from public.person_notes) = 0, 'a Group Leader cannot read pastoral notes');
 select pg_temp.as_postgres();
 
 delete from public.org_members where org_id = '20000000-0000-0000-0000-000000000001' and user_id = '00000000-0000-0000-0000-00000000000e';
+select pg_temp.ok(not exists (select 1 from public.person_logins where user_id = '00000000-0000-0000-0000-00000000000e'), 'leaving a church unlinks the login');
+insert into public.org_members (org_id, user_id, role) values ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000e', 'volunteer');
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000e');
-select pg_temp.ok(not public.has_org_permission('20000000-0000-0000-0000-000000000001', 'people.view'), 'removing the membership removes every permission');
+select pg_temp.ok(not public.has_org_permission('20000000-0000-0000-0000-000000000001', 'people.view'), 'rejoining does not bring back old roles');
+select pg_temp.ok((select count(*) from public.people) = 0, 'a member without a linked person sees nobody');
 select pg_temp.as_postgres();
-
--- reviewer anonymity: nothing in the schema joins church people to reviews
-select pg_temp.ok(not exists (
-  select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public' and p.prosrc ~ 'public\.people\M' and p.prosrc ~* 'reviews|profiles'),
-  'no function references both church people and reviews or profiles');
-select pg_temp.ok(not exists (
-  select 1 from pg_views where schemaname = 'public' and definition ~ '\mpeople\M' and definition ~* 'reviews|profiles'),
-  'no view joins church people to reviews or profiles');
+-- Eve rejoins properly for the chart tests below.
+insert into public.person_logins (person_id, org_id, user_id) values ('30000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000e');
 
 \echo
 \echo '== chms: oversight chart =========================================='
@@ -593,28 +615,41 @@ select pg_temp.ok(not exists (
 -- the Associate answers to the Lead, the Youth Pastor to the Associate.
 select pg_temp.as_postgres();
 insert into auth.users (id, email, raw_user_meta_data) values
-  ('00000000-0000-0000-0000-000000000011', 'lead@pilot.org',  '{"full_name":"Lead Pastor"}'),
-  ('00000000-0000-0000-0000-000000000012', 'assoc@pilot.org', '{"full_name":"Associate Pastor"}'),
-  ('00000000-0000-0000-0000-000000000013', 'youth@pilot.org', '{"full_name":"Youth Pastor"}'),
-  ('00000000-0000-0000-0000-000000000014', 'elder@pilot.org', '{"full_name":"An Elder"}');
+  ('00000000-0000-0000-0000-000000000011', 'lead@pilot.org',   '{"full_name":"Lead Pastor"}'),
+  ('00000000-0000-0000-0000-000000000012', 'assoc@pilot.org',  '{"full_name":"Associate Pastor"}'),
+  ('00000000-0000-0000-0000-000000000013', 'youth@pilot.org',  '{"full_name":"Youth Pastor"}'),
+  ('00000000-0000-0000-0000-000000000014', 'elder@pilot.org',  '{"full_name":"An Elder"}'),
+  ('00000000-0000-0000-0000-000000000015', 'keeper@pilot.org', '{"full_name":"Role Keeper"}'),
+  ('00000000-0000-0000-0000-000000000016', 'paul2@pilot.org',  '{"full_name":"Paul Again"}');
 insert into public.org_members (org_id, user_id, role) values
   ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000011', 'staff'),
   ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000012', 'staff'),
   ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000013', 'staff'),
   ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000014', 'volunteer'),
-  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000e', 'volunteer');
-select set_config('app.chms_linking', 'on', true);
-insert into public.people (id, org_id, first_name, last_name, title, user_id) values
-  ('31000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'Lee', 'Lead', 'Lead Pastor', '00000000-0000-0000-0000-000000000011'),
-  ('31000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', 'Ash', 'Assoc', 'Associate Pastor', '00000000-0000-0000-0000-000000000012'),
-  ('31000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000001', 'Yan', 'Youth', 'Youth Pastor', '00000000-0000-0000-0000-000000000013'),
-  ('31000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000001', 'Eli', 'Elder', null, '00000000-0000-0000-0000-000000000014');
-select set_config('app.chms_linking', '', true);
+  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000015', 'volunteer');
+insert into public.people (id, org_id, first_name, last_name, title) values
+  ('31000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'Lee', 'Lead', 'Lead Pastor'),
+  ('31000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', 'Ash', 'Assoc', 'Associate Pastor'),
+  ('31000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000001', 'Yan', 'Youth', 'Youth Pastor'),
+  ('31000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000001', 'Eli', 'Elder', null),
+  ('31000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000001', 'Kip', 'Keeper', null),
+  ('31000000-0000-0000-0000-000000000006', '20000000-0000-0000-0000-000000000001', 'Val', 'Vacant', 'Pastor (vacant)');
+insert into public.person_logins (person_id, org_id, user_id) values
+  ('31000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000011'),
+  ('31000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000012'),
+  ('31000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000013'),
+  ('31000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000014'),
+  ('31000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000015');
+insert into public.org_roles (org_id, name, permissions) values
+  ('20000000-0000-0000-0000-000000000001', 'Role Keeper', '{roles.manage}'),
+  ('20000000-0000-0000-0000-000000000001', 'Coordinator', '{people.view,roles.manage}'),
+  ('20000000-0000-0000-0000-000000000001', 'Inviter', '{people.view,org.manage}');
 insert into public.person_roles (person_id, role_id, org_id)
   select x.pid::uuid, r.id, r.org_id
   from (values ('31000000-0000-0000-0000-000000000001', 'Pastor'), ('31000000-0000-0000-0000-000000000001', 'Elder'),
                ('31000000-0000-0000-0000-000000000002', 'Pastor'), ('31000000-0000-0000-0000-000000000003', 'Staff'),
-               ('31000000-0000-0000-0000-000000000004', 'Elder')) x(pid, role)
+               ('31000000-0000-0000-0000-000000000004', 'Elder'), ('31000000-0000-0000-0000-000000000005', 'Role Keeper'),
+               ('31000000-0000-0000-0000-000000000006', 'Pastor')) x(pid, role)
   join public.org_roles r on r.org_id = '20000000-0000-0000-0000-000000000001' and r.name = x.role;
 update public.person_roles set role_id = (select id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Deacon')
   where person_id = '30000000-0000-0000-0000-000000000002';
@@ -622,7 +657,8 @@ insert into public.person_overseers (org_id, person_id, overseer_role_id)
   select org_id, '31000000-0000-0000-0000-000000000001', id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Elder';
 insert into public.person_overseers (org_id, person_id, overseer_person_id) values
   ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000002', '31000000-0000-0000-0000-000000000001'),
-  ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000003', '31000000-0000-0000-0000-000000000002');
+  ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000003', '31000000-0000-0000-0000-000000000002'),
+  ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000005', '31000000-0000-0000-0000-000000000001');
 
 select pg_temp.ok(chms_private.overseer_ids('31000000-0000-0000-0000-000000000003')
   @> array['31000000-0000-0000-0000-000000000002', '31000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000004']::uuid[]
@@ -631,9 +667,38 @@ select pg_temp.ok(chms_private.overseer_ids('31000000-0000-0000-0000-00000000000
 select pg_temp.ok(not ('31000000-0000-0000-0000-000000000001' = any (chms_private.overseer_ids('31000000-0000-0000-0000-000000000001')))
   and '31000000-0000-0000-0000-000000000004' = any (chms_private.overseer_ids('31000000-0000-0000-0000-000000000001')),
   'a lead pastor who is also an elder answers to the other elders, not to himself');
+
+-- loops
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
   $$insert into public.person_overseers (org_id, person_id, overseer_person_id) values ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000003')$$) = '23514',
   'the chart cannot go in a circle, even for the owner');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+  $$insert into public.person_roles (person_id, role_id, org_id) select '31000000-0000-0000-0000-000000000002', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Elder'$$) = '',
+  'the associate can also be an elder');
+select pg_temp.ok(not ('31000000-0000-0000-0000-000000000002' = any (chms_private.overseer_ids('31000000-0000-0000-0000-000000000001'))),
+  'an elder who answers to the lead pastor does not oversee him through the board');
+select pg_temp.as_postgres();
+delete from public.person_roles where person_id = '31000000-0000-0000-0000-000000000002'
+  and role_id = (select id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Elder');
+insert into public.org_roles (org_id, name, permissions) values
+  ('20000000-0000-0000-0000-000000000001', 'Board One', '{}'), ('20000000-0000-0000-0000-000000000001', 'Board Two', '{}');
+insert into public.people (id, org_id, first_name) values
+  ('31000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000001', 'Zed'),
+  ('31000000-0000-0000-0000-000000000012', '20000000-0000-0000-0000-000000000001', 'Zoe');
+insert into public.person_overseers (org_id, person_id, overseer_role_id)
+  select org_id, '31000000-0000-0000-0000-000000000011', id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Board One';
+insert into public.person_overseers (org_id, person_id, overseer_role_id)
+  select org_id, '31000000-0000-0000-0000-000000000012', id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Board Two';
+insert into public.person_roles (person_id, role_id, org_id)
+  select '31000000-0000-0000-0000-000000000012', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Board One';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+  $$insert into public.person_roles (person_id, role_id, org_id) select '31000000-0000-0000-0000-000000000011', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Board Two'$$) = '23514',
+  'giving someone a board role cannot close a loop');
+update public.people set archived_at = now() where id = '31000000-0000-0000-0000-000000000002';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+  $$insert into public.person_overseers (org_id, person_id, overseer_person_id) values ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000003')$$) = '23514',
+  'a loop through an archived person is still a loop');
+update public.people set archived_at = null where id = '31000000-0000-0000-0000-000000000002';
 
 -- the associate pastor holds every permission but answers to the lead pastor
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
@@ -645,6 +710,9 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
   $$update public.people set archived_at = now() where id = '31000000-0000-0000-0000-000000000001'$$) = '42501',
   'a pastor cannot archive the pastor over him');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
+  $$select public.unlink_person_login('31000000-0000-0000-0000-000000000001')$$) = '42501',
+  'a pastor cannot remove the login of the pastor over him');
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
   $$delete from public.person_overseers where person_id = '31000000-0000-0000-0000-000000000002'$$) = '42501',
   'nobody can remove who they answer to');
@@ -666,8 +734,7 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
   $$update public.people set archived_at = now() where id = '31000000-0000-0000-0000-000000000001'$$) = '42501',
   'staff cannot archive a pastor over them');
 
--- nobody hands out more access than they hold
-insert into public.org_roles (org_id, name, permissions) values ('20000000-0000-0000-0000-000000000001', 'Coordinator', '{people.view,roles.manage}');
+-- nobody hands out, edits or removes more access than they hold
 insert into public.person_roles (person_id, role_id, org_id)
   select '31000000-0000-0000-0000-000000000003', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Coordinator';
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
@@ -682,6 +749,34 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
   $$insert into public.person_roles (person_id, role_id, org_id) select '30000000-0000-0000-0000-000000000001', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Group Leader'$$) = '',
   'a role manager can grant a role within their own access');
+
+-- a role manager who cannot even see the directory is held to the same rules
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000015',
+  $$update public.org_roles set description = 'changed' where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Pastor'$$) = '42501',
+  'a role manager without directory access cannot touch a role held by someone over them');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000015',
+  $$delete from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Staff'$$) = '42501',
+  'a role manager cannot delete a role carrying permissions they lack');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000015',
+  $$update public.org_roles set permissions = '{}' where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Staff'$$) = '42501',
+  'a role manager cannot strip permissions they lack from a role');
+
+-- invitations onto existing records
+insert into public.person_roles (person_id, role_id, org_id)
+  select '31000000-0000-0000-0000-000000000003', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Inviter';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
+  $$select public.create_org_invitation('20000000-0000-0000-0000-000000000001', 'me-again@pilot.org', '31000000-0000-0000-0000-000000000006')$$) = '42501',
+  'an inviter cannot take over a record with more access than they hold');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000013');
+insert into _chms values ('paul', public.create_org_invitation('20000000-0000-0000-0000-000000000001', 'paul2@pilot.org', '30000000-0000-0000-0000-000000000001')->>'token');
+select pg_temp.as_postgres();
+insert into public.person_roles (person_id, role_id, org_id)
+  select '30000000-0000-0000-0000-000000000001', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Pastor';
+select pg_temp.as_user('00000000-0000-0000-0000-000000000016');
+select pg_temp.ok((public.accept_org_invitation((select v from _chms where k = 'paul'))->>'ok') = 'false',
+  'an invitation is refused if the record gained access the inviter lacks');
+select pg_temp.ok(not public.is_org_member('20000000-0000-0000-0000-000000000001'), 'the refused invitation grants nothing');
+select pg_temp.as_postgres();
 
 -- notes: oversight notes go up the chart only; nobody reads notes about themselves
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
@@ -701,6 +796,51 @@ select pg_temp.ok((select count(*) from public.person_notes where person_id = '3
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
 select pg_temp.ok((select count(*) from public.person_notes where visibility = 'private') = 1, 'the author reads their private note');
 select pg_temp.as_postgres();
+
+\echo
+\echo '== chms: church ownership ========================================='
+
+-- Only the claim process changes who claimed a church.
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000d',
+  $$update public.churches set claimed_by = '00000000-0000-0000-0000-00000000000d' where id = '10000000-0000-0000-0000-000000000001'$$) = '42501',
+  'a moderator cannot make themselves a church''s claimant');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000d');
+insert into public.churches (id, name, city, state, status, claimed_by) values
+  ('10000000-0000-0000-0000-000000000077', 'Moderator Church', 'Tampa', 'FL', 'approved', '00000000-0000-0000-0000-00000000000d');
+select pg_temp.as_postgres();
+select pg_temp.ok((select claimed_by is null from public.churches where id = '10000000-0000-0000-0000-000000000077')
+  and not exists (select 1 from public.organizations where church_id = '10000000-0000-0000-0000-000000000077'),
+  'a moderator cannot create a church already claimed');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000d');
+select pg_temp.ok(not public.has_org_permission((select id from public.organizations where church_id = '10000000-0000-0000-0000-000000000001'), 'people.notes'),
+  'a moderator holds no church permissions');
+select pg_temp.as_postgres();
+
+-- A transfer removes the previous claimant as owner.
+update public.churches set claimed_by = '00000000-0000-0000-0000-00000000000f' where id = '10000000-0000-0000-0000-000000000002';
+select pg_temp.ok(not exists (select 1 from public.org_members m join public.organizations o on o.id = m.org_id
+                              where o.church_id = '10000000-0000-0000-0000-000000000002' and m.user_id = '00000000-0000-0000-0000-00000000000b'),
+  'transferring a church removes the previous owner');
+update public.churches set claimed_by = null where id = '10000000-0000-0000-0000-000000000002';
+select pg_temp.ok(not exists (select 1 from public.org_members m join public.organizations o on o.id = m.org_id
+                              where o.church_id = '10000000-0000-0000-0000-000000000002'),
+  'un-claiming a church removes its owner');
+update public.churches set claimed_by = '00000000-0000-0000-0000-00000000000b' where id = '10000000-0000-0000-0000-000000000002';
+
+-- reviewer anonymity: nothing in the schema joins church people to reviews
+select pg_temp.ok(not exists (
+  select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname in ('public', 'chms_private')
+    and p.prosrc ~ '(public\.people|public\.person_\w+)\M' and p.prosrc ~* '\m(reviews|profiles|review_\w+)\M'),
+  'no function references both church people and reviews or profiles');
+select pg_temp.ok(not exists (
+  select 1 from pg_views where schemaname in ('public', 'chms_private') and definition ~ '\m(people|person_\w+)\M' and definition ~* '\m(reviews|profiles)\M'),
+  'no view joins church people to reviews or profiles');
+select pg_temp.ok(not exists (
+  select 1 from pg_policies where schemaname = 'public'
+    and coalesce(qual, '') || coalesce(with_check, '') ~ '\m(people|person_\w+)\M'
+    and coalesce(qual, '') || coalesce(with_check, '') ~* '\m(reviews|profiles)\M'),
+  'no policy mixes church people with reviews or profiles');
 
 \echo
 \echo 'All tests passed.'
