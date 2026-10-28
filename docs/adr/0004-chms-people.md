@@ -60,8 +60,13 @@ and the phone app.
   author). Nobody reads notes written about themselves.
 - **Boards and votes** (Elders, Trustees, Deacons, committees, with equal
   votes) arrive with the Groups phase; the chart can then point at a board.
-- **People are records, not accounts.** `people.user_id` is set only when a
-  leader accepts an invitation.
+- **People are records, not accounts.** A login is tied to a person only in
+  `person_logins`, written only when a leader accepts an invitation sent to
+  their own address. Each user reads only their own row there and in
+  `org_members`, the audit trail records actors as person ids, and note
+  authors are person records, so no church user ever sees another user's
+  account id (reviews carry account ids publicly, so an id would expose a
+  leader's review history).
 
 ## Guardrails
 
