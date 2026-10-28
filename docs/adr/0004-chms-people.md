@@ -46,6 +46,20 @@ and the phone app.
   uses. People-phase permissions: `people.view`, `people.edit`,
   `people.notes`, `people.export`, `roles.manage`, `org.manage`. Later
   phases add `groups.*`, `events.*`, `health.*`, `giving.*`.
+- **Hierarchy is separate from access.** Roles decide what someone can do;
+  the oversight chart (`person_overseers`) records who answers to whom. A
+  person can answer to another person or to everyone holding a role, which is
+  how a board works (at the pilot church the Lead Pastor answers to the
+  Elders, and pastors are elders too). Several overseers are allowed; the
+  chart can never form a loop. For everyone except owners and admins, the
+  chart adds: nobody changes their own roles or chart line, or those of
+  anyone over them; nobody archives or unlinks someone over them; nobody
+  grants a role, or edits a role, beyond the permissions they hold.
+- **Notes have three levels:** `care` (everyone with `people.notes`),
+  `oversight` (only those over the person in the chart) and `private` (the
+  author). Nobody reads notes written about themselves.
+- **Boards and votes** (Elders, Trustees, Deacons, committees, with equal
+  votes) arrive with the Groups phase; the chart can then point at a board.
 - **People are records, not accounts.** `people.user_id` is set only when a
   leader accepts an invitation.
 
