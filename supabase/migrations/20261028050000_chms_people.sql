@@ -38,6 +38,7 @@ create table public.people (
   first_name text not null check (length(btrim(first_name)) between 1 and 100),
   last_name text not null default '' check (length(last_name) <= 100),
   preferred_name text check (preferred_name is null or length(preferred_name) <= 100),
+  title text check (title is null or length(title) <= 100),  -- position, e.g. Lead Pastor
   email text check (email is null or (length(email) <= 254 and email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$')),
   phone text check (phone is null or length(phone) <= 40),
   birthdate date check (birthdate is null or birthdate between '1900-01-01' and current_date + 1),
