@@ -34,7 +34,8 @@ Everything marked done below was applied to production on 2026-10-22 (hardening 
 - **done** Versioned migrations with a reconstructed baseline; RLS regression suite; CI running lint, typecheck, build, and migrations+tests.
 - **done** Typed Supabase client (PKCE), generated DB types, `src/lib/api` data-access layer.
 - **next** Split `ByTheirFruit.tsx` (5k lines) into route components and hooks; remove `@ts-nocheck`.
-- **next** Monorepo (`apps/web`, `apps/chms`, `packages/db`, `packages/ui`). See ADR-0001.
+- **done** Church app scaffold in `apps/chms` (sign-in, church picker, People / Groups / Events / Health shell; ADR-0004). It shares generated DB types with the public site through a path alias.
+- **later** Full monorepo (`apps/web`, `packages/db`, `packages/ui`) once the two apps share more than types. See ADR-0001.
 - **later** Playwright smoke tests (search, church page, submit review, admin approve).
 
 ## Church-management expansion
@@ -43,7 +44,7 @@ Everything marked done below was applied to production on 2026-10-22 (hardening 
 - **next** Auth hook that embeds org roles in the JWT so RLS checks avoid a join.
 - **done** Billing paused for the beta (2026-10-24): church accounts are free; no prices or payment buttons on the site (ADR-0003).
 - **later** When billing returns: server-created Stripe Checkout sessions and Customer Portal; `subscriptions` becomes the single source of truth (ADR-0003).
-- **next** Core ChMS tables with `org_id` + the two helper checks on every policy: `people`, `households`, `groups`, `group_memberships`, `events`, `attendance`, `giving`, `visitor_followups`, `prayer_requests`.
+- **next** ChMS phase 1, People (ADR-0004): people, households, church-named roles with permissions, pastoral notes, audit, leader invites, Subsplash import. Then Groups, Health v1, Events, volunteering and kids check-in, giving.
 - **next** Nightly rollups (`church_metrics_daily`) via pg_cron; formalize `score_snapshots` and `regional_benchmarks` as views over them.
 - **later** Correlations that make the review data valuable to churches: welcome score vs first-time-visitor return rate, kids score vs kids check-in growth, leadership score vs volunteer retention.
 - **later** City and state landing pages generated from the 270k listings (largest organic growth lever).

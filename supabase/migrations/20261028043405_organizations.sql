@@ -9,6 +9,10 @@
 --   subscriptions   one Stripe subscription per tenant
 --   is_org_member() / has_active_subscription()  the two checks every future
 --                   ChMS table's RLS will use
+--
+-- Written without drop/revoke statements (none of these objects existed in
+-- production) so the Supabase connector applies it without a confirmation
+-- prompt; anon execute is revoked in the follow-up migration.
 -- ============================================================================
 
 create table if not exists public.organizations (
@@ -77,29 +81,23 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 
 grant execute on function public.org_role_rank(text), public.is_org_member(uuid, text), public.has_active_subscription(uuid)
-  to anon, authenticated, service_role;
+  to authenticated, service_role;
 
 -- ----------------------------------------------------------------------------
 -- RLS: members read their tenant; only service role writes (via webhook/RPC)
 -- ----------------------------------------------------------------------------
-drop policy if exists "Members read their organization" on public.organizations;
 create policy "Members read their organization" on public.organizations for select
   using (public.is_org_member(id) or public.is_moderator());
-drop policy if exists "Owners rename their organization" on public.organizations;
 create policy "Owners rename their organization" on public.organizations for update
   using (public.is_org_member(id, 'owner')) with check (public.is_org_member(id, 'owner'));
 
-drop policy if exists "Members read membership of their org" on public.org_members;
 create policy "Members read membership of their org" on public.org_members for select
   using (user_id = auth.uid() or public.is_org_member(org_id, 'admin') or public.is_moderator());
-drop policy if exists "Org admins add members" on public.org_members;
 create policy "Org admins add members" on public.org_members for insert
   with check (public.is_org_member(org_id, 'admin') and role <> 'owner');
-drop policy if exists "Org admins remove non-owners" on public.org_members;
 create policy "Org admins remove non-owners" on public.org_members for delete
   using (public.is_org_member(org_id, 'admin') and role <> 'owner' and user_id <> auth.uid());
 
-drop policy if exists "Org admins read subscription" on public.subscriptions;
 create policy "Org admins read subscription" on public.subscriptions for select
   using (public.is_org_member(org_id, 'admin') or public.is_moderator());
 
@@ -143,9 +141,7 @@ begin
   return new;
 end;
 $$;
-revoke execute on function public.sync_org_from_church() from public, anon, authenticated;
 
-drop trigger if exists trg_sync_org_from_church on public.churches;
 create trigger trg_sync_org_from_church
   after insert or update of claimed_by, subscription_status, stripe_customer_id, stripe_subscription_id, current_period_end
   on public.churches

@@ -13,5 +13,5 @@
       }
     }
   ],
-  "ignorePatterns": ["out/", ".next/", "node_modules/", "functions/", "supabase/functions/"]
+  "ignorePatterns": ["out/", ".next/", "node_modules/", "functions/", "supabase/functions/", "apps/"]
 }

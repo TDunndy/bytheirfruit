@@ -12,7 +12,8 @@ frontend. The order below keeps the live site working at every step.
 | 2b. Claim lockdown + review lifecycle migrations | **applied to production on 2026-10-24** (20261024011258, 20261024011342) |
 | 3. Merge to main (frontend deploy) | **done** (main deploys to Cloudflare Pages) |
 | 4a. Profiles private (restrictive policy) | **applied to production on 2026-10-27** (20261027190746); anon reads 0 profiles, users their own row, admins all. The one review carrying reviewer coordinates was cleared (copy kept in `review_locations`) |
-| 4. Privacy lockdown + organizations | pending: the lockdown's policy and column drops need the owner to approve Supabase's confirmation prompt within 60 s; profiles are already private via 4a |
+| 4b. Organizations (tenancy) | **applied to production on 2026-10-28** (20261028043405), written without drop/revoke statements so no confirmation prompt was needed; backfill created one organization (the admin's test listing) |
+| 4. Privacy lockdown | pending: its policy and column drops need the owner to approve Supabase's confirmation prompt within 60 s; profiles are already private via 4a. Apply together with `revoke execute ... from anon` on `is_org_member`, `has_active_subscription` and `org_role_rank` (anon can execute them through default privileges; they return false without a login) |
 | 5. Dashboard settings | pending |
 
 ## 0. One-time CLI setup
@@ -129,13 +130,13 @@ frontend reads `public_profiles`, calls `verify_claim_code`, `churches_near`,
 Only after the new frontend is live (the old one read `profiles` directly):
 
 ```bash
-npx supabase db push        # applies 20261022200000_privacy_lockdown and 20261022200100_organizations
+npx supabase db push        # applies 20261022200000_privacy_lockdown (organizations is already applied)
 ```
 
 The privacy migration drops `reviews.reviewer_lat/lng/distance_miles`
 (already copied to `review_locations`) and `church_claims.verification_code`
-(replaced by the hash). The organizations migration is additive and
-backfills organizations from existing claims.
+(replaced by the hash). The organizations migration (20261028043405) is
+already applied; it is additive and backfilled organizations from existing claims.
 
 If `db push` is not available, the connector's migration tool works the same
 way it did for the hardening parts; record the versions it assigns and

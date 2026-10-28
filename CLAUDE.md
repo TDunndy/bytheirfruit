@@ -39,3 +39,11 @@ npm run dev | lint | typecheck | build
 npm run test:db          # migrations + RLS tests on a local Postgres
 npm run db:types         # same, plus regenerate database.types.ts
 ```
+
+## Church app (`apps/chms`)
+- Separate Next.js app with its own `package.json`; run `npm ci` and its
+  scripts inside `apps/chms`. It imports DB types only (`import type` from
+  `@db/database.types`), never runtime code from the root `src/`.
+- Every ChMS table carries `org_id` and RLS through `has_org_permission` /
+  `is_org_member`. No ChMS table, view or function may join `people` to
+  `reviews` or `profiles` (reviewer anonymity; ADR-0004).
