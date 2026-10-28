@@ -74,7 +74,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav aria-label="Main">
           {NAV.map((n) => (
-            <Link key={n.href} href={n.href} className={pathname?.startsWith(n.href) ? 'nav-item active' : 'nav-item'}>
+            <Link key={n.href} href={n.href} className={pathname?.startsWith(n.href) || (n.href === '/people' && pathname?.startsWith('/households')) ? 'nav-item active' : 'nav-item'}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={n.icon} /></svg>
               {n.label}
             </Link>

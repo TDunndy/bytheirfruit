@@ -7,11 +7,16 @@ import { fetchMyOrgs, rememberOrgId, rememberedOrgId, type MyOrg } from '@/lib/o
 
 type Status = 'loading' | 'signed-out' | 'ready' | 'error'
 
+export type Permission = 'people.view' | 'people.edit' | 'people.notes' | 'people.export' | 'roles.manage' | 'org.manage'
+
 interface SessionValue {
   status: Status
   user: User | null
   orgs: MyOrg[]
   org: MyOrg | null
+  /** What the signed-in leader may do in the current church (the database enforces it). */
+  can: (permission: Permission) => boolean
+  isChurchAdmin: boolean
   selectOrg: (id: string) => void
   signOut: () => Promise<void>
 }
@@ -29,6 +34,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [orgs, setOrgs] = useState<MyOrg[]>([])
   const [orgId, setOrgId] = useState<string | null>(null)
+  const [permissions, setPermissions] = useState<string[]>([])
 
   const load = useCallback(async (u: User | null) => {
     setUser(u)
@@ -58,12 +64,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return () => sub.subscription.unsubscribe()
   }, [load])
 
+  useEffect(() => {
+    setPermissions([])
+    if (!orgId) return
+    let cancelled = false
+    supabase.rpc('my_org_permissions', { p_org_id: orgId }).then(({ data, error }) => {
+      if (error) console.error('Loading permissions failed', error)
+      if (!cancelled) setPermissions(data ?? [])
+    })
+    return () => { cancelled = true }
+  }, [orgId, user])
+
   const selectOrg = useCallback((id: string) => { rememberOrgId(id); setOrgId(id) }, [])
   const signOut = useCallback(async () => { await supabase.auth.signOut() }, [])
 
-  const value = useMemo<SessionValue>(() => ({
-    status, user, orgs, org: orgs.find((o) => o.id === orgId) ?? null, selectOrg, signOut,
-  }), [status, user, orgs, orgId, selectOrg, signOut])
+  const value = useMemo<SessionValue>(() => {
+    const org = orgs.find((o) => o.id === orgId) ?? null
+    return {
+      status, user, orgs, org, selectOrg, signOut,
+      can: (permission: Permission) => permissions.includes(permission),
+      isChurchAdmin: org?.role === 'owner' || org?.role === 'admin',
+    }
+  }, [status, user, orgs, orgId, permissions, selectOrg, signOut])
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }
