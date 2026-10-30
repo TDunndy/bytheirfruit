@@ -769,6 +769,34 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
   $$insert into public.person_overseers (org_id, person_id, overseer_person_id) values ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000008', '31000000-0000-0000-0000-000000000002')$$) = '',
   'a pastor can place a newcomer under himself');
 
+-- board members' chart lines are admin-only (they decide who oversees whom)
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000011',
+  $$insert into public.person_overseers (org_id, person_id, overseer_person_id) values ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000004', '31000000-0000-0000-0000-000000000001')$$) = '42501'
+  and '31000000-0000-0000-0000-000000000004' = any (chms_private.overseer_ids('31000000-0000-0000-0000-000000000001')),
+  'a non-admin lead pastor cannot place an unplaced elder who oversees him under himself');
+insert into public.people (id, org_id, first_name) values ('31000000-0000-0000-0000-000000000021', '20000000-0000-0000-0000-000000000001', 'Bea');
+insert into public.person_overseers (org_id, person_id, overseer_person_id) values
+  ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000004', '31000000-0000-0000-0000-000000000021');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000011',
+  $$insert into public.person_overseers (org_id, person_id, overseer_person_id) values ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000021', '31000000-0000-0000-0000-000000000001')$$) = '42501'
+  and '31000000-0000-0000-0000-000000000004' = any (chms_private.overseer_ids('31000000-0000-0000-0000-000000000001')),
+  'a non-admin cannot place someone an elder answers to under himself');
+delete from public.person_overseers where person_id = '31000000-0000-0000-0000-000000000004';
+insert into public.person_roles (person_id, role_id, org_id)
+  select '31000000-0000-0000-0000-000000000008', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Elder';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
+  $$delete from public.person_overseers where person_id = '31000000-0000-0000-0000-000000000008'$$) = '42501'
+  and not ('31000000-0000-0000-0000-000000000008' = any (chms_private.overseer_ids('31000000-0000-0000-0000-000000000001'))),
+  'a non-admin cannot remove an elder''s line to make that elder oversee his boss');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
+  $$delete from public.person_roles where person_id = '31000000-0000-0000-0000-000000000008'$$) = '42501',
+  'a non-admin cannot take someone off a board');
+delete from public.person_roles where person_id = '31000000-0000-0000-0000-000000000008';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
+  $$insert into public.person_roles (person_id, role_id, org_id) select '31000000-0000-0000-0000-000000000003', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Elder'$$) = '42501'
+  and not ('31000000-0000-0000-0000-000000000003' = any (chms_private.overseer_ids('31000000-0000-0000-0000-000000000001'))),
+  'a non-admin cannot put anyone on a board');
+
 -- the youth pastor (Staff: view, edit, export) can edit details but not archive those over him
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
   $$update public.people set phone = '555-0199' where id = '31000000-0000-0000-0000-000000000001'$$) = '',
@@ -776,6 +804,19 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
   $$update public.people set archived_at = now() where id = '31000000-0000-0000-0000-000000000001'$$) = '42501',
   'staff cannot archive a pastor over them');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
+  $$update public.people set archived_at = now() where id = '31000000-0000-0000-0000-000000000006'$$) = '42501',
+  'staff cannot archive a leader with more access than they hold');
+update public.people set archived_at = now() where id = '31000000-0000-0000-0000-000000000006';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
+  $$update public.people set archived_at = null where id = '31000000-0000-0000-0000-000000000006'$$) = '42501',
+  'staff cannot restore a leader with more access than they hold');
+update public.people set archived_at = null where id = '31000000-0000-0000-0000-000000000006';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
+  $$update public.people set archived_at = now() where id = '31000000-0000-0000-0000-000000000007'$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000013',
+  $$update public.people set archived_at = null where id = '31000000-0000-0000-0000-000000000007'$$) = '',
+  'staff can archive and restore someone with no more access than they hold');
 
 -- nobody hands out, edits or removes more access than they hold
 insert into public.person_roles (person_id, role_id, org_id)
@@ -882,6 +923,17 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000d',
   $$select public.review_church_claim((select id from public.church_claims where church_id = '10000000-0000-0000-0000-000000000088'), true)$$) = '42501',
   'a moderator cannot approve their own claim');
 select pg_temp.ok((select claimed_by is null from public.churches where id = '10000000-0000-0000-0000-000000000088'), 'the church stays unclaimed');
+insert into public.churches (id, name, city, state, status, website) values ('10000000-0000-0000-0000-000000000089', 'Auto Church', 'Tampa', 'FL', 'approved', 'https://autochurch.org');
+insert into public.church_claims (church_id, user_id, claim_email, verification_code_hash, code_expires_at, review_status)
+  values ('10000000-0000-0000-0000-000000000089', '00000000-0000-0000-0000-00000000000d', 'dan@autochurch.org',
+          encode(extensions.digest('313131', 'sha256'), 'hex'), now() + interval '1 hour', 'auto');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000d');
+select pg_temp.ok((public.verify_claim_code('10000000-0000-0000-0000-000000000089', '313131')->>'manual_review') = 'true',
+  'a moderator''s matching-domain claim still waits for review');
+select pg_temp.as_postgres();
+select pg_temp.ok((select claimed_by is null from public.churches where id = '10000000-0000-0000-0000-000000000089')
+  and (select review_status = 'pending_review' and verified from public.church_claims where church_id = '10000000-0000-0000-0000-000000000089'),
+  'the moderator''s church stays unclaimed until another reviewer approves');
 
 -- A transfer removes the previous claimant as owner.
 update public.churches set claimed_by = '00000000-0000-0000-0000-00000000000f' where id = '10000000-0000-0000-0000-000000000002';

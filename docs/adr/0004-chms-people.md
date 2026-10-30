@@ -55,9 +55,12 @@ and the phone app.
   board member who answers to someone through person lines does not oversee
   them through the board. For everyone except owners and admins, the chart
   adds: nobody changes their own roles or chart line, or those of anyone
-  over them; nobody archives someone over them; nobody grants, edits or
-  removes a role beyond the permissions they hold; people are placed only
-  under yourself or someone under you; board lines are drawn by admins.
+  over them; nobody archives or restores someone over them or someone with
+  more access than they hold; nobody grants, edits or removes a role beyond
+  the permissions they hold; people are placed only under yourself or
+  someone under you; board lines, board membership, and the chart lines of
+  board members (and of anyone a board member answers to) are admin-only,
+  because they decide which board members oversee whom.
 - **Logins and invitations:** only church admins (owners and admins) invite
   a login onto a person record or remove one; an invitation dies if its
   sender stops being an admin. Memberships are created only by invitations

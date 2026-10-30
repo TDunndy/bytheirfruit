@@ -66,7 +66,7 @@ function websiteDomain(website: string | null): string | null {
   if (!website) return null;
   try {
     const host = new URL(website.startsWith("http") ? website : `https://${website}`).hostname.toLowerCase().replace(/^www\./, "");
-    if (PLATFORM_HOSTS.some((p) => host === p || host.endsWith("." + p))) return null;
+    if (FREE_MAIL.has(host) || PLATFORM_HOSTS.some((p) => host === p || host.endsWith("." + p))) return null;
     return host;
   } catch {
     return null;

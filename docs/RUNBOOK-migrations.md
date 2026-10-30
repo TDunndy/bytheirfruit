@@ -13,6 +13,7 @@ frontend. The order below keeps the live site working at every step.
 | 3. Merge to main (frontend deploy) | **done** (main deploys to Cloudflare Pages) |
 | 4a. Profiles private (restrictive policy) | **applied to production on 2026-10-27** (20261027190746); anon reads 0 profiles, users their own row, admins all. The one review carrying reviewer coordinates was cleared (copy kept in `review_locations`) |
 | 4b. Organizations (tenancy) | **applied to production on 2026-10-28** (20261028043405), written without drop/revoke statements so no confirmation prompt was needed; backfill created one organization (the admin's test listing) |
+| 4c. Church app: People (`20261028050000_chms_people.sql`) | pending: the connector asked for confirmation; the owner approves Supabase's prompt within 60 s. It also replaces `verify_claim_code` (a moderator's own claim always goes to review), so redeploy `send-verification-email` (free-mail website domains no longer auto-verify) |
 | 4. Privacy lockdown | pending: its policy and column drops need the owner to approve Supabase's confirmation prompt within 60 s; profiles are already private via 4a. Apply together with `revoke execute ... from anon` on `is_org_member`, `has_active_subscription` and `org_role_rank` (anon can execute them through default privileges; they return false without a login) |
 | 5. Dashboard settings | pending |
 

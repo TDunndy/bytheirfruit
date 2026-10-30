@@ -385,17 +385,27 @@ returns uuid[] language sql stable security definer set search_path = public as 
 $$;
 
 -- Everyone under the signed-in user, in every church (the same edges walked
--- downward). Policies call it once per statement.
+-- downward). Policies call it once per statement; each board member's person
+-- lines are looked up once per call, not once per edge.
 create or replace function chms_private.people_i_oversee()
 returns uuid[] language plpgsql stable security definer set search_path = public as $$
 declare
   v_seen uuid[] := '{}';
   v_frontier uuid[] := chms_private.my_person_ids();
   v_next uuid[];
+  v_lines jsonb;
 begin
   if cardinality(v_frontier) = 0 then
     return '{}';
   end if;
+  select coalesce(jsonb_object_agg(h.person_id::text, to_jsonb(chms_private.person_line_ids(h.person_id)::text[])), '{}')
+    into v_lines
+  from (
+    select distinct pr.person_id
+    from public.person_roles pr
+    where pr.org_id in (select org_id from public.people where id = any (v_frontier))
+      and exists (select 1 from public.person_overseers o where o.overseer_role_id = pr.role_id)
+  ) h;
   loop
     select coalesce(array_agg(distinct s.x), '{}') into v_next
     from (
@@ -408,7 +418,7 @@ begin
       join public.person_overseers o on o.overseer_role_id = pr.role_id
       where pr.person_id = any (v_frontier)
         and o.person_id <> pr.person_id
-        and not o.person_id = any (chms_private.person_line_ids(pr.person_id))
+        and not coalesce((v_lines -> pr.person_id::text) ? o.person_id::text, false)
     ) s
     where not s.x = any (v_seen);
     exit when cardinality(v_next) = 0;
@@ -448,6 +458,20 @@ $$;
 create or replace function chms_private.role_is_board(p_role_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.person_overseers where overseer_role_id = p_role_id);
+$$;
+
+-- Does a person's chart line feed the board rules? True for a board member,
+-- and for anyone a board member answers to through person lines (a board
+-- member never oversees the people above them in person lines).
+create or replace function chms_private.shapes_a_board(p_person_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1
+    from public.person_roles pr
+    where pr.org_id = (select org_id from public.people where id = p_person_id)
+      and exists (select 1 from public.person_overseers o where o.overseer_role_id = pr.role_id)
+      and (pr.person_id = p_person_id or p_person_id = any (chms_private.person_line_ids(pr.person_id)))
+  );
 $$;
 
 create or replace function chms_private.has_chart_line(p_person_id uuid)
@@ -512,16 +536,21 @@ create trigger trg_person_notes_touch before update on public.person_notes for e
 -- current_user); everything they look up goes through definer helpers so a
 -- caller's own RLS view cannot hide a row from the check.
 
--- Nobody archives themselves or someone over them.
+-- Archiving switches off a leader's access and restoring switches it back on,
+-- so nobody archives or restores themselves, someone over them, or someone
+-- whose roles carry permissions they do not hold.
 create or replace function public.protect_people_hierarchy()
 returns trigger language plpgsql set search_path = public as $$
 begin
   if public.is_privileged() or chms_private.is_church_admin(new.org_id) then
     return new;
   end if;
-  if old.archived_at is null and new.archived_at is not null
-     and (old.id = chms_private.my_person_id(new.org_id) or chms_private.is_over_me(new.org_id, old.id)) then
-    raise exception 'you cannot archive yourself or someone over you' using errcode = '42501';
+  if (old.archived_at is null) <> (new.archived_at is null)
+     and (old.id = chms_private.my_person_id(new.org_id)
+          or chms_private.is_over_me(new.org_id, old.id)
+          or not (chms_private.person_role_permissions(old.id) <@ public.my_org_permissions(new.org_id))) then
+    raise exception 'you cannot archive or restore yourself, someone over you, or someone with permissions you do not hold'
+      using errcode = '42501';
   end if;
   return new;
 end;
@@ -529,8 +558,9 @@ $$;
 create trigger trg_protect_people_hierarchy before update of archived_at on public.people
   for each row execute function public.protect_people_hierarchy();
 
--- Role assignments: not your own, not anyone over you, and never a role that
--- carries a permission you do not hold.
+-- Role assignments: not your own, not anyone over you, never a role that
+-- carries a permission you do not hold, and only admins decide who sits on a
+-- board (board members oversee people).
 create or replace function public.protect_person_roles()
 returns trigger language plpgsql set search_path = public as $$
 declare
@@ -539,6 +569,9 @@ begin
   if tg_op = 'DELETE' then v_row := old; else v_row := new; end if;
   if public.is_privileged() or chms_private.is_church_admin(v_row.org_id) then
     return v_row;
+  end if;
+  if chms_private.role_is_board(v_row.role_id) then
+    raise exception 'only a church admin can change who sits on a board' using errcode = '42501';
   end if;
   if v_row.person_id = chms_private.my_person_id(v_row.org_id) or chms_private.is_over_me(v_row.org_id, v_row.person_id) then
     raise exception 'you cannot change your own roles or those of someone over you' using errcode = '42501';
@@ -592,7 +625,9 @@ create trigger trg_protect_org_roles before insert or update or delete on public
 
 -- Chart edits by non-admins: board lines are admin-only; a person line may only
 -- place someone who is under you (or not yet placed) under yourself or someone
--- under you, and only lines below you can be removed.
+-- under you, and only lines below you can be removed. Lines of anyone over
+-- you, or of a board member or anyone a board member answers to, are
+-- admin-only: those lines decide which board members oversee whom.
 create or replace function public.protect_person_overseers()
 returns trigger language plpgsql set search_path = public as $$
 declare
@@ -606,6 +641,9 @@ begin
   v_me := chms_private.my_person_id(v_row.org_id);
   if v_me is null or v_row.overseer_role_id is not null then
     raise exception 'only a church admin can change board lines' using errcode = '42501';
+  end if;
+  if chms_private.is_over_me(v_row.org_id, v_row.person_id) or chms_private.shapes_a_board(v_row.person_id) then
+    raise exception 'only a church admin can move board members or anyone over you' using errcode = '42501';
   end if;
   if v_row.overseer_person_id <> v_me and not chms_private.i_oversee(v_row.org_id, v_row.overseer_person_id) then
     raise exception 'you can only place people under yourself or someone under you' using errcode = '42501';
@@ -815,6 +853,65 @@ end;
 $$;
 create trigger trg_protect_claim_self_review before update of review_status on public.church_claims
   for each row execute function public.protect_claim_self_review();
+
+-- A site moderator's own claim always waits for another reviewer, even when
+-- the email domain matches the website (moderators can edit websites).
+create or replace function public.verify_claim_code(p_church_id uuid, p_code text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_uid uuid := auth.uid();
+  v_claim public.church_claims%rowtype;
+  v_hash text;
+begin
+  if v_uid is null then
+    raise exception 'Sign in required' using errcode = '42501';
+  end if;
+  select * into v_claim from public.church_claims
+  where church_id = p_church_id and user_id = v_uid for update;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'No pending claim found. Please request a new code.');
+  end if;
+  if v_claim.review_status = 'rejected' then
+    return jsonb_build_object('ok', false, 'error', 'This claim was not approved. Request a new code to apply again.');
+  end if;
+  if v_claim.verified then
+    return jsonb_build_object('ok', true, 'already_verified', true,
+      'manual_review', v_claim.review_status = 'pending_review');
+  end if;
+  if v_claim.verify_attempts >= 5 then
+    return jsonb_build_object('ok', false, 'error', 'Too many attempts. Please request a new code.');
+  end if;
+  if v_claim.code_expires_at is null or v_claim.code_expires_at < now() then
+    return jsonb_build_object('ok', false, 'error', 'This code has expired. Please request a new code.');
+  end if;
+  v_hash := encode(extensions.digest(trim(p_code), 'sha256'), 'hex');
+  if v_claim.verification_code_hash is null or v_hash <> v_claim.verification_code_hash then
+    update public.church_claims set verify_attempts = verify_attempts + 1 where id = v_claim.id;
+    return jsonb_build_object('ok', false, 'error', 'Incorrect code. Please check your email and try again.');
+  end if;
+  if exists (select 1 from public.churches where id = p_church_id and claimed_by is not null and claimed_by <> v_uid) then
+    return jsonb_build_object('ok', false, 'error', 'This church has already been claimed.');
+  end if;
+  if v_claim.review_status <> 'pending_review'
+     and exists (select 1 from public.profiles where id = v_uid and role in ('admin', 'moderator')) then
+    v_claim.review_status := 'pending_review';
+    update public.church_claims
+      set review_status = 'pending_review', review_note = 'claimant is a site moderator; needs another reviewer'
+      where id = v_claim.id;
+  end if;
+  update public.church_claims
+    set verified = true, verified_at = now(), verification_code_hash = null
+    where id = v_claim.id;
+  if v_claim.review_status = 'pending_review' then
+    -- Email proven, ownership not: an admin approves through review_church_claim().
+    return jsonb_build_object('ok', true, 'manual_review', true);
+  end if;
+  update public.churches
+    set claimed_by = v_uid, claimed_at = now(), claim_email = v_claim.claim_email, claim_verified = true
+    where id = p_church_id;
+  return jsonb_build_object('ok', true, 'manual_review', false);
+end;
+$$;
 
 -- An organization stays bound to its church listing; only the name and slug
 -- can be edited.
