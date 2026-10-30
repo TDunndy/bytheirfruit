@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { useSession } from '@/components/Session'
 import { PersonForm, StatusBadge } from '@/components/PersonParts'
 import { PersonPicker } from '@/components/PersonPicker'
+import { Avatar, BackLink, Chevron, IconTile, RemoveGlyph } from '@/components/ui'
 import {
   addChartLine, addNote, addRole, addToHousehold, age, chartFor, createHousehold, deleteNote, displayName,
   errorMessage, getPerson, historyFor, householdsOf, listRoles, notesFor, peopleNames, personRoleIds,
@@ -73,18 +74,32 @@ function PersonView() {
     try { await fn(); await load() } catch (e) { setError(errorMessage(e)) }
   }
 
-  if (missing) return <section><Link href="/people" className="back">← People</Link><p className="muted">This person isn't in your directory.</p></section>
+  if (missing) return <section><BackLink href="/people" label="People" /><p className="muted">This person isn't in your directory.</p></section>
   if (!person || !org) return <div className="spinner" aria-label="Loading" />
 
   const a = age(person.birthdate)
   const address = [person.address_line1, person.address_line2, [person.city, person.state].filter(Boolean).join(', '), person.postal_code]
     .filter(Boolean).join(' · ')
 
+  const hasDetails = Boolean(person.email || person.phone || address || person.birthdate || person.gender
+    || person.first_visit_date || person.joined_date || person.tags.length > 0)
+
   return (
     <section className="person">
-      <Link href="/people" className="back">← People</Link>
-      <header className="page-head wrap">
-        <div>
+      <div className="page-nav">
+        <BackLink href="/people" label="People" />
+        {can('people.edit') && !editing && (
+          <div className="actions">
+            <button className="btn btn-tinted btn-small" onClick={() => setEditing(true)}>Edit</button>
+            <button className="btn btn-tinted btn-small" onClick={() => act(() => setArchived(person.id, !person.archived_at))}>
+              {person.archived_at ? 'Restore' : 'Archive'}
+            </button>
+          </div>
+        )}
+      </div>
+      <header className="hero">
+        <Avatar name={displayName(person)} size="lg" />
+        <div className="hero-text">
           <h1>{displayName(person)}</h1>
           <div className="meta">
             {person.title && <span>{person.title}</span>}
@@ -93,15 +108,6 @@ function PersonView() {
             {loginRole && <span className="chip">Signs in · {loginRole}</span>}
           </div>
         </div>
-        <span className="spacer" />
-        {can('people.edit') && !editing && (
-          <div className="actions">
-            <button className="btn btn-secondary" onClick={() => setEditing(true)}>Edit</button>
-            <button className="btn btn-secondary" onClick={() => act(() => setArchived(person.id, !person.archived_at))}>
-              {person.archived_at ? 'Restore' : 'Archive'}
-            </button>
-          </div>
-        )}
       </header>
 
       {error && <p className="error" role="alert">{error}</p>}
@@ -117,39 +123,49 @@ function PersonView() {
         />
       ) : (
         <div className="columns">
-          <div className="stack">
-            <div className="card">
-              <h2>Details</h2>
-              <dl className="details">
-                {person.email && <><dt>Email</dt><dd><a href={`mailto:${person.email}`}>{person.email}</a></dd></>}
-                {person.phone && <><dt>Phone</dt><dd><a href={`tel:${person.phone}`}>{person.phone}</a></dd></>}
-                {address && <><dt>Address</dt><dd>{address}</dd></>}
-                {person.birthdate && <><dt>Birthday</dt><dd>{fmtDate(person.birthdate)}{a !== null ? ` (${a})` : ''}</dd></>}
-                {person.gender && <><dt>Gender</dt><dd className="cap">{person.gender}</dd></>}
-                {person.first_visit_date && <><dt>First visit</dt><dd>{fmtDate(person.first_visit_date)}</dd></>}
-                {person.joined_date && <><dt>Joined</dt><dd>{fmtDate(person.joined_date)}</dd></>}
+          <div className="column">
+            <section className="section">
+              <h2 className="group-head">Details</h2>
+              {hasDetails ? (
+              <dl className="group details">
+                {person.email && <div className="kv"><dt>Email</dt><dd><a href={`mailto:${person.email}`}>{person.email}</a></dd></div>}
+                {person.phone && <div className="kv"><dt>Phone</dt><dd><a href={`tel:${person.phone}`}>{person.phone}</a></dd></div>}
+                {address && <div className="kv"><dt>Address</dt><dd>{address}</dd></div>}
+                {person.birthdate && <div className="kv"><dt>Birthday</dt><dd>{fmtDate(person.birthdate)}{a !== null ? ` (${a})` : ''}</dd></div>}
+                {person.gender && <div className="kv"><dt>Gender</dt><dd className="cap">{person.gender}</dd></div>}
+                {person.first_visit_date && <div className="kv"><dt>First visit</dt><dd>{fmtDate(person.first_visit_date)}</dd></div>}
+                {person.joined_date && <div className="kv"><dt>Joined</dt><dd>{fmtDate(person.joined_date)}</dd></div>}
+                {person.tags.length > 0 && (
+                  <div className="kv"><dt>Tags</dt><dd><div className="chips">{person.tags.map((t) => <span key={t} className="chip">{t}</span>)}</div></dd></div>
+                )}
               </dl>
-              {person.tags.length > 0 && (
-                <div className="chips">{person.tags.map((t) => <span key={t} className="chip">{t}</span>)}</div>
-              )}
-            </div>
+              ) : <div className="group"><div className="cell muted">No details yet.</div></div>}
+            </section>
 
-            <div className="card">
-              <h2>Family</h2>
-              {families.length === 0 && <p className="muted small">Not in a family yet.</p>}
-              {families.map((f) => (
-                <p key={f.household.id}>
-                  <Link href={`/households/view?id=${f.household.id}`}>{f.household.name}</Link>
-                  <span className="muted small"> · {f.relationship}</span>
-                </p>
-              ))}
-              {families.length === 0 && can('people.edit') && (
-                <button className="link-btn" onClick={() => act(async () => {
-                  const h = await createHousehold(org.id, `The ${person.last_name || person.first_name} Family`, person)
-                  await addToHousehold(org.id, h.id, person.id, 'head')
-                })}>Start a family</button>
-              )}
-            </div>
+            <section className="section">
+              <h2 className="group-head">Family</h2>
+              <ul className="group">
+                {families.length === 0 && <li className="cell muted">Not in a family yet.</li>}
+                {families.map((f) => (
+                  <li key={f.household.id}>
+                    <Link href={`/households/view?id=${f.household.id}`} className="cell-link">
+                      <IconTile name="house" />
+                      <span className="cell-title">{f.household.name}</span>
+                      <span className="cell-value cap">{f.relationship}</span>
+                      <Chevron />
+                    </Link>
+                  </li>
+                ))}
+                {families.length === 0 && can('people.edit') && (
+                  <li>
+                    <button className="cell-link cell-action" onClick={() => act(async () => {
+                      const h = await createHousehold(org.id, `The ${person.last_name || person.first_name} Family`, person)
+                      await addToHousehold(org.id, h.id, person.id, 'head')
+                    })}>Start a family</button>
+                  </li>
+                )}
+              </ul>
+            </section>
 
             {can('people.notes') && (
               <NotesCard
@@ -162,75 +178,105 @@ function PersonView() {
             )}
           </div>
 
-          <div className="stack">
-            <div className="card">
-              <h2>Roles</h2>
-              <div className="chips">
-                {roleIds.length === 0 && <span className="muted small">No roles.</span>}
+          <div className="column">
+            <section className="section">
+              <h2 className="group-head">Roles</h2>
+              <ul className="group">
+                {roleIds.length === 0 && <li className="cell muted">No roles.</li>}
                 {roleIds.map((r) => (
-                  <span key={r} className="chip">
-                    {roleName.get(r) ?? 'Role'}
-                    {can('roles.manage') && <button className="chip-x" aria-label={`Remove ${roleName.get(r)}`} onClick={() => act(() => removeRole(person.id, r))}>×</button>}
-                  </span>
-                ))}
-              </div>
-              {can('roles.manage') && roles.some((r) => !roleIds.includes(r.id)) && (
-                <select className="mt" aria-label="Add role" value="" onChange={(e) => e.target.value && act(() => addRole(org.id, person.id, e.target.value))}>
-                  <option value="">Add a role…</option>
-                  {roles.filter((r) => !roleIds.includes(r.id)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-              )}
-            </div>
-
-            <div className="card">
-              <h2>Answers to</h2>
-              {chart.answersTo.length === 0 && <p className="muted small">No one yet.</p>}
-              <ul className="lines">
-                {chart.answersTo.map((l) => (
-                  <li key={l.id}>
-                    {l.overseer_person_id
-                      ? <Link href={`/people/view?id=${l.overseer_person_id}`}>{names.get(l.overseer_person_id) ?? 'Someone'}</Link>
-                      : <span>{roleName.get(l.overseer_role_id ?? '') ?? 'Role'} board <span className="muted small">(everyone with this role)</span></span>}
-                    {can('roles.manage') && <button className="chip-x" aria-label="Remove line" onClick={() => act(() => removeChartLine(l.id))}>×</button>}
+                  <li key={r} className="cell">
+                    <span className="cell-title">{roleName.get(r) ?? 'Role'}</span>
+                    {can('roles.manage') && (
+                      <button className="remove-btn" aria-label={`Remove ${roleName.get(r)}`} onClick={() => act(() => removeRole(person.id, r))}><RemoveGlyph /></button>
+                    )}
                   </li>
                 ))}
+                {can('roles.manage') && roles.some((r) => !roleIds.includes(r.id)) && (
+                  <li className="cell">
+                    <select className="row-select action" aria-label="Add role" value="" onChange={(e) => e.target.value && act(() => addRole(org.id, person.id, e.target.value))}>
+                      <option value="">Add a role…</option>
+                      {roles.filter((r) => !roleIds.includes(r.id)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                  </li>
+                )}
               </ul>
-              {can('roles.manage') && (
-                <div className="stack mt">
-                  <PersonPicker orgId={org.id} exclude={[person.id]} placeholder="Answers to… (search)"
-                    onPick={(p) => act(() => addChartLine(org.id, person.id, { personId: p.id }))} />
-                  {isChurchAdmin && (
-                    <select aria-label="Answers to a board" value="" onChange={(e) => e.target.value && act(() => addChartLine(org.id, person.id, { roleId: e.target.value }))}>
+            </section>
+
+            <section className="section">
+              <h2 className="group-head">Answers to</h2>
+              <ul className="group lines">
+                {chart.answersTo.length === 0 && <li className="cell muted">No one yet.</li>}
+                {chart.answersTo.map((l) => (
+                  <li key={l.id} className="split">
+                    {l.overseer_person_id
+                      ? (
+                        <Link href={`/people/view?id=${l.overseer_person_id}`} className="cell-link">
+                          <Avatar name={names.get(l.overseer_person_id) ?? 'Someone'} size="sm" />
+                          <span className="cell-title">{names.get(l.overseer_person_id) ?? 'Someone'}</span>
+                          <Chevron />
+                        </Link>
+                      )
+                      : (
+                        <div className="cell">
+                          <IconTile name="board" />
+                          <span className="cell-text">
+                            <span className="cell-title">{roleName.get(l.overseer_role_id ?? '') ?? 'Role'} board</span>
+                            <span className="cell-sub">Everyone with this role</span>
+                          </span>
+                        </div>
+                      )}
+                    {can('roles.manage') && <button className="remove-btn" aria-label="Remove line" onClick={() => act(() => removeChartLine(l.id))}><RemoveGlyph /></button>}
+                  </li>
+                ))}
+                {can('roles.manage') && (
+                  <li className="cell">
+                    <PersonPicker orgId={org.id} exclude={[person.id]} placeholder="Answers to… (search)"
+                      onPick={(p) => act(() => addChartLine(org.id, person.id, { personId: p.id }))} />
+                  </li>
+                )}
+                {can('roles.manage') && isChurchAdmin && (
+                  <li className="cell">
+                    <select className="row-select action" aria-label="Answers to a board" value="" onChange={(e) => e.target.value && act(() => addChartLine(org.id, person.id, { roleId: e.target.value }))}>
                       <option value="">…or answers to a board (everyone in a role)</option>
                       {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                     </select>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="card">
-              <h2>Oversees</h2>
-              {chart.reports.length === 0 && <p className="muted small">No one reports directly.</p>}
-              <ul className="lines">
-                {chart.reports.map((l) => (
-                  <li key={l.id}><Link href={`/people/view?id=${l.person_id}`}>{names.get(l.person_id) ?? 'Someone'}</Link></li>
-                ))}
+                  </li>
+                )}
               </ul>
-            </div>
+            </section>
 
-            <div className="card">
-              <h2>History</h2>
-              <ul className="history">
-                {history.map((h) => (
-                  <li key={h.id}>
-                    <span className="cap">{h.action === 'insert' ? 'Added' : h.action === 'update' ? 'Updated' : h.action === 'archive' ? 'Archived' : 'Restored'}</span>
-                    {h.action === 'update' && <span className="muted"> {Object.keys(h.changes as Record<string, unknown>).map(label).join(', ')}</span>}
-                    <span className="muted small"> · {h.actor_person_id ? names.get(h.actor_person_id) ?? 'A leader' : h.actor_kind === 'admin' ? 'Church admin' : 'Import'} · {fmtDateTime(h.at)}</span>
+            <section className="section">
+              <h2 className="group-head">Oversees</h2>
+              <ul className="group lines">
+                {chart.reports.length === 0 && <li className="cell muted">No one reports directly.</li>}
+                {chart.reports.map((l) => (
+                  <li key={l.id}>
+                    <Link href={`/people/view?id=${l.person_id}`} className="cell-link">
+                      <Avatar name={names.get(l.person_id) ?? 'Someone'} size="sm" />
+                      <span className="cell-title">{names.get(l.person_id) ?? 'Someone'}</span>
+                      <Chevron />
+                    </Link>
                   </li>
                 ))}
               </ul>
-            </div>
+            </section>
+
+            <section className="section">
+              <h2 className="group-head">History</h2>
+              <ul className="group history">
+                {history.map((h) => (
+                  <li key={h.id} className="cell">
+                    <span className="cell-text">
+                      <span className="cell-title wrap">
+                        {h.action === 'insert' ? 'Added' : h.action === 'update' ? 'Updated' : h.action === 'archive' ? 'Archived' : 'Restored'}
+                        {h.action === 'update' && <span className="muted"> {Object.keys(h.changes as Record<string, unknown>).map(label).join(', ')}</span>}
+                      </span>
+                      <span className="cell-sub">{h.actor_person_id ? names.get(h.actor_person_id) ?? 'A leader' : h.actor_kind === 'admin' ? 'Church admin' : 'Import'} · {fmtDateTime(h.at)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           </div>
         </div>
       )}
@@ -249,9 +295,9 @@ function NotesCard({ notes, names, canManage, onAdd, onDelete }: {
   const [visibility, setVisibility] = useState<NoteVisibility>('care')
   const [busy, setBusy] = useState(false)
   return (
-    <div className="card">
-      <h2>Pastoral notes</h2>
-      <form className="stack" onSubmit={async (e) => {
+    <section className="section">
+      <h2 className="group-head">Pastoral notes</h2>
+      <form className="group compose" onSubmit={async (e) => {
         e.preventDefault()
         if (!body.trim()) return
         setBusy(true)
@@ -259,28 +305,30 @@ function NotesCard({ notes, names, canManage, onAdd, onDelete }: {
         setBody('')
         setBusy(false)
       }}>
-        <textarea rows={3} placeholder="Add a note…" value={body} onChange={(e) => setBody(e.target.value)} aria-label="New note" />
-        <div className="row">
-          <select aria-label="Who can read it" value={visibility} onChange={(e) => setVisibility(e.target.value as NoteVisibility)}>
+        <div className="cell">
+          <textarea rows={3} placeholder="Add a note…" value={body} onChange={(e) => setBody(e.target.value)} aria-label="New note" />
+        </div>
+        <div className="cell compose-bar">
+          <select className="row-select" aria-label="Who can read it" value={visibility} onChange={(e) => setVisibility(e.target.value as NoteVisibility)}>
             {VISIBILITY.map((v) => <option key={v.value} value={v.value}>{v.label}: {v.help}</option>)}
           </select>
-          <button className="btn btn-primary" disabled={busy || !body.trim()}>Add note</button>
+          <button className="btn btn-filled btn-small" disabled={busy || !body.trim()}>Add note</button>
         </div>
       </form>
-      <ul className="notes">
-        {notes.length === 0 && <li className="muted small">No notes you can see.</li>}
+      <ul className="group notes">
+        {notes.length === 0 && <li className="cell muted">No notes you can see.</li>}
         {notes.map((n) => (
-          <li key={n.id}>
+          <li key={n.id} className="note">
             <p>{n.body}</p>
-            <div className="muted small">
+            <div className="note-meta">
               <span className={`vis vis-${n.visibility}`}>{VISIBILITY.find((v) => v.value === n.visibility)?.label}</span>
               {' · '}{n.author_person_id ? names.get(n.author_person_id) ?? 'A leader' : 'Imported'} · {fmtDateTime(n.created_at)}
-              {canManage && <> · <button className="link-btn small" onClick={() => onDelete(n.id)}>Delete</button></>}
+              {canManage && <> · <button className="link-btn destructive" onClick={() => onDelete(n.id)}>Delete</button></>}
             </div>
           </li>
         ))}
       </ul>
-    </div>
+    </section>
   )
 }
 

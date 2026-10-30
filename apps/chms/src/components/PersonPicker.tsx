@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { displayName, listPeople, type DirectoryRow } from '@/lib/people'
+import { Avatar, SearchField } from './ui'
 
 /** Type-ahead search over the church directory. */
 export function PersonPicker({ orgId, exclude = [], placeholder, onPick }: {
@@ -27,14 +28,15 @@ export function PersonPicker({ orgId, exclude = [], placeholder, onPick }: {
 
   return (
     <div className="picker">
-      <input type="search" value={q} placeholder={placeholder ?? 'Search people'} aria-label={placeholder ?? 'Search people'}
+      <SearchField value={q} placeholder={placeholder ?? 'Search people'} aria-label={placeholder ?? 'Search people'}
         onChange={(e) => setQ(e.target.value)} />
       {results.length > 0 && (
-        <ul className="picker-results" role="listbox">
+        <ul className="picker-results popover" aria-label="Matching people">
           {results.map((p) => (
             <li key={p.id}>
               <button type="button" onClick={() => { onPick(p); setQ(''); setResults([]) }}>
-                {displayName(p)}{p.title ? <span className="muted"> · {p.title}</span> : null}
+                <Avatar name={displayName(p)} size="xs" />
+                <span className="picker-name">{displayName(p)}{p.title ? <span className="muted"> · {p.title}</span> : null}</span>
               </button>
             </li>
           ))}

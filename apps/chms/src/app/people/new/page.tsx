@@ -1,9 +1,9 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/components/Session'
 import { PersonForm } from '@/components/PersonParts'
+import { BackLink } from '@/components/ui'
 import { createPerson, errorMessage } from '@/lib/people'
 
 export default function NewPersonPage() {
@@ -16,7 +16,7 @@ export default function NewPersonPage() {
 
   return (
     <section>
-      <Link href="/people" className="back">← People</Link>
+      <div className="page-nav"><BackLink href="/people" label="People" /></div>
       <header className="page-head"><h1>Add person</h1></header>
       <PersonForm
         submitLabel="Add person"

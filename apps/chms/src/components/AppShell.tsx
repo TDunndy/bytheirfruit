@@ -2,14 +2,17 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
 import { useSession } from './Session'
 import { Logo, SignIn } from './SignIn'
+import { Avatar, Chevron, Icon, type IconName } from './ui'
+import type { MyOrg } from '@/lib/orgs'
 
-const NAV = [
-  { href: '/people', label: 'People', icon: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' },
-  { href: '/groups', label: 'Groups', icon: 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1m1-6h1a5 5 0 0 1 5 5v1' },
-  { href: '/events', label: 'Events', icon: 'M8 3v3m8-3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z' },
-  { href: '/health', label: 'Health', icon: 'M20.8 5.6a5 5 0 0 0-7.6.6L12 7.4l-1.2-1.2a5 5 0 1 0-7.1 7.1L12 21.6l8.3-8.3a5 5 0 0 0 .5-7.7z' },
+const NAV: { href: string; label: string; icon: IconName }[] = [
+  { href: '/people', label: 'People', icon: 'people' },
+  { href: '/groups', label: 'Groups', icon: 'groups' },
+  { href: '/events', label: 'Events', icon: 'events' },
+  { href: '/health', label: 'Health', icon: 'health' },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -21,10 +24,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (status === 'error') {
     return (
       <main className="center-page">
-        <div className="card narrow">
+        <div className="auth">
+          <Logo stacked />
           <h1>Something went wrong</h1>
-          <p className="muted">We couldn't load your churches. Check your connection and try again.</p>
-          <button className="btn btn-primary" onClick={() => window.location.reload()}>Try again</button>
+          <p className="auth-lead">We couldn't load your churches. Check your connection and try again.</p>
+          <button className="btn btn-filled btn-large btn-block" onClick={() => window.location.reload()}>Try again</button>
         </div>
       </main>
     )
@@ -32,15 +36,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (orgs.length === 0) {
     return (
       <main className="center-page">
-        <div className="card narrow">
-          <Logo />
+        <div className="auth">
+          <Logo stacked />
           <h1>No church yet</h1>
-          <p className="muted">
+          <p className="auth-lead">
             You're signed in as {user?.email}, but you aren't a leader at any church here yet.
             Ask your church's administrator to invite you, or claim your church on{' '}
             <a href="https://bytheirfruit.church/#/for-churches">bytheirfruit.church</a>.
           </p>
-          <button className="btn btn-secondary" onClick={signOut}>Sign out</button>
+          <button className="btn btn-raised btn-large btn-block" onClick={signOut}>Sign out</button>
         </div>
       </main>
     )
@@ -48,44 +52,119 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!org) {
     return (
       <main className="center-page">
-        <div className="card narrow">
-          <Logo />
+        <div className="auth">
+          <Logo stacked />
           <h1>Choose a church</h1>
-          <div className="stack">
+          <ul className="group church-list">
             {orgs.map((o) => (
-              <button key={o.id} className="btn btn-secondary btn-block" onClick={() => selectOrg(o.id)}>{o.name}</button>
+              <li key={o.id}>
+                <button className="cell-link" onClick={() => selectOrg(o.id)}>
+                  <ChurchTile name={o.name} />
+                  <span className="cell-title">{o.name}</span>
+                  <Chevron />
+                </button>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       </main>
     )
   }
 
+  const email = user?.email ?? ''
   return (
     <div className="shell">
       <aside className="sidebar">
-        <Logo />
-        <div className="org-name" title={org.name}>
-          {orgs.length > 1 ? (
-            <select aria-label="Church" value={org.id} onChange={(e) => selectOrg(e.target.value)}>
-              {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-            </select>
-          ) : org.name}
-        </div>
-        <nav aria-label="Main">
-          {NAV.map((n) => (
-            <Link key={n.href} href={n.href} className={pathname?.startsWith(n.href) || (n.href === '/people' && pathname?.startsWith('/households')) ? 'nav-item active' : 'nav-item'}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={n.icon} /></svg>
-              {n.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="sidebar-foot">
-          <div className="muted small" title={user?.email ?? ''}>{user?.email}</div>
-          <button className="link-btn small" onClick={signOut}>Sign out</button>
+        <div className="sidebar-inner">
+          <Logo />
+          <ChurchSwitcher orgs={orgs} org={org} onSelect={selectOrg} />
+          <nav aria-label="Main" className="nav">
+            {NAV.map((n) => {
+              const active = Boolean(pathname?.startsWith(n.href) || (n.href === '/people' && pathname?.startsWith('/households')))
+              return (
+                <Link key={n.href} href={n.href} className={active ? 'nav-item active' : 'nav-item'} aria-current={active ? 'page' : undefined}>
+                  <Icon name={n.icon} size={22} />
+                  <span>{n.label}</span>
+                </Link>
+              )
+            })}
+          </nav>
+          <div className="sidebar-foot">
+            <Avatar name={email} size="sm" />
+            <div className="account">
+              <div className="account-email" title={email}>{email}</div>
+              <button className="link-btn small" onClick={signOut}>Sign out</button>
+            </div>
+          </div>
         </div>
       </aside>
-      <main className="content">{children}</main>
+      <header className="phone-bar">
+        <ChurchSwitcher orgs={orgs} org={org} onSelect={selectOrg} compact />
+        <AccountMenu email={email} onSignOut={signOut} />
+      </header>
+      <main className="content"><div className="content-inner">{children}</div></main>
+    </div>
+  )
+}
+
+function ChurchTile({ name }: { name: string }) {
+  return <span className="church-tile" aria-hidden="true">{name.trim().charAt(0).toUpperCase()}</span>
+}
+
+/** The current church; a pop-up menu (native select) when the leader belongs to several. */
+function ChurchSwitcher({ orgs, org, onSelect, compact = false }: {
+  orgs: MyOrg[]
+  org: MyOrg
+  onSelect: (id: string) => void
+  compact?: boolean
+}) {
+  const cls = compact ? 'church church-compact' : 'church'
+  if (orgs.length < 2) {
+    return <div className={cls} title={org.name}><ChurchTile name={org.name} /><span className="church-name">{org.name}</span></div>
+  }
+  return (
+    <label className={`${cls} church-switch`} title={org.name}>
+      <ChurchTile name={org.name} />
+      <span className="church-name">{org.name}</span>
+      <svg className="updown" width="10" height="14" viewBox="0 0 10 14" fill="none" stroke="currentColor" strokeWidth="1.8"
+        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M2 5l3-3 3 3M2 9l3 3 3-3" /></svg>
+      <select aria-label="Church" value={org.id} onChange={(e) => onSelect(e.target.value)}>
+        {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+      </select>
+    </label>
+  )
+}
+
+/** Phone-only account button: shows who is signed in and offers Sign out. */
+function AccountMenu({ email, onSignOut }: { email: string; onSignOut: () => Promise<void> }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent | TouchEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('touchstart', close)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('touchstart', close)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [open])
+
+  return (
+    <div className="account-menu" ref={ref}>
+      <button type="button" className="account-btn" aria-label="Account" aria-expanded={open} aria-controls="account-popover" onClick={() => setOpen(!open)}>
+        <Avatar name={email} size="sm" />
+      </button>
+      {open && (
+        <div className="popover account-popover" id="account-popover">
+          <div className="account-popover-email">{email}</div>
+          <button type="button" className="btn btn-tinted btn-destructive btn-block" onClick={onSignOut}>Sign out</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -98,8 +177,13 @@ export function ComingNext({ title, lead, items }: { title: string; lead: string
         <span className="badge">Coming next</span>
       </header>
       <p className="lead">{lead}</p>
-      <ul className="checklist">
-        {items.map((i) => <li key={i}>{i}</li>)}
+      <ul className="group checklist">
+        {items.map((i) => (
+          <li key={i} className="cell">
+            <Icon name="planned" size={20} className="checklist-icon" />
+            <span>{i}</span>
+          </li>
+        ))}
       </ul>
     </section>
   )

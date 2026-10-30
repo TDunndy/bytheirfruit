@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { AppIcon } from './ui'
 
 export function SignIn() {
   const [email, setEmail] = useState('')
@@ -29,38 +30,38 @@ export function SignIn() {
 
   return (
     <main className="center-page">
-      <div className="card narrow">
-        <Logo />
+      <div className="auth">
+        <Logo stacked />
         <h1>Sign in</h1>
-        <p className="muted">Use your By Their Fruit account. Church leaders get access when their church invites them.</p>
-        <button type="button" className="btn btn-secondary btn-block" onClick={withGoogle}>Continue with Google</button>
+        <p className="auth-lead">Use your By Their Fruit account. Church leaders get access when their church invites them.</p>
+        <button type="button" className="btn btn-raised btn-large btn-block" onClick={withGoogle}>Continue with Google</button>
         <div className="divider"><span>or</span></div>
         <form onSubmit={withPassword} className="stack">
-          <label className="field">
-            <span>Email</span>
-            <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Password</span>
-            <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-          </label>
+          <div className="group">
+            <label className="field">
+              <span>Email</span>
+              <input type="email" autoComplete="email" placeholder="name@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            </label>
+            <label className="field">
+              <span>Password</span>
+              <input type="password" autoComplete="current-password" placeholder="Required" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            </label>
+          </div>
           {error && <p className="error" role="alert">{error}</p>}
-          <button type="submit" className="btn btn-primary btn-block" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+          <button type="submit" className="btn btn-filled btn-large btn-block" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         </form>
-        <p className="muted small">No account yet? <a href="https://bytheirfruit.church">Create one on bytheirfruit.church</a>.</p>
+        <p className="auth-foot">No account yet? <a href="https://bytheirfruit.church">Create one on bytheirfruit.church</a>.</p>
       </div>
     </main>
   )
 }
 
-export function Logo() {
+/** App icon and name. `stacked` is the large centered version used on the sign-in and church screens. */
+export function Logo({ stacked = false }: { stacked?: boolean }) {
   return (
-    <div className="logo">
-      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
-        <rect width="32" height="32" rx="8" fill="#18181b" />
-        <path d="M16 6C16 6 10 13 10 18C10 21.3 12.7 24 16 24C19.3 24 22 21.3 22 18C22 13 16 6 16 6Z" fill="#2563eb" />
-      </svg>
-      <span>By Their Fruit <em>for Churches</em></span>
+    <div className={stacked ? 'logo logo-stacked' : 'logo'}>
+      <AppIcon size={stacked ? 64 : 28} />
+      <span className="logo-name">By Their Fruit <em>for Churches</em></span>
     </div>
   )
 }

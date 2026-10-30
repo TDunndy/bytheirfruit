@@ -56,8 +56,8 @@ export function PersonForm({ initial, submitLabel, onSubmit, onCancel }: {
   return (
     <form className="card form" onSubmit={submit}>
       <fieldset>
-        <legend>Name</legend>
-        <div className="grid">
+        <legend className="group-head">Name</legend>
+        <div className="group">
           <label className="field"><span>First name *</span><input required value={v.first_name ?? ''} onChange={(e) => setV({ ...v, first_name: e.target.value })} /></label>
           <label className="field"><span>Last name</span><input value={v.last_name ?? ''} onChange={(e) => setV({ ...v, last_name: e.target.value })} /></label>
           <label className="field"><span>Goes by</span><input {...text('preferred_name')} /></label>
@@ -65,8 +65,8 @@ export function PersonForm({ initial, submitLabel, onSubmit, onCancel }: {
         </div>
       </fieldset>
       <fieldset>
-        <legend>Church</legend>
-        <div className="grid">
+        <legend className="group-head">Church</legend>
+        <div className="group">
           <label className="field"><span>Status</span>
             <select value={v.membership_status ?? 'visitor'} onChange={(e) => setV({ ...v, membership_status: e.target.value })}>
               {MEMBERSHIP_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -78,8 +78,8 @@ export function PersonForm({ initial, submitLabel, onSubmit, onCancel }: {
         </div>
       </fieldset>
       <fieldset>
-        <legend>Contact</legend>
-        <div className="grid">
+        <legend className="group-head">Contact</legend>
+        <div className="group">
           <label className="field"><span>Email</span><input type="email" {...text('email')} /></label>
           <label className="field"><span>Phone</span><input type="tel" {...text('phone')} /></label>
           <label className="field"><span>Birthdate</span><input type="date" {...text('birthdate')} /></label>
@@ -88,8 +88,8 @@ export function PersonForm({ initial, submitLabel, onSubmit, onCancel }: {
               <option value="">—</option><option value="male">Male</option><option value="female">Female</option>
             </select>
           </label>
-          <label className="field wide"><span>Address</span><input {...text('address_line1')} /></label>
-          <label className="field wide"><span>Address line 2</span><input {...text('address_line2')} /></label>
+          <label className="field"><span>Address</span><input {...text('address_line1')} /></label>
+          <label className="field"><span>Address line 2</span><input {...text('address_line2')} /></label>
           <label className="field"><span>City</span><input {...text('city')} /></label>
           <label className="field"><span>State</span><input {...text('state')} /></label>
           <label className="field"><span>Zip</span><input {...text('postal_code')} /></label>
@@ -97,8 +97,8 @@ export function PersonForm({ initial, submitLabel, onSubmit, onCancel }: {
       </fieldset>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="actions">
-        {onCancel && <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>}
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : submitLabel}</button>
+        {onCancel && <button type="button" className="btn btn-tinted" onClick={onCancel}>Cancel</button>}
+        <button type="submit" className="btn btn-filled" disabled={busy}>{busy ? 'Saving…' : submitLabel}</button>
       </div>
     </form>
   )
