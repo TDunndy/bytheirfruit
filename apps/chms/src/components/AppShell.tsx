@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { useSession } from './Session'
 import { Logo, SignIn } from './SignIn'
-import { Avatar, Chevron, Icon, type IconName } from './ui'
+import { Avatar, Chevron, Icon, Spinner, type IconName } from './ui'
 import type { MyOrg } from '@/lib/orgs'
 
 const NAV: { href: string; label: string; icon: IconName }[] = [
@@ -18,8 +18,9 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { status, user, orgs, org, selectOrg, signOut } = useSession()
   const pathname = usePathname()
+  useScrolledBars(pathname)
 
-  if (status === 'loading') return <main className="center-page"><div className="spinner" aria-label="Loading" /></main>
+  if (status === 'loading') return <main className="center-page"><Spinner /></main>
   if (status === 'signed-out') return <SignIn />
   if (status === 'error') {
     return (
@@ -72,8 +73,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const email = user?.email ?? ''
+  // DOM order: skip link, top bar (phones), sidebar or tab bar, content.
   return (
     <div className="shell">
+      <a className="skip-link" href="#content">Skip to content</a>
+      <header className="phone-bar">
+        <ChurchSwitcher orgs={orgs} org={org} onSelect={selectOrg} compact />
+        <AccountMenu email={email} onSignOut={signOut} />
+      </header>
       <aside className="sidebar">
         <div className="sidebar-inner">
           <Logo />
@@ -83,7 +90,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               const active = Boolean(pathname?.startsWith(n.href) || (n.href === '/people' && pathname?.startsWith('/households')))
               return (
                 <Link key={n.href} href={n.href} className={active ? 'nav-item active' : 'nav-item'} aria-current={active ? 'page' : undefined}>
-                  <Icon name={n.icon} size={22} />
+                  <Icon name={n.icon} size={22} className="icon-outline" />
+                  {active && <Icon name={n.icon} size={22} className="icon-fill" filled />}
                   <span>{n.label}</span>
                 </Link>
               )
@@ -98,13 +106,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </aside>
-      <header className="phone-bar">
-        <ChurchSwitcher orgs={orgs} org={org} onSelect={selectOrg} compact />
-        <AccountMenu email={email} onSignOut={signOut} />
-      </header>
-      <main className="content"><div className="content-inner">{children}</div></main>
+      <main className="content" id="content" tabIndex={-1}><div className="content-inner">{children}</div></main>
     </div>
   )
+}
+
+/**
+ * Phones pin the top bar (or a page's back/actions bar) while scrolling. The bar is clear at
+ * rest and turns into a material with a hairline once content scrolls under it, so this
+ * sets data-scrolled on <html> when the page has scrolled and that bar is pinned.
+ */
+function useScrolledBars(route: string | null) {
+  useEffect(() => {
+    const root = document.documentElement
+    let frame = 0
+    const update = () => {
+      frame = 0
+      let scrolled = window.scrollY > 0
+      const nav = document.querySelector<HTMLElement>('.page-nav')
+      if (scrolled && nav) {
+        const style = getComputedStyle(nav)
+        if (style.position === 'sticky') scrolled = nav.getBoundingClientRect().top <= (parseFloat(style.top) || 0) + 0.5
+      }
+      root.toggleAttribute('data-scrolled', scrolled)
+    }
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update) }
+    update()
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    return () => {
+      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      if (frame) cancelAnimationFrame(frame)
+      root.removeAttribute('data-scrolled')
+    }
+  }, [route])
 }
 
 function ChurchTile({ name }: { name: string }) {
@@ -139,11 +175,13 @@ function ChurchSwitcher({ orgs, org, onSelect, compact = false }: {
 function AccountMenu({ email, onSignOut }: { email: string; onSignOut: () => Promise<void> }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!open) return
     const close = (e: MouseEvent | TouchEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    // Escape closes the menu and puts focus back on the button that opened it.
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); btnRef.current?.focus() } }
     document.addEventListener('mousedown', close)
     document.addEventListener('touchstart', close)
     document.addEventListener('keydown', esc)
@@ -155,8 +193,9 @@ function AccountMenu({ email, onSignOut }: { email: string; onSignOut: () => Pro
   }, [open])
 
   return (
-    <div className="account-menu" ref={ref}>
-      <button type="button" className="account-btn" aria-label="Account" aria-expanded={open} aria-controls="account-popover" onClick={() => setOpen(!open)}>
+    <div className="account-menu" ref={ref}
+      onBlur={(e) => { if (e.relatedTarget && !ref.current?.contains(e.relatedTarget as Node)) setOpen(false) }}>
+      <button type="button" className="account-btn" ref={btnRef} aria-label="Account" aria-expanded={open} aria-controls="account-popover" onClick={() => setOpen(!open)}>
         <Avatar name={email} size="sm" />
       </button>
       {open && (

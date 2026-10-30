@@ -4,7 +4,9 @@ import { AppShell } from '@/components/AppShell'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'By Their Fruit for Churches',
+  // Each section names itself ("People · By Their Fruit for Churches"); person and family
+  // pages put the loaded name in front once it arrives (useDocumentTitle).
+  title: { default: 'By Their Fruit for Churches', template: '%s · By Their Fruit for Churches' },
   description: 'Church management built around the health of your congregation.',
   robots: { index: false, follow: false },
   icons: {

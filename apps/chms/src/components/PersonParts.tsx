@@ -30,6 +30,8 @@ export function PersonForm({ initial, submitLabel, onSubmit, onCancel }: {
 
   const text = (key: keyof FormValues) => ({
     value: (v[key] as string | null | undefined) ?? '',
+    // Lets CSS show an empty date field's "mm/dd/yyyy" as a placeholder rather than a value.
+    'data-empty': !v[key],
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setV((prev) => ({ ...prev, [key]: e.target.value === '' ? null : e.target.value })),
   })
@@ -58,9 +60,9 @@ export function PersonForm({ initial, submitLabel, onSubmit, onCancel }: {
       <fieldset>
         <legend className="group-head">Name</legend>
         <div className="group">
-          <label className="field"><span>First name *</span><input required value={v.first_name ?? ''} onChange={(e) => setV({ ...v, first_name: e.target.value })} /></label>
-          <label className="field"><span>Last name</span><input value={v.last_name ?? ''} onChange={(e) => setV({ ...v, last_name: e.target.value })} /></label>
-          <label className="field"><span>Goes by</span><input {...text('preferred_name')} /></label>
+          <label className="field"><span>First name</span><input required placeholder="Required" value={v.first_name ?? ''} onChange={(e) => setV({ ...v, first_name: e.target.value })} /></label>
+          <label className="field"><span>Last name</span><input placeholder="Optional" value={v.last_name ?? ''} onChange={(e) => setV({ ...v, last_name: e.target.value })} /></label>
+          <label className="field"><span>Goes by</span><input placeholder="Optional" {...text('preferred_name')} /></label>
           <label className="field"><span>Position or title</span><input placeholder="e.g. Youth Pastor" {...text('title')} /></label>
         </div>
       </fieldset>
@@ -74,25 +76,25 @@ export function PersonForm({ initial, submitLabel, onSubmit, onCancel }: {
           </label>
           <label className="field"><span>First visit</span><input type="date" {...text('first_visit_date')} /></label>
           <label className="field"><span>Joined</span><input type="date" {...text('joined_date')} /></label>
-          <label className="field"><span>Tags</span><input placeholder="comma separated" value={tags} onChange={(e) => setTags(e.target.value)} /></label>
+          <label className="field"><span>Tags</span><input placeholder="Comma separated" value={tags} onChange={(e) => setTags(e.target.value)} /></label>
         </div>
       </fieldset>
       <fieldset>
         <legend className="group-head">Contact</legend>
         <div className="group">
-          <label className="field"><span>Email</span><input type="email" {...text('email')} /></label>
-          <label className="field"><span>Phone</span><input type="tel" {...text('phone')} /></label>
+          <label className="field"><span>Email</span><input type="email" placeholder="name@example.com" {...text('email')} /></label>
+          <label className="field"><span>Phone</span><input type="tel" placeholder="(555) 555-0100" {...text('phone')} /></label>
           <label className="field"><span>Birthdate</span><input type="date" {...text('birthdate')} /></label>
           <label className="field"><span>Gender</span>
             <select {...text('gender')}>
               <option value="">—</option><option value="male">Male</option><option value="female">Female</option>
             </select>
           </label>
-          <label className="field"><span>Address</span><input {...text('address_line1')} /></label>
-          <label className="field"><span>Address line 2</span><input {...text('address_line2')} /></label>
-          <label className="field"><span>City</span><input {...text('city')} /></label>
-          <label className="field"><span>State</span><input {...text('state')} /></label>
-          <label className="field"><span>Zip</span><input {...text('postal_code')} /></label>
+          <label className="field"><span>Address</span><input placeholder="Street" {...text('address_line1')} /></label>
+          <label className="field"><span>Address line 2</span><input placeholder="Apt, suite, unit" {...text('address_line2')} /></label>
+          <label className="field"><span>City</span><input placeholder="Optional" {...text('city')} /></label>
+          <label className="field"><span>State</span><input placeholder="Optional" {...text('state')} /></label>
+          <label className="field"><span>Zip</span><input placeholder="Optional" {...text('postal_code')} /></label>
         </div>
       </fieldset>
       {error && <p className="error" role="alert">{error}</p>}

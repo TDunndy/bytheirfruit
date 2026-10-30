@@ -58,6 +58,7 @@ export default function PeoplePage() {
 
   const roleNames = useMemo(() => new Map(roles.map((r) => [r.id, r.name])), [roles])
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const count = `${total.toLocaleString()} ${archived ? 'archived' : ''} ${total === 1 ? 'person' : 'people'}`
 
   if (!can('people.view')) {
     return (
@@ -75,12 +76,14 @@ export default function PeoplePage() {
       <header className="page-head">
         <div className="page-title">
           <h1>People</h1>
-          <p className="page-sub">{loading ? 'Loading…' : `${total.toLocaleString()} ${archived ? 'archived' : ''} ${total === 1 ? 'person' : 'people'}`}</p>
+          <p className="page-sub">{loading ? 'Loading…' : count}</p>
         </div>
         {can('people.edit') && (
-          <Link href="/people/new" className="btn btn-filled"><Icon name="plus" size={18} />Add person</Link>
+          <Link href="/people/new" className="btn btn-filled btn-add"><Icon name="plus" size={18} /><span className="btn-label">Add person</span></Link>
         )}
       </header>
+      {/* Announces the new count after a search or filter change (the visible count is above). */}
+      <p className="sr-only" role="status">{loading ? '' : count.replace(/\s+/g, ' ')}</p>
 
       <div className="toolbar">
         <SearchField

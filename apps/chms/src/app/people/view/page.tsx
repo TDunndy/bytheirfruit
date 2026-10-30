@@ -6,7 +6,8 @@ import { useSearchParams } from 'next/navigation'
 import { useSession } from '@/components/Session'
 import { PersonForm, StatusBadge } from '@/components/PersonParts'
 import { PersonPicker } from '@/components/PersonPicker'
-import { Avatar, BackLink, Chevron, IconTile, RemoveGlyph } from '@/components/ui'
+import { Avatar, BackLink, Chevron, IconTile, RemoveGlyph, Spinner } from '@/components/ui'
+import { useDocumentTitle } from '@/components/useDocumentTitle'
 import {
   addChartLine, addNote, addRole, addToHousehold, age, chartFor, createHousehold, deleteNote, displayName,
   errorMessage, getPerson, historyFor, householdsOf, listRoles, notesFor, peopleNames, personRoleIds,
@@ -16,7 +17,7 @@ import {
 
 export default function PersonPage() {
   return (
-    <Suspense fallback={<div className="spinner" aria-label="Loading" />}>
+    <Suspense fallback={<Spinner />}>
       <PersonView />
     </Suspense>
   )
@@ -70,18 +71,22 @@ function PersonView() {
   useEffect(() => { load() }, [load])
 
   const roleName = useMemo(() => new Map(roles.map((r) => [r.id, r.name])), [roles])
+  useDocumentTitle(person ? displayName(person) : null)
   const act = async (fn: () => Promise<unknown>) => {
     try { await fn(); await load() } catch (e) { setError(errorMessage(e)) }
   }
 
   if (missing) return <section><BackLink href="/people" label="People" /><p className="muted">This person isn't in your directory.</p></section>
-  if (!person || !org) return <div className="spinner" aria-label="Loading" />
+  if (!person || !org) return <Spinner />
 
   const a = age(person.birthdate)
-  const address = [person.address_line1, person.address_line2, [person.city, person.state].filter(Boolean).join(', '), person.postal_code]
-    .filter(Boolean).join(' · ')
+  // A postal address as lines: street, unit, then "City, ST ZIP".
+  const addressLines = [
+    person.address_line1, person.address_line2,
+    [[person.city, person.state].filter(Boolean).join(', '), person.postal_code].filter(Boolean).join(' '),
+  ].filter(Boolean)
 
-  const hasDetails = Boolean(person.email || person.phone || address || person.birthdate || person.gender
+  const hasDetails = Boolean(person.email || person.phone || addressLines.length > 0 || person.birthdate || person.gender
     || person.first_visit_date || person.joined_date || person.tags.length > 0)
 
   return (
@@ -130,7 +135,7 @@ function PersonView() {
               <dl className="group details">
                 {person.email && <div className="kv"><dt>Email</dt><dd><a href={`mailto:${person.email}`}>{person.email}</a></dd></div>}
                 {person.phone && <div className="kv"><dt>Phone</dt><dd><a href={`tel:${person.phone}`}>{person.phone}</a></dd></div>}
-                {address && <div className="kv"><dt>Address</dt><dd>{address}</dd></div>}
+                {addressLines.length > 0 && <div className="kv"><dt>Address</dt><dd>{addressLines.map((l, i) => <div key={i}>{l}</div>)}</dd></div>}
                 {person.birthdate && <div className="kv"><dt>Birthday</dt><dd>{fmtDate(person.birthdate)}{a !== null ? ` (${a})` : ''}</dd></div>}
                 {person.gender && <div className="kv"><dt>Gender</dt><dd className="cap">{person.gender}</dd></div>}
                 {person.first_visit_date && <div className="kv"><dt>First visit</dt><dd>{fmtDate(person.first_visit_date)}</dd></div>}
@@ -185,10 +190,10 @@ function PersonView() {
                 {roleIds.length === 0 && <li className="cell muted">No roles.</li>}
                 {roleIds.map((r) => (
                   <li key={r} className="cell">
-                    <span className="cell-title">{roleName.get(r) ?? 'Role'}</span>
                     {can('roles.manage') && (
-                      <button className="remove-btn" aria-label={`Remove ${roleName.get(r)}`} onClick={() => act(() => removeRole(person.id, r))}><RemoveGlyph /></button>
+                      <button className="remove-btn" aria-label={`Remove the ${roleName.get(r) ?? ''} role`} onClick={() => act(() => removeRole(person.id, r))}><RemoveGlyph /></button>
                     )}
+                    <span className="cell-title">{roleName.get(r) ?? 'Role'}</span>
                   </li>
                 ))}
                 {can('roles.manage') && roles.some((r) => !roleIds.includes(r.id)) && (
@@ -208,6 +213,11 @@ function PersonView() {
                 {chart.answersTo.length === 0 && <li className="cell muted">No one yet.</li>}
                 {chart.answersTo.map((l) => (
                   <li key={l.id} className="split">
+                    {isChurchAdmin && (
+                      <button className="remove-btn"
+                        aria-label={`Remove ${l.overseer_person_id ? names.get(l.overseer_person_id) ?? 'this person' : `the ${roleName.get(l.overseer_role_id ?? '') ?? ''} board`} from Answers to`}
+                        onClick={() => act(() => removeChartLine(l.id))}><RemoveGlyph /></button>
+                    )}
                     {l.overseer_person_id
                       ? (
                         <Link href={`/people/view?id=${l.overseer_person_id}`} className="cell-link">
@@ -225,24 +235,24 @@ function PersonView() {
                           </span>
                         </div>
                       )}
-                    {can('roles.manage') && <button className="remove-btn" aria-label="Remove line" onClick={() => act(() => removeChartLine(l.id))}><RemoveGlyph /></button>}
                   </li>
                 ))}
-                {can('roles.manage') && (
+                {isChurchAdmin && (
                   <li className="cell">
-                    <PersonPicker orgId={org.id} exclude={[person.id]} placeholder="Answers to… (search)"
+                    <PersonPicker orgId={org.id} exclude={[person.id]} placeholder="Add a person"
                       onPick={(p) => act(() => addChartLine(org.id, person.id, { personId: p.id }))} />
                   </li>
                 )}
-                {can('roles.manage') && isChurchAdmin && (
+                {isChurchAdmin && (
                   <li className="cell">
                     <select className="row-select action" aria-label="Answers to a board" value="" onChange={(e) => e.target.value && act(() => addChartLine(org.id, person.id, { roleId: e.target.value }))}>
-                      <option value="">…or answers to a board (everyone in a role)</option>
+                      <option value="">Add a board…</option>
                       {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                     </select>
                   </li>
                 )}
               </ul>
+              {isChurchAdmin && <p className="group-foot">A board means everyone who holds that role.</p>}
             </section>
 
             <section className="section">
@@ -323,7 +333,7 @@ function NotesCard({ notes, names, canManage, onAdd, onDelete }: {
             <div className="note-meta">
               <span className={`vis vis-${n.visibility}`}>{VISIBILITY.find((v) => v.value === n.visibility)?.label}</span>
               {' · '}{n.author_person_id ? names.get(n.author_person_id) ?? 'A leader' : 'Imported'} · {fmtDateTime(n.created_at)}
-              {canManage && <> · <button className="link-btn destructive" onClick={() => onDelete(n.id)}>Delete</button></>}
+              {canManage && <> · <button className="link-btn destructive" aria-label={`Delete note from ${fmtDateTime(n.created_at)}`} onClick={() => onDelete(n.id)}>Delete</button></>}
             </div>
           </li>
         ))}

@@ -6,7 +6,8 @@ import { useSearchParams } from 'next/navigation'
 import { useSession } from '@/components/Session'
 import { StatusBadge } from '@/components/PersonParts'
 import { PersonPicker } from '@/components/PersonPicker'
-import { Avatar, BackLink, Chevron } from '@/components/ui'
+import { Avatar, BackLink, Chevron, RemoveGlyph, Spinner } from '@/components/ui'
+import { useDocumentTitle } from '@/components/useDocumentTitle'
 import {
   RELATIONSHIPS, addToHousehold, age, displayName, errorMessage, getHousehold, removeFromHousehold,
   type Household, type Person, type Relationship,
@@ -14,7 +15,7 @@ import {
 
 export default function HouseholdPage() {
   return (
-    <Suspense fallback={<div className="spinner" aria-label="Loading" />}>
+    <Suspense fallback={<Spinner />}>
       <HouseholdView />
     </Suspense>
   )
@@ -44,10 +45,15 @@ function HouseholdView() {
   const act = async (fn: () => Promise<unknown>) => {
     try { await fn(); await load() } catch (e) { setError(errorMessage(e)) }
   }
+  useDocumentTitle(household?.name ?? null)
 
   if (missing) return <section><BackLink href="/people" label="People" /><p className="muted">This family isn't in your directory.</p></section>
-  if (!household || !org) return <div className="spinner" aria-label="Loading" />
-  const address = [household.address_line1, [household.city, household.state].filter(Boolean).join(', '), household.postal_code].filter(Boolean).join(' · ')
+  if (!household || !org) return <Spinner />
+  // One-line subtitle: "Street, City, ST ZIP".
+  const address = [
+    household.address_line1,
+    [[household.city, household.state].filter(Boolean).join(', '), household.postal_code].filter(Boolean).join(' '),
+  ].filter(Boolean).join(', ')
 
   return (
     <section>
@@ -66,6 +72,10 @@ function HouseholdView() {
             const a = age(person.birthdate)
             return (
               <li key={person.id} className="member split">
+                {can('people.edit') && (
+                  <button className="remove-btn" aria-label={`Remove ${displayName(person)} from this family`}
+                    onClick={() => act(() => removeFromHousehold(household.id, person.id))}><RemoveGlyph /></button>
+                )}
                 <Link href={`/people/view?id=${person.id}`} className="cell-link">
                   <Avatar name={displayName(person)} size="md" />
                   <span className="cell-text">
@@ -75,9 +85,6 @@ function HouseholdView() {
                   <StatusBadge status={person.membership_status} />
                   <Chevron />
                 </Link>
-                {can('people.edit') && (
-                  <button className="link-btn destructive member-remove" onClick={() => act(() => removeFromHousehold(household.id, person.id))}>Remove</button>
-                )}
               </li>
             )
           })}

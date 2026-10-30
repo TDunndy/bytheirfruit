@@ -1,4 +1,7 @@
 import { ComingNext } from '@/components/AppShell'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = { title: 'Health' }
 
 export default function HealthPage() {
   return (
