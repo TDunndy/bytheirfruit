@@ -53,14 +53,15 @@ and the phone app.
   Elders, and pastors are elders too). Several overseers are allowed. Person
   lines never loop; a board may hold its own members accountable, and a
   board member who answers to someone through person lines does not oversee
-  them through the board. For everyone except owners and admins, the chart
-  adds: nobody changes their own roles or chart line, or those of anyone
-  over them; nobody archives or restores someone over them or someone with
-  more access than they hold; nobody grants, edits or removes a role beyond
-  the permissions they hold; people are placed only under yourself or
-  someone under you; board lines, board membership, and the chart lines of
-  board members (and of anyone a board member answers to) are admin-only,
-  because they decide which board members oversee whom.
+  them through the board. Only church admins (owners and admins) draw the
+  chart, seat boards or change a board role: who answers to whom decides who
+  reads oversight notes, so leaders who could redraw it could choose their own
+  overseers (three review rounds found ways to do that while leaders could
+  edit their part of the chart). For everyone else: nobody changes their own
+  roles or those of anyone over them, an overseer on leave (archived)
+  included; nobody archives or restores someone over them, a church admin, a
+  board member, or someone with more access than they hold; nobody grants,
+  edits or removes a role beyond the permissions they hold.
 - **Logins and invitations:** only church admins (owners and admins) invite
   a login onto a person record or remove one; an invitation dies if its
   sender stops being an admin. Memberships are created only by invitations

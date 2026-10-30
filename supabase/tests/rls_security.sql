@@ -766,8 +766,14 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
   $$insert into public.person_overseers (org_id, person_id, overseer_role_id) select org_id, '31000000-0000-0000-0000-000000000008', id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Elder'$$) = '42501',
   'only church admins draw board lines');
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
+  $$insert into public.person_overseers (org_id, person_id, overseer_person_id) values ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000008', '31000000-0000-0000-0000-000000000002')$$) = '42501',
+  'only church admins draw the chart, even a pastor placing a newcomer under himself');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000011',
+  $$delete from public.person_overseers where person_id = '31000000-0000-0000-0000-000000000002'$$) = '42501',
+  'only church admins remove chart lines, even below them');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
   $$insert into public.person_overseers (org_id, person_id, overseer_person_id) values ('20000000-0000-0000-0000-000000000001', '31000000-0000-0000-0000-000000000008', '31000000-0000-0000-0000-000000000002')$$) = '',
-  'a pastor can place a newcomer under himself');
+  'a church admin places a newcomer under the associate');
 
 -- board members' chart lines are admin-only (they decide who oversees whom)
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000011',
@@ -796,6 +802,24 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
   $$insert into public.person_roles (person_id, role_id, org_id) select '31000000-0000-0000-0000-000000000003', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Elder'$$) = '42501'
   and not ('31000000-0000-0000-0000-000000000003' = any (chms_private.overseer_ids('31000000-0000-0000-0000-000000000001'))),
   'a non-admin cannot put anyone on a board');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
+  $$update public.org_roles set description = 'changed' where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Board One'$$) = '42501',
+  'a non-admin cannot change a board');
+
+-- an overseer on leave (archived) is still over you
+update public.people set archived_at = now() where id = '31000000-0000-0000-0000-000000000001';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
+  $$delete from public.person_roles where person_id = '31000000-0000-0000-0000-000000000001'$$) = '42501',
+  'a pastor cannot change the roles of an archived pastor over him');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012',
+  $$update public.people set archived_at = null where id = '31000000-0000-0000-0000-000000000001'$$) = '42501',
+  'a pastor cannot restore an archived pastor over him');
+update public.people set archived_at = null where id = '31000000-0000-0000-0000-000000000001';
+update public.people set archived_at = now() where id = '31000000-0000-0000-0000-000000000004';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000011',
+  $$update public.people set archived_at = null where id = '31000000-0000-0000-0000-000000000004'$$) = '42501',
+  'a leader cannot restore an archived elder');
+update public.people set archived_at = null where id = '31000000-0000-0000-0000-000000000004';
 
 -- the youth pastor (Staff: view, edit, export) can edit details but not archive those over him
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
@@ -817,6 +841,12 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
   and pg_temp.try_as('00000000-0000-0000-0000-000000000013',
   $$update public.people set archived_at = null where id = '31000000-0000-0000-0000-000000000007'$$) = '',
   'staff can archive and restore someone with no more access than they hold');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
+  $$update public.people set archived_at = now() where id = '30000000-0000-0000-0000-000000000004'$$) = '42501',
+  'staff cannot archive the church owner''s record');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000013',
+  $$update public.people set archived_at = now() where id = '31000000-0000-0000-0000-000000000012'$$) = '42501',
+  'staff cannot archive a board member');
 
 -- nobody hands out, edits or removes more access than they hold
 insert into public.person_roles (person_id, role_id, org_id)

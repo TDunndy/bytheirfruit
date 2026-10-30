@@ -16,11 +16,12 @@
 --   org_invitations    leader invites (church admins only); accepting links a
 --                      login to a person record
 --
--- Access comes from roles (flat). For everyone except owners and admins the
--- oversight chart adds: nobody changes their own roles or chart line or those
--- of anyone over them, nobody archives someone over them, nobody grants,
--- edits or removes a role beyond the permissions they hold, and people are
--- placed only under yourself or someone under you. Person lines never loop;
+-- Access comes from roles (flat). Church admins (owners and admins) draw the
+-- oversight chart and seat boards. For everyone else: nobody changes their
+-- own roles or those of anyone over them (on leave included), nobody archives
+-- or restores someone over them, an admin, a board member or someone with
+-- more access, and nobody grants, edits or removes a role beyond the
+-- permissions they hold. Person lines never loop;
 -- a board (role) may hold its own members accountable. A board member who
 -- answers through person lines to someone does not oversee them through the
 -- board. "Oversight" notes go up the chart only; nobody reads notes about
@@ -320,7 +321,7 @@ $$;
 
 -- People a person answers to through person lines only (archived included).
 create or replace function chms_private.person_line_ids(p_person_id uuid)
-returns uuid[] language plpgsql stable security definer set search_path = public as $$
+returns uuid[] language plpgsql stable security definer cost 1000 set search_path = public as $$
 declare
   v_seen uuid[] := '{}';
   v_frontier uuid[] := array[p_person_id];
@@ -435,14 +436,12 @@ returns boolean language sql stable security definer set search_path = public as
   select p_person_id = any (chms_private.person_line_ids(p_person_id));
 $$;
 
+-- Is a person over the signed-in user in the chart? Archived people count:
+-- the guards below must not treat an overseer on leave as fair game.
 create or replace function chms_private.is_over_me(p_org_id uuid, p_person_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
-  select coalesce(p_person_id = any (chms_private.overseer_ids(chms_private.my_person_id(p_org_id))), false);
-$$;
-
-create or replace function chms_private.i_oversee(p_org_id uuid, p_person_id uuid)
-returns boolean language sql stable security definer set search_path = public as $$
-  select coalesce(chms_private.my_person_id(p_org_id) = any (chms_private.overseer_ids(p_person_id)), false);
+  select coalesce(p_person_id <> chms_private.my_person_id(p_org_id)
+                  and p_person_id = any (chms_private.overseer_ids_raw(chms_private.my_person_id(p_org_id))), false);
 $$;
 
 -- Is a role held by the signed-in user or by anyone over them?
@@ -460,23 +459,25 @@ returns boolean language sql stable security definer set search_path = public as
   select exists (select 1 from public.person_overseers where overseer_role_id = p_role_id);
 $$;
 
--- Does a person's chart line feed the board rules? True for a board member,
--- and for anyone a board member answers to through person lines (a board
--- member never oversees the people above them in person lines).
-create or replace function chms_private.shapes_a_board(p_person_id uuid)
+-- Does a person sit on a board (hold a role the chart points at)?
+create or replace function chms_private.holds_board_role(p_person_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (
-    select 1
-    from public.person_roles pr
-    where pr.org_id = (select org_id from public.people where id = p_person_id)
-      and exists (select 1 from public.person_overseers o where o.overseer_role_id = pr.role_id)
-      and (pr.person_id = p_person_id or p_person_id = any (chms_private.person_line_ids(pr.person_id)))
+    select 1 from public.person_roles pr
+    join public.person_overseers o on o.overseer_role_id = pr.role_id
+    where pr.person_id = p_person_id
   );
 $$;
 
-create or replace function chms_private.has_chart_line(p_person_id uuid)
+-- Is a person record linked to a church owner or admin login? (A boolean
+-- only: no account id leaves this function.)
+create or replace function chms_private.person_is_church_admin(p_person_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.person_overseers where person_id = p_person_id);
+  select exists (
+    select 1 from public.person_logins pl
+    join public.org_members m on m.org_id = pl.org_id and m.user_id = pl.user_id
+    where pl.person_id = p_person_id and m.role in ('owner', 'admin')
+  );
 $$;
 
 -- Default roles for every church; editable afterwards.
@@ -537,8 +538,9 @@ create trigger trg_person_notes_touch before update on public.person_notes for e
 -- caller's own RLS view cannot hide a row from the check.
 
 -- Archiving switches off a leader's access and restoring switches it back on,
--- so nobody archives or restores themselves, someone over them, or someone
--- whose roles carry permissions they do not hold.
+-- so nobody but a church admin archives or restores themselves, someone over
+-- them (on leave included), a church admin, a board member, or someone whose
+-- roles carry permissions they do not hold.
 create or replace function public.protect_people_hierarchy()
 returns trigger language plpgsql set search_path = public as $$
 begin
@@ -548,9 +550,10 @@ begin
   if (old.archived_at is null) <> (new.archived_at is null)
      and (old.id = chms_private.my_person_id(new.org_id)
           or chms_private.is_over_me(new.org_id, old.id)
+          or chms_private.person_is_church_admin(old.id)
+          or chms_private.holds_board_role(old.id)
           or not (chms_private.person_role_permissions(old.id) <@ public.my_org_permissions(new.org_id))) then
-    raise exception 'you cannot archive or restore yourself, someone over you, or someone with permissions you do not hold'
-      using errcode = '42501';
+    raise exception 'only a church admin can archive or restore this person' using errcode = '42501';
   end if;
   return new;
 end;
@@ -586,8 +589,8 @@ create trigger trg_protect_person_roles before insert or delete on public.person
   for each row execute function public.protect_person_roles();
 
 -- Role definitions: you can only add or remove permissions you hold, never
--- touch a role held by you or someone over you, and only admins delete a role
--- that the chart uses as a board.
+-- touch a role held by you or someone over you, and only admins change or
+-- delete a role that the chart uses as a board.
 create or replace function public.protect_org_roles()
 returns trigger language plpgsql set search_path = public as $$
 declare
@@ -604,6 +607,9 @@ begin
     raise exception 'a role cannot carry permissions you do not hold' using errcode = '42501';
   end if;
   if tg_op <> 'INSERT' then
+    if chms_private.role_is_board(old.id) then
+      raise exception 'only a church admin can change a board' using errcode = '42501';
+    end if;
     if not (old.permissions <@ v_mine) then
       raise exception 'you cannot change a role that carries permissions you do not hold' using errcode = '42501';
     end if;
@@ -612,9 +618,6 @@ begin
     end if;
   end if;
   if tg_op = 'DELETE' then
-    if chms_private.role_is_board(old.id) then
-      raise exception 'only a church admin can delete a role the chart uses as a board' using errcode = '42501';
-    end if;
     return old;
   end if;
   return new;
@@ -623,40 +626,17 @@ $$;
 create trigger trg_protect_org_roles before insert or update or delete on public.org_roles
   for each row execute function public.protect_org_roles();
 
--- Chart edits by non-admins: board lines are admin-only; a person line may only
--- place someone who is under you (or not yet placed) under yourself or someone
--- under you, and only lines below you can be removed. Lines of anyone over
--- you, or of a board member or anyone a board member answers to, are
--- admin-only: those lines decide which board members oversee whom.
+-- The chart is drawn by church admins only. Who answers to whom decides who
+-- reads oversight notes and who may change whose roles, so letting leaders
+-- redraw it would let them choose their own overseers.
 create or replace function public.protect_person_overseers()
 returns trigger language plpgsql set search_path = public as $$
-declare
-  v_row public.person_overseers%rowtype;
-  v_me uuid;
 begin
-  if tg_op = 'DELETE' then v_row := old; else v_row := new; end if;
-  if public.is_privileged() or chms_private.is_church_admin(v_row.org_id) then
-    return v_row;
+  if public.is_privileged() or chms_private.is_church_admin(coalesce(new.org_id, old.org_id)) then
+    if tg_op = 'DELETE' then return old; end if;
+    return new;
   end if;
-  v_me := chms_private.my_person_id(v_row.org_id);
-  if v_me is null or v_row.overseer_role_id is not null then
-    raise exception 'only a church admin can change board lines' using errcode = '42501';
-  end if;
-  if chms_private.is_over_me(v_row.org_id, v_row.person_id) or chms_private.shapes_a_board(v_row.person_id) then
-    raise exception 'only a church admin can move board members or anyone over you' using errcode = '42501';
-  end if;
-  if v_row.overseer_person_id <> v_me and not chms_private.i_oversee(v_row.org_id, v_row.overseer_person_id) then
-    raise exception 'you can only place people under yourself or someone under you' using errcode = '42501';
-  end if;
-  if tg_op = 'DELETE' then
-    if not chms_private.i_oversee(v_row.org_id, v_row.person_id) then
-      raise exception 'you can only change lines below you' using errcode = '42501';
-    end if;
-  elsif not (chms_private.i_oversee(v_row.org_id, v_row.person_id) or not chms_private.has_chart_line(v_row.person_id))
-        or v_row.person_id = v_me then
-    raise exception 'you can only place people who are under you or not yet placed' using errcode = '42501';
-  end if;
-  return v_row;
+  raise exception 'only a church admin can change the chart' using errcode = '42501';
 end;
 $$;
 create trigger trg_protect_person_overseers before insert or update or delete on public.person_overseers
@@ -1167,6 +1147,8 @@ create policy "Role managers remove roles" on public.person_roles for delete
 
 create policy "Viewers read the chart" on public.person_overseers for select
   using (org_id = any ((select chms_private.orgs_with_permission('people.view'))::uuid[]));
+-- Role managers reach the chart guard, which lets only church admins through
+-- (so other leaders get a clear error instead of a silent no-op).
 create policy "Role managers edit the chart" on public.person_overseers for insert
   with check (org_id = any ((select chms_private.orgs_with_permission('roles.manage'))::uuid[]));
 create policy "Role managers remove chart lines" on public.person_overseers for delete
