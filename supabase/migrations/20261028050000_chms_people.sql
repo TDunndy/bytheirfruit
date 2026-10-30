@@ -36,9 +36,7 @@
 -- church stays fast.
 --
 -- Guardrail: nothing here references reviews or profiles.
--- Written without drop/revoke statements so the connector applies it without
--- a confirmation prompt; internal helpers live in chms_private, which the API
--- does not expose.
+-- Internal helpers live in chms_private, which the API does not expose.
 -- ============================================================================
 
 create schema if not exists chms_private;
@@ -1064,12 +1062,13 @@ returns void language plpgsql security definer set search_path = public as $$
 declare
   v_login public.person_logins%rowtype;
 begin
+  -- Check the caller first, so nobody else learns whether a person has a login.
+  if auth.uid() is null or not coalesce(chms_private.is_church_admin((select org_id from public.people where id = p_person_id)), false) then
+    raise exception 'only church admins can remove a login' using errcode = '42501';
+  end if;
   select * into v_login from public.person_logins where person_id = p_person_id;
   if not found then
     return;
-  end if;
-  if auth.uid() is null or not chms_private.is_church_admin(v_login.org_id) then
-    raise exception 'only church admins can remove a login' using errcode = '42501';
   end if;
   if exists (select 1 from public.org_members where org_id = v_login.org_id and user_id = v_login.user_id and role = 'owner') then
     raise exception 'owners are changed through the church claim' using errcode = '42501';
@@ -1079,10 +1078,18 @@ begin
 end;
 $$;
 
+-- Signed-in users only. (The chms_private policy helpers stay executable by
+-- anon: policies call them on anon reads, which must return no rows rather
+-- than an error.)
+revoke execute on function public.has_org_permission(uuid, text), public.my_org_permissions(uuid),
+  public.people_with_logins(uuid), public.create_org_invitation(uuid, text, uuid, text),
+  public.accept_org_invitation(text), public.revoke_org_invitation(uuid), public.unlink_person_login(uuid)
+  from public, anon;
 grant execute on function public.has_org_permission(uuid, text), public.my_org_permissions(uuid),
   public.people_with_logins(uuid), public.create_org_invitation(uuid, text, uuid, text),
   public.accept_org_invitation(text), public.revoke_org_invitation(uuid), public.unlink_person_login(uuid)
   to authenticated, service_role;
+revoke execute on function chms_private.seed_default_org_roles(uuid) from public, anon, authenticated;
 
 -- ------------------------------------------------------------------- RLS --
 -- Membership rows carry account ids: each user reads only their own, and
@@ -1168,10 +1175,16 @@ create policy "Authors edit their notes" on public.person_notes for update
          and author_person_id = any ((select chms_private.my_person_ids())::uuid[]))
   with check (org_id = any ((select chms_private.orgs_with_permission('people.notes'))::uuid[])
               and author_person_id = any ((select chms_private.my_person_ids())::uuid[]));
-create policy "Authors or church managers delete notes" on public.person_notes for delete
-  using (org_id = any ((select chms_private.orgs_with_permission('people.notes'))::uuid[])
-         and (author_person_id = any ((select chms_private.my_person_ids())::uuid[])
-              or org_id = any ((select chms_private.orgs_with_permission('org.manage'))::uuid[])));
+-- Church managers delete only notes they may read (a DELETE without a WHERE
+-- is checked against this policy alone, not the read policy).
+create policy "Authors or church managers delete notes they can read" on public.person_notes for delete
+  using (org_id = any ((select chms_private.orgs_with_permission('people.notes'))::uuid[]) and (
+    author_person_id = any ((select chms_private.my_person_ids())::uuid[])
+    or (org_id = any ((select chms_private.orgs_with_permission('org.manage'))::uuid[])
+        and not person_id = any ((select chms_private.my_person_ids())::uuid[])
+        and (visibility = 'care'
+             or (visibility = 'oversight' and person_id = any ((select chms_private.people_i_oversee())::uuid[]))))
+  ));
 
 create policy "Viewers read people history" on public.people_audit for select
   using (org_id = any ((select chms_private.orgs_with_permission('people.view'))::uuid[]));

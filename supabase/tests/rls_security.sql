@@ -492,7 +492,10 @@ select pg_temp.ok(not exists (select 1 from pg_proc p join pg_namespace n on n.o
 select pg_temp.as_user(null, 'anon');
 select pg_temp.ok((select count(*) from public.people) = 0, 'anon sees no people');
 select pg_temp.ok((select count(*) from public.households) = 0, 'anon sees no households');
-select pg_temp.ok(not public.has_org_permission('20000000-0000-0000-0000-000000000001', 'people.view'), 'anon has no permission');
+select pg_temp.ok(not has_function_privilege('anon', 'public.has_org_permission(uuid, text)', 'execute')
+  and not has_function_privilege('anon', 'public.unlink_person_login(uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'chms_private.seed_default_org_roles(uuid)', 'execute'),
+  'anon cannot call the church app functions, and nobody can call role seeding');
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');
 select pg_temp.ok((select count(*) from public.people) = 0, 'site admin of By Their Fruit sees no church people');
 select pg_temp.as_postgres();
@@ -925,6 +928,10 @@ select pg_temp.ok((select count(*) from public.person_notes where person_id = '3
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
 select pg_temp.ok((select count(*) from public.person_notes where visibility = 'private') = 1, 'the author reads their private note');
 select pg_temp.as_postgres();
+insert into _chms values ('notes_before', (select count(*) from public.person_notes));
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000012', $$delete from public.person_notes$$) = ''
+  and (select count(*) from public.person_notes)::text = (select v from _chms where k = 'notes_before'),
+  'a pastor who is not an admin cannot blindly delete notes about himself or others'' private notes');
 
 \echo
 \echo '== chms: church ownership ========================================='
