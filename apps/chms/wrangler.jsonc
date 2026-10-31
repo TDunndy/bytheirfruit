@@ -1,0 +1,11 @@
+// Cloudflare Workers (static assets) hosting for app.bytheirfruit.church.
+// Workers Builds runs `npm run build` (Next static export to out/) and then
+// `npx wrangler deploy`; the dashboard Worker name must match "name".
+{
+  "name": "bytheirfruit-chms",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page"
+  }
+}
