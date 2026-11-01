@@ -182,6 +182,13 @@ Permissions are hard-coded in three places: the `org_roles` CHECK constraint, th
   - iOS: Guided Access for the pilot (built in; a staff passcode exits it). Later, if wanted, supervising the iPads through Apple Configurator on a Mac (a one-time reset-and-enroll) lets the app lock itself with Autonomous Single App Mode.
   - Android: screen pinning for the pilot. True Lock Task needs an MDM / Android Management API kiosk policy, not a device-owner app in the Play build.
 
+**What the current kiosk does** (Subsplash, photographed 2026-11-01; the bar for 1b parity):
+- An iPad in a kiosk enclosure on top of the QL-820NWBc; the app has its own refresh and settings buttons, and settings open behind a church-wide numeric kiosk passcode ("Where can I find this?"). The iOS status bar is visible, so it is not in Guided Access.
+- Attract screen: church logo on a gradient, "Touch to check in".
+- Lookup: a full-screen phone keypad is the default ("(000) 000-0000"); "Search by email" is a toggle with domain shortcut chips (@gmail.com, @outlook.com, …); "Fast check-in in the mobile app" scans a QR pass from the parent's account with the camera.
+- "New here? Sign up and check in": first name, last name, phone, email, Continue (then the children).
+- Ours keeps the same shape (one purpose per screen, big targets, phone first, email second, scan third, guest sign-up from the lookup screen) and differs where the plan says: the staff PIN is per person and server-checked rather than one church-wide passcode, last-4 lookup only on staffed stations, our own codes and labels, restrictions answered with "see the welcome desk".
+
 **Station identity** (1b, web first):
 1. An admin creates a station and gets a pairing code (hashed, valid 10 minutes).
 2. The `pair-station` edge function creates an auth user `station-<uuid>@stations.invalid` with `app_metadata.kind = 'station'`, stores it in `chms_private.station_principals`, and returns a session.
