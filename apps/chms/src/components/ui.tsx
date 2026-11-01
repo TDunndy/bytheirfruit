@@ -19,10 +19,20 @@ const ICONS = {
   planned: 'M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zM12 7.5V12l3 2',
   church: 'M12 2v4m-2-2h4M7 21v-8l5-4 5 4v8M4 21h16M10 21v-4h4v4',
   signout: 'M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3',
+  checkin: 'M12 3l7 3v6c0 4.4-3 8.1-7 9-4-.9-7-4.6-7-9V6l7-3zM9 12l2 2 4-4',
+  room: 'M4 20V9l8-5 8 5v11M4 20h16M10 20v-6h4v6',
+  clock: 'M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zM12 7.5V12l3 2',
+  print: 'M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z',
+  tablet: 'M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM11 18h2',
+  shield: 'M12 3l7 3v6c0 4.4-3 8.1-7 9-4-.9-7-4.6-7-9V6l7-3z',
+  photo: 'M4 7h3l2-2h6l2 2h3v12H4zM12 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
+  doc: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h5M10 17h5',
+  warn: 'M12 3l10 18H2zM12 10v4M12 17.5v.5',
 } as const
 
 // Filled variants for the tab bar's selected tab (closed shapes, drawn with the same stroke).
 const FILLED: Partial<Record<keyof typeof ICONS, string>> = {
+  checkin: 'M12 3l7 3v6c0 4.4-3 8.1-7 9-4-.9-7-4.6-7-9V6l7-3z',
   people: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1z',
   groups: 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1zm15-6h1a5 5 0 0 1 5 5v1h-5v-1a6 6 0 0 0-1-5z',
   events: 'M8 3v3m8-3v3M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',

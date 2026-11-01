@@ -1965,6 +1965,18 @@ select pg_temp.ok((select array_agg(distinct type order by type) from public.dom
   = array['checkin.checked_out', 'checkin.created', 'checkin.moved', 'checkin.voided', 'label.requested', 'occurrence.closed', 'occurrence.open'],
   'attendance emits the platform events');
 select pg_temp.ok(not exists (select 1 from public.domain_events where payload::text ~* 'grandma|peanut|gigi|eggs'), 'event payloads carry no names');
+-- documents are opened through a logged RPC
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$select public.log_document_access((select id from public.person_documents where title = 'Order'))$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$select public.log_document_access((select id from public.person_documents where title = 'Order'))$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+  $$select public.log_document_access((select id from public.person_documents where title = 'Order'))$$) = '42501',
+  'a custody manager opens a custody document; care holders and other churches cannot');
+select pg_temp.ok((select count(*) from public.access_log where action = 'document.read' and actor_person_id = '32000000-0000-0000-0000-000000000004') = 1, 'document reads are logged');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok(pg_temp.try_sql($$select public.log_document_access((select id from public.person_documents limit 1))$$) = '42501', 'a station opens no documents');
+select pg_temp.as_postgres();
 select pg_temp.ok(not has_function_privilege('authenticated', 'chms_private.ingest_one(jsonb,uuid,uuid,uuid,uuid[])', 'execute')
   and not has_function_privilege('anon', 'public.ingest(jsonb)', 'execute') and not has_function_privilege('anon', 'public.roster(uuid,uuid)', 'execute')
   and not has_table_privilege('anon', 'public.room_stays', 'select'),

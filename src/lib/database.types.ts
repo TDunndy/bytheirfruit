@@ -1996,6 +1996,9 @@ isOneToOne: false
 "is_station":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"log_document_access":
+{ Args: { "p_document_id": string }; Returns: string
+                           },
 "my_org_permissions":
 { Args: { "p_org_id": string }; Returns: (string)[]
                            },

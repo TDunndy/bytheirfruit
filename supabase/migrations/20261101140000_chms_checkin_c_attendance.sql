@@ -923,6 +923,25 @@ begin
 end;
 $$;
 
+-- ------------------------------------------------------- documents --
+-- The documents bucket has no SELECT policy for the API: the document-url
+-- edge function calls this as the reader, which checks the permission and
+-- logs the read, then signs a short-lived URL with the service role.
+create or replace function public.log_document_access(p_document_id uuid)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  d record;
+begin
+  select org_id, person_id, kind, storage_path into d from public.person_documents where id = p_document_id and archived_at is null;
+  if not found or auth.uid() is null or public.is_station()
+     or not public.has_org_permission(d.org_id, case when d.kind = 'custody' then 'custody.manage' else 'kids.care' end) then
+    raise exception 'Not allowed' using errcode = '42501';
+  end if;
+  perform chms_private.log_access(d.org_id, 'document.read', d.person_id, 1, jsonb_build_object('document_id', p_document_id, 'kind', d.kind));
+  return d.storage_path;
+end;
+$$;
+
 -- -------------------------------------------------- realtime (guarded) --
 -- Broadcast topics are org:<org_id>:occ:<occurrence_id>; members and the
 -- church's stations may subscribe. Payloads carry ids and a rev only.
@@ -939,10 +958,12 @@ end $$;
 
 -- ------------------------------------------------------------ grants --
 revoke execute on function
-  public.ingest(jsonb), public.allocate_codes(date, integer, uuid), public.roster(uuid, uuid), public.close_occurrence(uuid)
+  public.ingest(jsonb), public.allocate_codes(date, integer, uuid), public.roster(uuid, uuid), public.close_occurrence(uuid),
+  public.log_document_access(uuid)
   from public, anon;
 grant execute on function
-  public.ingest(jsonb), public.allocate_codes(date, integer, uuid), public.roster(uuid, uuid), public.close_occurrence(uuid)
+  public.ingest(jsonb), public.allocate_codes(date, integer, uuid), public.roster(uuid, uuid), public.close_occurrence(uuid),
+  public.log_document_access(uuid)
   to authenticated, service_role;
 -- effective_at is pure and the view needs it; my_led_room_ids and
 -- can_see_room are policy helpers evaluated as the caller.

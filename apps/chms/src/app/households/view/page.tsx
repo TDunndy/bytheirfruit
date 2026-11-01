@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/PersonParts'
 import { PersonPicker } from '@/components/PersonPicker'
 import { Avatar, BackLink, Chevron, RemoveGlyph, Spinner } from '@/components/ui'
 import { useDocumentTitle } from '@/components/useDocumentTitle'
+import { HouseholdExtras } from '@/components/kids/HouseholdExtras'
 import {
   RELATIONSHIPS, addToHousehold, age, displayName, errorMessage, getHousehold, removeFromHousehold,
   type Household, type Person, type Relationship,
@@ -99,6 +100,7 @@ function HouseholdView() {
           )}
         </ul>
       </section>
+      <HouseholdExtras householdId={household.id} memberNames={new Map(members.map((m) => [m.person.id, displayName(m.person)]))} />
     </section>
   )
 }

@@ -3,20 +3,21 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { useSession } from './Session'
+import { useSession, type Permission } from './Session'
 import { Logo, SignIn } from './SignIn'
 import { Avatar, Chevron, Icon, Spinner, type IconName } from './ui'
 import type { MyOrg } from '@/lib/orgs'
 
-const NAV: { href: string; label: string; icon: IconName }[] = [
+const NAV: { href: string; label: string; icon: IconName; needs?: Permission[] }[] = [
   { href: '/people', label: 'People', icon: 'people' },
+  { href: '/checkin', label: 'Check-in', icon: 'checkin', needs: ['checkin.manage', 'checkin.station', 'attendance.reports', 'kids.view'] },
   { href: '/groups', label: 'Groups', icon: 'groups' },
   { href: '/events', label: 'Events', icon: 'events' },
   { href: '/health', label: 'Health', icon: 'health' },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { status, user, orgs, org, selectOrg, signOut } = useSession()
+  const { status, user, orgs, org, selectOrg, signOut, can } = useSession()
   const pathname = usePathname()
   useScrolledBars(pathname)
 
@@ -86,7 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Logo />
           <ChurchSwitcher orgs={orgs} org={org} onSelect={selectOrg} />
           <nav aria-label="Main" className="nav">
-            {NAV.map((n) => {
+            {NAV.filter((n) => !n.needs || n.needs.some((p) => can(p))).map((n) => {
               const active = Boolean(pathname?.startsWith(n.href) || (n.href === '/people' && pathname?.startsWith('/households')))
               return (
                 <Link key={n.href} href={n.href} className={active ? 'nav-item active' : 'nav-item'} aria-current={active ? 'page' : undefined}>

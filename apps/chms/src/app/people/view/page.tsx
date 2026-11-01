@@ -8,6 +8,7 @@ import { PersonForm, StatusBadge } from '@/components/PersonParts'
 import { PersonPicker } from '@/components/PersonPicker'
 import { Avatar, BackLink, Chevron, IconTile, RemoveGlyph, Spinner } from '@/components/ui'
 import { useDocumentTitle } from '@/components/useDocumentTitle'
+import { KidsSections } from '@/components/kids/KidsSections'
 import {
   addChartLine, addNote, addRole, addToHousehold, age, chartFor, createHousehold, deleteNote, displayName,
   errorMessage, getPerson, historyFor, householdsOf, listRoles, notesFor, peopleNames, personRoleIds,
@@ -171,6 +172,8 @@ function PersonView() {
                 )}
               </ul>
             </section>
+
+            <KidsSections person={person} onChange={load} />
 
             {can('people.notes') && (
               <NotesCard
