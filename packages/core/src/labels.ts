@@ -142,7 +142,7 @@ export function renderLabelHtml(t: LabelTemplate, d: LabelData): string {
     const style = `${pos}width:${e.w}mm;height:${e.h}mm;font-size:${e.size}pt;${e.bold ? 'font-weight:700;' : ''}text-align:${e.align ?? 'left'};`
     return `<div class="el" style="${style}">${esc(content)}</div>`
   }).join('')
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>
 @page { size: ${t.width_mm}mm ${t.height_mm}mm; margin: 0 }
 html, body { margin: 0; padding: 0 }
 .label { position: relative; width: ${t.width_mm}mm; height: ${t.height_mm}mm; overflow: hidden; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; color: #000 }

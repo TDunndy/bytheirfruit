@@ -15,6 +15,7 @@ export default function BaselinesPage() {
   const [q, setQ] = useState('')
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
+  const [status, setStatus] = useState('')
   const [loaded, setLoaded] = useState(false)
   const manage = can('checkin.manage')
   const allowed = manage || can('attendance.reports')
@@ -33,7 +34,7 @@ export default function BaselinesPage() {
   const total = baselines.reduce((n, b) => n + b.count, 0)
 
   if (!org) return <Spinner />
-  if (!allowed) return <NoAccess what="attendance baselines" />
+  if (!allowed) return <NoAccess what="past check-ins" />
   if (!loaded && !error) return <Spinner />
 
   const save = async (householdId: string) => {
@@ -41,12 +42,14 @@ export default function BaselinesPage() {
     if (raw === undefined) return
     const n = Number(raw)
     if (!Number.isInteger(n) || n < 0) { setError('Enter a whole number.'); return }
-    try { await saveBaseline(org.id, householdId, year, n, null); await load() } catch (e) { setError(errorMessage(e)) }
+    setStatus('')
+    try { await saveBaseline(org.id, householdId, year, n, null); await load(); setStatus('Saved') } catch (e) { setError(errorMessage(e)) }
   }
 
   return (
     <div className="stack">
-      <p className="lead">Each family&apos;s child check-ins so far this year, typed in from the old system once. The serve policy adds them to what we record from now on.</p>
+      <p className="lead">Each family&apos;s child check-ins so far this year, typed in once from the old system. The serve policy adds them to what is recorded from now on.</p>
+      <p className="sr-only" role="status">{status}</p>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="toolbar">
         <SearchField className="search" placeholder="Search families" aria-label="Search families" value={q} onChange={(e) => setQ(e.target.value)} />

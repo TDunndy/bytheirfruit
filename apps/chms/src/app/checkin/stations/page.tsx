@@ -6,16 +6,9 @@ import { NoAccess } from '@/components/checkin/CheckinNav'
 import { IconTile, RemoveGlyph, Spinner, Switch } from '@/components/ui'
 import { errorMessage } from '@/lib/people'
 import {
-  STATION_MODES, archiveStation, listAreas, listPrinters, listRooms, listStationScopes, listStations, saveStation, setStationScope,
+  STATION_MODES, archiveStation, label, listAreas, listPrinters, listRooms, listStationScopes, listStations, saveStation, setStationScope,
   type Area, type Printer, type Room, type Station, type StationInput, type StationScope,
 } from '@/lib/checkin'
-
-const MODE_HELP: Record<Station['mode'], string> = {
-  kiosk: 'Parents check in by phone number or scan',
-  staffed: 'A volunteer runs it; last-4 lookup and guest add',
-  roster: 'A classroom device: live roster, move, check out',
-  volunteer: 'Volunteers check in; own label stock',
-}
 
 export default function StationsPage() {
   const { org, can } = useSession()
@@ -26,6 +19,7 @@ export default function StationsPage() {
   const [printers, setPrinters] = useState<Printer[]>([])
   const [editing, setEditing] = useState<(Partial<StationInput> & { areaIds?: string[]; roomIds?: string[] }) | null>(null)
   const [error, setError] = useState('')
+  const [status, setStatus] = useState('')
   const [loaded, setLoaded] = useState(false)
   const manage = can('checkin.manage')
   const allowed = manage || can('checkin.station')
@@ -38,7 +32,7 @@ export default function StationsPage() {
     } catch (e) { setError(errorMessage(e)) }
   }, [org, allowed])
   useEffect(() => { load() }, [load])
-  const act = async (fn: () => Promise<unknown>) => { try { await fn(); await load() } catch (e) { setError(errorMessage(e)) } }
+  const act = async (fn: () => Promise<unknown>, done = 'Saved') => { setStatus(''); try { await fn(); await load(); setStatus(done) } catch (e) { setError(errorMessage(e)) } }
   const areaName = useMemo(() => new Map(areas.map((a) => [a.id, a.name])), [areas])
   const roomName = useMemo(() => new Map(rooms.map((r) => [r.id, r.name])), [rooms])
   const printerName = useMemo(() => new Map(printers.map((p) => [p.id, p.name])), [printers])
@@ -53,30 +47,34 @@ export default function StationsPage() {
     return mine.map((s) => (s.area_id ? `${areaName.get(s.area_id) ?? 'Area'} (area)` : roomName.get(s.room_id ?? '') ?? 'Room')).join(', ')
   }
 
+  if (editing) {
+    return (
+      <StationForm key={editing.id ?? 'new'} initial={editing} areas={areas} rooms={rooms} printers={printers} onCancel={() => setEditing(null)}
+        onSave={(s, areaIds, roomIds) => act(async () => {
+          const saved = await saveStation(org.id, s)
+          await setStationScope(org.id, saved.id, areaIds, roomIds)
+          setEditing(null)
+        }, 'Station saved')} />
+    )
+  }
+
   return (
     <div className="stack">
+      <p className="sr-only" role="status">{status}</p>
       {error && <p className="error" role="alert">{error}</p>}
-      {manage && !editing && <div className="row"><button className="btn btn-filled" onClick={() => setEditing({ areaIds: [], roomIds: [] })}>Add station</button></div>}
-      {editing && (
-        <StationForm initial={editing} areas={areas} rooms={rooms} printers={printers} onCancel={() => setEditing(null)}
-          onSave={(s, areaIds, roomIds) => act(async () => {
-            const saved = await saveStation(org.id, s)
-            await setStationScope(org.id, saved.id, areaIds, roomIds)
-            setEditing(null)
-          })} />
-      )}
+      {manage && <div className="row"><button className="btn btn-filled" onClick={() => setEditing({ areaIds: [], roomIds: [] })}>Add station</button></div>}
       <ul className="group">
         {stations.length === 0 && <li className="cell muted">No stations yet. One per iPad or laptop: a mode, the rooms it serves and its printer.</li>}
         {stations.map((s) => (
           <li key={s.id} className="cell">
-            {manage && <button className="remove-btn" aria-label={`Remove ${s.name}`} onClick={() => act(() => archiveStation(s.id))}><RemoveGlyph /></button>}
+            {manage && <button className="remove-btn" aria-label={`Remove ${s.name}`} onClick={() => { if (window.confirm(`Remove the station ${s.name}? Its paired device will stop working.`)) act(() => archiveStation(s.id), 'Station removed') }}><RemoveGlyph /></button>}
             <IconTile name="tablet" />
             <span className="cell-text">
               <span className="cell-title">{s.name}{!s.active && <span className="chip">Off</span>}</span>
-              <span className="cell-sub"><span className="cap">{s.mode}</span> · {scopeText(s.id)}{s.printer_id ? ` · ${printerName.get(s.printer_id) ?? 'printer'}` : ''}</span>
+              <span className="cell-sub">{label(STATION_MODES, s.mode)} · {scopeText(s.id)}{s.printer_id ? ` · ${printerName.get(s.printer_id) ?? 'printer'}` : ''}</span>
             </span>
             {manage && (
-              <button className="btn btn-plain btn-small" onClick={() => setEditing({
+              <button className="btn btn-plain btn-small" aria-label={`Edit ${s.name}`} onClick={() => setEditing({
                 ...s, areaIds: scopes.filter((x) => x.station_id === s.id && x.area_id).map((x) => x.area_id as string),
                 roomIds: scopes.filter((x) => x.station_id === s.id && x.room_id).map((x) => x.room_id as string),
               })}>Edit</button>
@@ -102,15 +100,16 @@ function StationForm({ initial, areas, rooms, printers, onSave, onCancel }: {
   })
   const [areaIds, setAreaIds] = useState<string[]>(initial.areaIds ?? [])
   const [roomIds, setRoomIds] = useState<string[]>(initial.roomIds ?? [])
+  const [busy, setBusy] = useState(false)
   const flip = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
   return (
-    <form className="card form" onSubmit={(e) => { e.preventDefault(); if (v.name.trim()) onSave({ ...v, name: v.name.trim() }, areaIds, roomIds) }}>
+    <form className="card form" onSubmit={async (e) => { e.preventDefault(); if (!v.name.trim()) return; setBusy(true); await onSave({ ...v, name: v.name.trim() }, areaIds, roomIds); setBusy(false) }}>
       <fieldset>
         <legend className="group-head">{v.id ? 'Edit station' : 'New station'}</legend>
         <div className="group">
-          <label className="field"><span>Name</span><input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="e.g. Barn kiosk 1" required /></label>
+          <label className="field"><span>Name</span><input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="e.g. Barn kiosk 1" required /></label>
           <label className="field"><span>Mode</span>
-            <select value={v.mode} onChange={(e) => setV({ ...v, mode: e.target.value as Station['mode'] })}>{STATION_MODES.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+            <select value={v.mode} onChange={(e) => setV({ ...v, mode: e.target.value as Station['mode'] })}>{STATION_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select>
           </label>
           <label className="field"><span>Printer</span>
             <select value={v.printer_id ?? ''} onChange={(e) => setV({ ...v, printer_id: e.target.value || null })}><option value="">None</option>{printers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
@@ -118,7 +117,7 @@ function StationForm({ initial, areas, rooms, printers, onSave, onCancel }: {
           <label className="field"><span>Label stock</span><input value={v.label_stock ?? ''} placeholder="Printer default" onChange={(e) => setV({ ...v, label_stock: e.target.value || null })} /></label>
           <div className="field"><Switch label="Active" checked={v.active} onChange={(on) => setV({ ...v, active: on })} /></div>
         </div>
-        <p className="group-foot">{MODE_HELP[v.mode]}.</p>
+        <p className="group-foot">{STATION_MODES.find((m) => m.value === v.mode)?.help}.</p>
       </fieldset>
       <fieldset>
         <legend className="group-head">Rooms it serves</legend>
@@ -128,7 +127,7 @@ function StationForm({ initial, areas, rooms, printers, onSave, onCancel }: {
         </div>
         <p className="group-foot">Nothing selected means every room (a front-desk kiosk). A classroom device gets its one room.</p>
       </fieldset>
-      <div className="actions"><button type="button" className="btn btn-tinted" onClick={onCancel}>Cancel</button><button type="submit" className="btn btn-filled">Save station</button></div>
+      <div className="actions"><button type="button" className="btn btn-tinted" onClick={onCancel}>Cancel</button><button type="submit" className="btn btn-filled" disabled={busy}>{busy ? 'Saving…' : 'Save station'}</button></div>
     </form>
   )
 }

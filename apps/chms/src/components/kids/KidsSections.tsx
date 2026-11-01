@@ -14,29 +14,53 @@ import {
 import { supabase } from '@/lib/supabase'
 
 function fmt(d: string) { return new Date(d.length === 10 ? d + 'T00:00:00' : d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
+type Act = (fn: () => Promise<unknown>, done?: string) => Promise<void>
 
-/** The kids' ministry sections of a person's page. Each one shows only to roles that may use it. */
-export function KidsSections({ person, onChange }: { person: Person; onChange: () => Promise<void> }) {
-  const { org, can } = useSession()
+function useAct(onChange: () => Promise<void>) {
   const [error, setError] = useState('')
+  const [status, setStatus] = useState('')
+  const act: Act = async (fn, done = 'Saved') => {
+    setStatus(''); setError('')
+    try { await fn(); await onChange(); setStatus(done) } catch (e) { setError(errorMessage(e)) }
+  }
+  return { act, error, status }
+}
+
+/** The kids' ministry sections on a child's page (photo for everyone). Each shows only to roles that may use it. */
+export function KidsSections({ person, isChild, onChange }: { person: Person; isChild: boolean; onChange: () => Promise<void> }) {
+  const { org, can } = useSession()
+  const { act, error, status } = useAct(onChange)
   if (!org) return null
-  const act = async (fn: () => Promise<unknown>) => { try { await fn(); setError(''); await onChange() } catch (e) { setError(errorMessage(e)) } }
   return (
     <>
+      <p className="sr-only" role="status">{status}</p>
       {error && <p className="error" role="alert">{error}</p>}
       {can('people.edit') && <PhotoSection person={person} orgId={org.id} act={act} />}
-      {can('kids.care') && <CareSection person={person} />}
-      {(can('kids.view') || can('custody.manage')) && <PickupsSection person={person} orgId={org.id} act={act} canManage={can('custody.manage')} />}
-      {(can('custody.manage') || can('kids.care')) && <DocumentsSection person={person} orgId={org.id} act={act} canCustody={can('custody.manage')} />}
-      {(can('checkin.manage') || can('custody.manage') || can('kids.care')) && <RestrictionsSection person={person} orgId={org.id} act={act} canSet={can('checkin.manage') || can('custody.manage')} />}
-      {(can('checkin.manage') || can('kids.view')) && <OverrideSection person={person} orgId={org.id} act={act} canSet={can('checkin.manage')} />}
-      {can('checkin.manage') && <CredentialsSection person={person} orgId={org.id} act={act} />}
+      {isChild && can('kids.care') && <CareSection person={person} />}
+      {isChild && (can('kids.view') || can('custody.manage')) && <PickupsSection person={person} orgId={org.id} act={act} canManage={can('custody.manage')} />}
+      {(can('custody.manage') || can('kids.care')) && <DocumentsSection person={person} orgId={org.id} act={act} canCustody={can('custody.manage')} canCare={can('kids.care')} />}
+      {isChild && (can('checkin.manage') || can('custody.manage') || can('kids.care')) && <RestrictionsSection person={person} orgId={org.id} act={act} canSet={can('checkin.manage') || can('custody.manage')} />}
+      {isChild && (can('checkin.manage') || can('kids.view')) && <OverrideSection person={person} orgId={org.id} act={act} canSet={can('checkin.manage')} />}
+    </>
+  )
+}
+
+/** The second-column sections: volunteer credentials (adults) and custom fields. */
+export function KidsSideSections({ person, isChild, onChange }: { person: Person; isChild: boolean; onChange: () => Promise<void> }) {
+  const { org, can } = useSession()
+  const { act, error, status } = useAct(onChange)
+  if (!org) return null
+  return (
+    <>
+      <p className="sr-only" role="status">{status}</p>
+      {error && <p className="error" role="alert">{error}</p>}
+      {!isChild && can('checkin.manage') && <CredentialsSection person={person} orgId={org.id} act={act} />}
       {can('people.edit') && <CustomFieldsSection person={person} orgId={org.id} act={act} canSensitive={can('kids.care')} />}
     </>
   )
 }
 
-function PhotoSection({ person, orgId, act }: { person: Person; orgId: string; act: (fn: () => Promise<unknown>) => Promise<void> }) {
+function PhotoSection({ person, orgId, act }: { person: Person; orgId: string; act: Act }) {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => { let c = false; photoUrl(person.photo_path).then((u) => { if (!c) setUrl(u) }); return () => { c = true } }, [person.photo_path])
   return (
@@ -44,10 +68,10 @@ function PhotoSection({ person, orgId, act }: { person: Person; orgId: string; a
       <h2 className="group-head">Photo</h2>
       <div className="group">
         <div className="cell">
-          {url ? <img className="photo" src={url} alt="" width={64} height={64} /> : <Avatar name={`${person.first_name} ${person.last_name}`} size="lg" />}
+          {url ? <img className="photo" src={url} alt="" width={88} height={88} /> : <Avatar name={`${person.first_name} ${person.last_name}`} size="lg" />}
           <label className="btn btn-tinted btn-small file-btn">
             {url ? 'Replace photo' : 'Add photo'}
-            <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) act(() => uploadPhoto(orgId, person.id, f)) }} />
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) act(() => uploadPhoto(orgId, person.id, f), 'Photo saved') }} />
           </label>
         </div>
       </div>
@@ -61,6 +85,7 @@ function CareSection({ person }: { person: Person }) {
   const [editing, setEditing] = useState(false)
   const [v, setV] = useState({ allergies: '', allergy_short: '', medical: '', special_needs: '' })
   const [error, setError] = useState('')
+  const [status, setStatus] = useState('')
   const open = async () => {
     try {
       const c = await getCare(person.id)
@@ -71,16 +96,17 @@ function CareSection({ person }: { person: Person }) {
   return (
     <section className="section">
       <h2 className="group-head">Care notes</h2>
+      <p className="sr-only" role="status">{status}</p>
       {error && <p className="error" role="alert">{error}</p>}
       {care === undefined ? (
         <div className="group"><button className="cell-link cell-action" onClick={open}>Show care notes</button></div>
       ) : editing ? (
         <form className="card form" onSubmit={async (e) => {
-          e.preventDefault()
-          try { await setCare(person.id, v); setEditing(false); await open() } catch (err) { setError(errorMessage(err)) }
+          e.preventDefault(); setStatus('')
+          try { await setCare(person.id, v); setEditing(false); await open(); setStatus('Care notes saved') } catch (err) { setError(errorMessage(err)) }
         }}>
           <div className="group">
-            <label className="field"><span>Allergies</span><input value={v.allergies} onChange={(e) => setV({ ...v, allergies: e.target.value })} placeholder="e.g. Peanuts, tree nuts" /></label>
+            <label className="field"><span>Allergies</span><input autoFocus value={v.allergies} onChange={(e) => setV({ ...v, allergies: e.target.value })} placeholder="e.g. Peanuts, tree nuts" /></label>
             <label className="field"><span>On the label</span><input value={v.allergy_short} maxLength={40} onChange={(e) => setV({ ...v, allergy_short: e.target.value })} placeholder="Short, e.g. Peanut" /></label>
             <div className="cell"><textarea rows={3} aria-label="Medical" placeholder="Medical (inhaler, epi-pen, seizures…)" value={v.medical} onChange={(e) => setV({ ...v, medical: e.target.value })} /></div>
             <div className="cell"><textarea rows={3} aria-label="Special needs" placeholder="Special needs and what helps" value={v.special_needs} onChange={(e) => setV({ ...v, special_needs: e.target.value })} /></div>
@@ -102,10 +128,11 @@ function CareSection({ person }: { person: Person }) {
   )
 }
 
-function PickupsSection({ person, orgId, act, canManage }: { person: Person; orgId: string; act: (fn: () => Promise<unknown>) => Promise<void>; canManage: boolean }) {
+function PickupsSection({ person, orgId, act, canManage }: { person: Person; orgId: string; act: Act; canManage: boolean }) {
   const [rows, setRows] = useState<PickupPerson[]>([])
   const [names, setNames] = useState<Map<string, string>>(new Map())
   const [adding, setAdding] = useState<'authorized' | 'restricted' | null>(null)
+  const [picked, setPicked] = useState<{ id: string; name: string } | null>(null)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [rel, setRel] = useState('')
@@ -117,7 +144,10 @@ function PickupsSection({ person, orgId, act, canManage }: { person: Person; org
     setNames(await peopleNames(r.map((x) => x.person_id ?? '')))
   }, [person.id])
   useEffect(() => { load().catch(() => {}) }, [load])
-  const run = (fn: () => Promise<unknown>) => act(async () => { await fn(); await load() })
+  const run = (fn: () => Promise<unknown>, done?: string) => act(async () => { await fn(); await load() }, done)
+  const reset = () => { setAdding(null); setPicked(null); setName(''); setPhone(''); setRel(''); setNote(''); setValidTo('') }
+  const ready = adding === 'restricted' ? Boolean(picked) : Boolean(picked || name.trim())
+  const nameOf = (p: PickupPerson) => (p.person_id ? names.get(p.person_id) ?? 'Someone' : p.name ?? 'Someone')
   return (
     <section className="section">
       <h2 className="group-head">Pickups and custody</h2>
@@ -125,10 +155,10 @@ function PickupsSection({ person, orgId, act, canManage }: { person: Person; org
         {rows.length === 0 && <li className="cell muted">No pickups recorded. Parents in the family can always pick up.</li>}
         {rows.map((p) => (
           <li key={p.id} className="cell">
-            {canManage && <button className="remove-btn" aria-label="Remove" onClick={() => run(() => archivePickup(p.id))}><RemoveGlyph /></button>}
-            {p.kind === 'restricted' ? <Icon name="warn" size={20} className="warn-icon" /> : <Avatar name={p.person_id ? names.get(p.person_id) ?? '?' : p.name ?? '?'} size="xs" />}
+            {canManage && <button className="remove-btn" aria-label={`Remove ${nameOf(p)}`} onClick={() => run(() => archivePickup(p.id), 'Pickup removed')}><RemoveGlyph /></button>}
+            {p.kind === 'restricted' ? <Icon name="warn" size={20} className="warn-icon" /> : <Avatar name={nameOf(p)} size="xs" />}
             <span className="cell-text">
-              <span className="cell-title">{p.person_id ? names.get(p.person_id) ?? 'Someone' : p.name}{p.relationship ? <span className="muted"> · {p.relationship}</span> : null}</span>
+              <span className="cell-title">{nameOf(p)}{p.relationship ? <span className="muted"> · {p.relationship}</span> : null}</span>
               <span className="cell-sub">{p.kind === 'restricted' ? 'Must not pick up' : 'May pick up'}{p.valid_to ? ` until ${fmt(p.valid_to)}` : ''}{p.note ? ` · ${p.note}` : ''}{p.phone ? ` · ${p.phone}` : ''}</span>
             </span>
           </li>
@@ -137,54 +167,81 @@ function PickupsSection({ person, orgId, act, canManage }: { person: Person; org
           <li className="cell">
             <div className="row">
               <button className="btn btn-plain btn-small" onClick={() => setAdding('authorized')}>Add authorized pickup</button>
-              <button className="btn btn-plain btn-small destructive" onClick={() => setAdding('restricted')}>Add restriction</button>
+              <button className="btn btn-plain btn-small" onClick={() => setAdding('restricted')}>Add restriction</button>
             </div>
           </li>
         )}
       </ul>
       {adding && (
-        <div className="card form mt">
-          <div className="group">
-            <div className="cell"><PersonPicker orgId={orgId} exclude={[person.id]} placeholder={adding === 'restricted' ? 'Who must not pick up (directory)' : 'Pick from the directory'}
-              onPick={(p) => run(async () => { await addPickup(orgId, person.id, { personId: p.id, kind: adding, note, validTo: validTo || null, relationship: rel || undefined }); setAdding(null); setNote(''); setValidTo('') })} /></div>
-            {adding === 'authorized' && (
-              <>
-                <label className="field"><span>Or a name</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Not in the directory" /></label>
-                <label className="field"><span>Phone</span><input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
-              </>
-            )}
-            <label className="field"><span>Relationship</span><input value={rel} onChange={(e) => setRel(e.target.value)} placeholder="e.g. grandmother" /></label>
-            <label className="field"><span>Note</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder={adding === 'restricted' ? 'e.g. court order on file' : 'Optional'} /></label>
-            <label className="field"><span>Until</span><input type="date" value={validTo} data-empty={!validTo} onChange={(e) => setValidTo(e.target.value)} /></label>
-          </div>
-          {adding === 'restricted' && <p className="group-foot">A restriction must name someone in the directory, so the station can check it. Stations show a neutral message and alert staff.</p>}
+        <form className="card form mt" onSubmit={(e) => {
+          e.preventDefault()
+          if (!ready) return
+          run(async () => {
+            await addPickup(orgId, person.id, picked
+              ? { personId: picked.id, kind: adding, note, validTo: validTo || null, relationship: rel || undefined }
+              : { name: name.trim(), phone, relationship: rel, kind: 'authorized', note, validTo: validTo || null })
+            reset()
+          }, adding === 'restricted' ? 'Restriction added' : 'Pickup added')
+        }}>
+          <fieldset>
+            <legend className="group-head">{adding === 'restricted' ? 'Who must not pick up' : 'Who may pick up'}</legend>
+            <div className="group">
+              <div className="cell">
+                {picked ? (
+                  <span className="chip">{picked.name}<button type="button" className="chip-remove" aria-label={`Remove ${picked.name}`} onClick={() => setPicked(null)}>×</button></span>
+                ) : (
+                  <PersonPicker orgId={orgId} exclude={[person.id]} placeholder={adding === 'restricted' ? 'Find them in the directory' : 'Find them in the directory'} onPick={(p) => setPicked({ id: p.id, name: `${p.preferred_name || p.first_name} ${p.last_name}`.trim() })} />
+                )}
+              </div>
+              {adding === 'authorized' && !picked && (
+                <>
+                  <label className="field"><span>Or a name</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Not in the directory" /></label>
+                  <label className="field"><span>Phone</span><input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
+                </>
+              )}
+              <label className="field"><span>Relationship</span><input value={rel} onChange={(e) => setRel(e.target.value)} placeholder="e.g. grandmother" /></label>
+              <label className="field"><span>Note</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder={adding === 'restricted' ? 'e.g. court order on file' : 'Optional'} /></label>
+              <label className="field"><span>Until</span><input type="date" value={validTo} data-empty={!validTo} onChange={(e) => setValidTo(e.target.value)} /></label>
+            </div>
+            {adding === 'restricted' && <p className="group-foot">A restriction must name someone in the directory, so the station can check it. Stations show a neutral message and alert staff.</p>}
+          </fieldset>
           <div className="actions">
-            <button type="button" className="btn btn-tinted" onClick={() => setAdding(null)}>Cancel</button>
-            {adding === 'authorized' && <button type="button" className="btn btn-filled" disabled={!name.trim()} onClick={() => run(async () => { await addPickup(orgId, person.id, { name: name.trim(), phone, relationship: rel, kind: 'authorized', note, validTo: validTo || null }); setAdding(null); setName(''); setPhone(''); setNote(''); setValidTo('') })}>Add by name</button>}
+            <button type="button" className="btn btn-tinted" onClick={reset}>Cancel</button>
+            <button type="submit" className="btn btn-filled" disabled={!ready}>{adding === 'restricted' ? 'Add restriction' : 'Add pickup'}</button>
           </div>
-        </div>
+        </form>
       )}
     </section>
   )
 }
 
-function DocumentsSection({ person, orgId, act, canCustody }: { person: Person; orgId: string; act: (fn: () => Promise<unknown>) => Promise<void>; canCustody: boolean }) {
+function DocumentsSection({ person, orgId, act, canCustody, canCare }: { person: Person; orgId: string; act: Act; canCustody: boolean; canCare: boolean }) {
   const [docs, setDocs] = useState<PersonDocument[]>([])
+  const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState<PersonDocument['kind']>(canCustody ? 'custody' : 'medical')
   const [file, setFile] = useState<File | null>(null)
   const [opening, setOpening] = useState('')
   const load = useCallback(async () => { setDocs(await documentsFor(person.id)) }, [person.id])
   useEffect(() => { load().catch(() => {}) }, [load])
-  const run = (fn: () => Promise<unknown>) => act(async () => { await fn(); await load() })
+  const run = (fn: () => Promise<unknown>, done?: string) => act(async () => { await fn(); await load() }, done)
   const open = async (d: PersonDocument) => {
     setOpening(d.id)
+    // Open the window now (a later open is blocked as a pop-up) and point it at the signed URL.
+    const w = window.open('', '_blank', 'noopener')
     try {
       const { data, error } = await supabase.functions.invoke('document-url', { body: { documentId: d.id } })
-      if (error) throw error
+      if (error) {
+        const body = await (error as { context?: Response }).context?.json().catch(() => null)
+        throw new Error(body?.error ?? error.message)
+      }
       const url = (data as { url?: string })?.url
-      if (url) window.open(url, '_blank', 'noopener')
-    } catch (e) { act(() => Promise.reject(e)) } finally { setOpening('') }
+      if (url && w) w.location.href = url
+      else if (url) window.location.href = url
+    } catch (e) {
+      w?.close()
+      act(() => Promise.reject(e))
+    } finally { setOpening('') }
   }
   return (
     <section className="section">
@@ -193,41 +250,50 @@ function DocumentsSection({ person, orgId, act, canCustody }: { person: Person; 
         {docs.length === 0 && <li className="cell muted">No documents.</li>}
         {docs.map((d) => (
           <li key={d.id} className="cell">
-            <button className="remove-btn" aria-label={`Remove ${d.title}`} onClick={() => run(() => archiveDocument(d.id))}><RemoveGlyph /></button>
+            <button className="remove-btn" aria-label={`Remove ${d.title}`} onClick={() => { if (window.confirm(`Remove ${d.title}?`)) run(() => archiveDocument(d.id), 'Document removed') }}><RemoveGlyph /></button>
             <Icon name="doc" size={20} />
             <span className="cell-text">
               <span className="cell-title">{d.title}</span>
               <span className="cell-sub"><span className="cap">{d.kind}</span> · {fmt(d.created_at)}{d.note ? ` · ${d.note}` : ''}</span>
             </span>
-            <button className="btn btn-plain btn-small" disabled={opening === d.id} onClick={() => open(d)}>{opening === d.id ? 'Opening…' : 'Open'}</button>
+            <button className="btn btn-plain btn-small" aria-label={`Open ${d.title}`} disabled={opening === d.id} onClick={() => open(d)}>{opening === d.id ? 'Opening…' : 'Open'}</button>
           </li>
         ))}
+        {!adding && <li><button className="cell-link cell-action" onClick={() => setAdding(true)}>Add document</button></li>}
       </ul>
-      <form className="card form mt" onSubmit={(e) => { e.preventDefault(); if (file && title.trim()) run(async () => { await uploadDocument(orgId, person.id, kind, file, title.trim(), null); setTitle(''); setFile(null) }) }}>
-        <div className="group">
-          <label className="field"><span>Title</span><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Custody order, March 2027" /></label>
-          <label className="field"><span>Kind</span>
-            <select value={kind} onChange={(e) => setKind(e.target.value as PersonDocument['kind'])}>
-              {canCustody && <option value="custody">Custody</option>}<option value="medical">Medical</option><option value="other">Other</option>
-            </select>
-          </label>
-          <label className="field"><span>File</span><input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
-        </div>
-        <p className="group-foot">Stored privately; every open is logged.</p>
-        <div className="actions"><button type="submit" className="btn btn-filled btn-small" disabled={!file || !title.trim()}>Upload</button></div>
-      </form>
+      {adding && (
+        <form className="card form mt" onSubmit={(e) => { e.preventDefault(); if (file && title.trim()) run(async () => { await uploadDocument(orgId, person.id, kind, file, title.trim(), null); setTitle(''); setFile(null); setAdding(false) }, 'Document added') }}>
+          <fieldset>
+            <legend className="group-head">New document</legend>
+            <div className="group">
+              <label className="field"><span>Title</span><input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Custody order, March 2027" /></label>
+              <label className="field"><span>Kind</span>
+                <select value={kind} onChange={(e) => setKind(e.target.value as PersonDocument['kind'])}>
+                  {canCustody && <option value="custody">Custody</option>}
+                  {canCare && <option value="medical">Medical</option>}
+                  {canCare && <option value="other">Other</option>}
+                </select>
+              </label>
+              <label className="field"><span>File</span><input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
+            </div>
+            <p className="group-foot">Stored privately; every open is logged.</p>
+          </fieldset>
+          <div className="actions"><button type="button" className="btn btn-tinted" onClick={() => setAdding(false)}>Cancel</button><button type="submit" className="btn btn-filled" disabled={!file || !title.trim()}>Upload</button></div>
+        </form>
+      )}
     </section>
   )
 }
 
-function RestrictionsSection({ person, orgId, act, canSet }: { person: Person; orgId: string; act: (fn: () => Promise<unknown>) => Promise<void>; canSet: boolean }) {
+function RestrictionsSection({ person, orgId, act, canSet }: { person: Person; orgId: string; act: Act; canSet: boolean }) {
   const [rows, setRows] = useState<Restriction[]>([])
+  const [adding, setAdding] = useState(false)
   const [kind, setKind] = useState<Restriction['kind']>('see_staff')
   const [note, setNote] = useState('')
   const [endsOn, setEndsOn] = useState('')
   const load = useCallback(async () => { setRows(await restrictionsFor(person.id)) }, [person.id])
   useEffect(() => { load().catch(() => {}) }, [load])
-  const run = (fn: () => Promise<unknown>) => act(async () => { await fn(); await load() })
+  const run = (fn: () => Promise<unknown>, done?: string) => act(async () => { await fn(); await load() }, done)
   const active = rows.filter((r) => !r.cleared_at)
   return (
     <section className="section">
@@ -241,32 +307,41 @@ function RestrictionsSection({ person, orgId, act, canSet }: { person: Person; o
               <span className="cell-title">{r.kind === 'no_checkin' ? 'Do not check in' : 'See staff first'}</span>
               <span className="cell-sub">{r.note ?? ''}{r.ends_on ? ` · until ${fmt(r.ends_on)}` : ''}</span>
             </span>
-            {canSet && <button className="btn btn-plain btn-small" onClick={() => run(() => clearRestriction(r.id))}>Clear</button>}
+            {canSet && <button className="btn btn-plain btn-small" aria-label={`Clear the ${r.kind === 'no_checkin' ? 'do not check in' : 'see staff'} restriction`} onClick={() => { if (window.confirm('Clear this restriction? Clearing is final; a new one can be added later.')) run(() => clearRestriction(r.id), 'Restriction cleared') }}>Clear</button>}
           </li>
         ))}
-        {canSet && (
-          <li className="cell add-member">
-            <select className="popup" aria-label="Kind" value={kind} onChange={(e) => setKind(e.target.value as Restriction['kind'])}><option value="see_staff">See staff first</option><option value="no_checkin">Do not check in</option></select>
-            <input aria-label="Reason" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reason (staff only)" />
-            <input type="date" aria-label="Until" value={endsOn} data-empty={!endsOn} onChange={(e) => setEndsOn(e.target.value)} />
-            <button className="btn btn-tinted btn-small" onClick={() => run(async () => { await addRestriction(orgId, person.id, kind, note || null, endsOn || null); setNote(''); setEndsOn('') })}>Restrict</button>
-          </li>
-        )}
+        {canSet && !adding && <li><button className="cell-link cell-action" onClick={() => setAdding(true)}>Add restriction</button></li>}
       </ul>
-      <p className="group-foot">The station shows a neutral &ldquo;please see the welcome desk&rdquo; and alerts staff silently.</p>
+      {adding && (
+        <form className="card form mt" onSubmit={(e) => { e.preventDefault(); run(async () => { await addRestriction(orgId, person.id, kind, note || null, endsOn || null); setNote(''); setEndsOn(''); setAdding(false) }, 'Restriction added') }}>
+          <fieldset>
+            <legend className="group-head">New restriction</legend>
+            <div className="group">
+              <label className="field"><span>Kind</span>
+                <select autoFocus value={kind} onChange={(e) => setKind(e.target.value as Restriction['kind'])}><option value="see_staff">See staff first</option><option value="no_checkin">Do not check in</option></select>
+              </label>
+              <label className="field"><span>Reason</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Staff only" /></label>
+              <label className="field"><span>Until</span><input type="date" value={endsOn} data-empty={!endsOn} onChange={(e) => setEndsOn(e.target.value)} /></label>
+            </div>
+            <p className="group-foot">The station shows a neutral &ldquo;please see the welcome desk&rdquo; and alerts staff silently.</p>
+          </fieldset>
+          <div className="actions"><button type="button" className="btn btn-tinted" onClick={() => setAdding(false)}>Cancel</button><button type="submit" className="btn btn-filled">Add restriction</button></div>
+        </form>
+      )}
     </section>
   )
 }
 
-function OverrideSection({ person, orgId, act, canSet }: { person: Person; orgId: string; act: (fn: () => Promise<unknown>) => Promise<void>; canSet: boolean }) {
+function OverrideSection({ person, orgId, act, canSet }: { person: Person; orgId: string; act: Act; canSet: boolean }) {
   const [rows, setRows] = useState<RoomOverride[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
+  const [adding, setAdding] = useState(false)
   const [roomId, setRoomId] = useState('')
   const [endsOn, setEndsOn] = useState('')
   const [note, setNote] = useState('')
   const load = useCallback(async () => { const [o, r] = await Promise.all([overridesFor(person.id), listRooms(orgId)]); setRows(o); setRooms(r) }, [person.id, orgId])
   useEffect(() => { load().catch(() => {}) }, [load])
-  const run = (fn: () => Promise<unknown>) => act(async () => { await fn(); await load() })
+  const run = (fn: () => Promise<unknown>, done?: string) => act(async () => { await fn(); await load() }, done)
   const roomName = useMemo(() => new Map(rooms.map((r) => [r.id, r.name])), [rooms])
   const current = rows[0]
   return (
@@ -281,60 +356,78 @@ function OverrideSection({ person, orgId, act, canSet }: { person: Person; orgId
               <span className="cell-title">Always {roomName.get(current.room_id) ?? 'this room'}</span>
               <span className="cell-sub">{current.ends_on ? `until ${fmt(current.ends_on)}` : 'until cleared'}{current.note ? ` · ${current.note}` : ''}</span>
             </span>
-            {canSet && <button className="btn btn-plain btn-small" onClick={() => run(() => clearOverride(current.id))}>Clear</button>}
+            {canSet && <button className="btn btn-plain btn-small" aria-label="Clear the room override" onClick={() => run(() => clearOverride(current.id), 'Override cleared')}>Clear</button>}
           </li>
         )}
-        {canSet && (
-          <li className="cell add-member">
-            <select className="popup" aria-label="Room" value={roomId} onChange={(e) => setRoomId(e.target.value)}><option value="">Room…</option>{rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
-            <input type="date" aria-label="Until" value={endsOn} data-empty={!endsOn} onChange={(e) => setEndsOn(e.target.value)} />
-            <input aria-label="Note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why (e.g. keep with sibling)" />
-            <button className="btn btn-tinted btn-small" disabled={!roomId} onClick={() => run(async () => { await setOverride(orgId, person.id, roomId, endsOn || null, note || null); setRoomId(''); setEndsOn(''); setNote('') })}>Set</button>
-          </li>
-        )}
+        {canSet && !adding && <li><button className="cell-link cell-action" onClick={() => setAdding(true)}>{current ? 'Change room' : 'Set a room'}</button></li>}
       </ul>
+      {adding && (
+        <form className="card form mt" onSubmit={(e) => { e.preventDefault(); if (!roomId) return; run(async () => { await setOverride(orgId, person.id, roomId, endsOn || null, note || null); setRoomId(''); setEndsOn(''); setNote(''); setAdding(false) }, 'Override saved') }}>
+          <fieldset>
+            <legend className="group-head">Always this room</legend>
+            <div className="group">
+              <label className="field"><span>Room</span>
+                <select autoFocus value={roomId} onChange={(e) => setRoomId(e.target.value)}><option value="">Choose…</option>{rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select>
+              </label>
+              <label className="field"><span>Until</span><input type="date" value={endsOn} data-empty={!endsOn} onChange={(e) => setEndsOn(e.target.value)} /></label>
+              <label className="field"><span>Why</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. keep with sibling" /></label>
+            </div>
+          </fieldset>
+          <div className="actions"><button type="button" className="btn btn-tinted" onClick={() => setAdding(false)}>Cancel</button><button type="submit" className="btn btn-filled" disabled={!roomId}>Set room</button></div>
+        </form>
+      )}
     </section>
   )
 }
 
-function CredentialsSection({ person, orgId, act }: { person: Person; orgId: string; act: (fn: () => Promise<unknown>) => Promise<void> }) {
+function CredentialsSection({ person, orgId, act }: { person: Person; orgId: string; act: Act }) {
   const [rows, setRows] = useState<Credential[]>([])
+  const [adding, setAdding] = useState(false)
   const [v, setV] = useState({ kind: 'background_check' as Credential['kind'], completedOn: todayLocal(), expiresOn: '', provider: '', reference: '' })
   const load = useCallback(async () => { setRows(await credentialsFor(person.id)) }, [person.id])
   useEffect(() => { load().catch(() => {}) }, [load])
-  const run = (fn: () => Promise<unknown>) => act(async () => { await fn(); await load() })
+  const run = (fn: () => Promise<unknown>, done?: string) => act(async () => { await fn(); await load() }, done)
   const status = credentialStatus(rows, todayLocal())
+  const statusText = status === 'cleared' ? 'Background check: cleared' : status === 'expired' ? 'Background check: expired' : status === 'pending' ? 'Background check: pending' : 'No background check on file'
+  const kindLabel = (k: Credential['kind']) => CREDENTIAL_KINDS.find((x) => x.value === k)?.label ?? k
   return (
     <section className="section">
-      <h2 className="group-head">Volunteer credentials <span className={`status status-${status === 'cleared' ? 'member' : status === 'expired' ? 'visitor' : status === 'pending' ? 'regular' : 'inactive'}`}>{status === 'cleared' ? 'Cleared' : status === 'expired' ? 'Check expired' : status === 'pending' ? 'Check pending' : 'No check'}</span></h2>
+      <h2 className="group-head">Volunteer credentials</h2>
       <ul className="group">
         {rows.length === 0 && <li className="cell muted">No credentials recorded.</li>}
         {rows.map((c) => (
           <li key={c.id} className="cell">
-            <button className="remove-btn" aria-label="Remove credential" onClick={() => run(() => archiveCredential(c.id))}><RemoveGlyph /></button>
+            <button className="remove-btn" aria-label={`Remove the ${kindLabel(c.kind)} from ${fmt(c.completed_on)}`} onClick={() => run(() => archiveCredential(c.id), 'Credential removed')}><RemoveGlyph /></button>
             <Icon name="shield" size={20} />
             <span className="cell-text">
-              <span className="cell-title">{CREDENTIAL_KINDS.find((k) => k.value === c.kind)?.label ?? c.kind}</span>
+              <span className="cell-title">{kindLabel(c.kind)}</span>
               <span className="cell-sub">{fmt(c.completed_on)}{c.expires_on ? ` → ${fmt(c.expires_on)}` : ''}{c.provider ? ` · ${c.provider}` : ''}{c.reference ? ` · ${c.reference}` : ''}</span>
             </span>
           </li>
         ))}
+        {!adding && <li><button className="cell-link cell-action" onClick={() => setAdding(true)}>Record a credential</button></li>}
       </ul>
-      <form className="card form mt" onSubmit={(e) => { e.preventDefault(); run(async () => { await addCredential(orgId, person.id, { kind: v.kind, completedOn: v.completedOn, expiresOn: v.expiresOn || null, provider: v.provider || null, reference: v.reference || null, note: null }); setV({ ...v, reference: '' }) }) }}>
-        <div className="group">
-          <label className="field"><span>Kind</span><select value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value as Credential['kind'] })}>{CREDENTIAL_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
-          <label className="field"><span>Completed</span><input type="date" value={v.completedOn} onChange={(e) => setV({ ...v, completedOn: e.target.value })} required /></label>
-          <label className="field"><span>Expires</span><input type="date" value={v.expiresOn} data-empty={!v.expiresOn} onChange={(e) => setV({ ...v, expiresOn: e.target.value })} /></label>
-          <label className="field"><span>Provider</span><input value={v.provider} onChange={(e) => setV({ ...v, provider: e.target.value })} placeholder="e.g. Protect My Ministry" /></label>
-          <label className="field"><span>Reference</span><input value={v.reference} onChange={(e) => setV({ ...v, reference: e.target.value })} placeholder="Optional" /></label>
-        </div>
-        <div className="actions"><button type="submit" className="btn btn-filled btn-small">Record</button></div>
-      </form>
+      <p className="group-foot">{statusText}. {status !== 'cleared' ? 'Stations alert staff when they check into a kids room.' : ''}</p>
+      {adding && (
+        <form className="card form mt" onSubmit={(e) => { e.preventDefault(); run(async () => { await addCredential(orgId, person.id, { kind: v.kind, completedOn: v.completedOn, expiresOn: v.expiresOn || null, provider: v.provider || null, reference: v.reference || null, note: null }); setV({ ...v, reference: '' }); setAdding(false) }, 'Credential recorded') }}>
+          <fieldset>
+            <legend className="group-head">New credential</legend>
+            <div className="group">
+              <label className="field"><span>Kind</span><select autoFocus value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value as Credential['kind'] })}>{CREDENTIAL_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select></label>
+              <label className="field"><span>Completed</span><input type="date" value={v.completedOn} onChange={(e) => setV({ ...v, completedOn: e.target.value })} required /></label>
+              <label className="field"><span>Expires</span><input type="date" value={v.expiresOn} data-empty={!v.expiresOn} onChange={(e) => setV({ ...v, expiresOn: e.target.value })} /></label>
+              <label className="field"><span>Provider</span><input value={v.provider} onChange={(e) => setV({ ...v, provider: e.target.value })} placeholder="e.g. Protect My Ministry" /></label>
+              <label className="field"><span>Reference</span><input value={v.reference} onChange={(e) => setV({ ...v, reference: e.target.value })} placeholder="Optional" /></label>
+            </div>
+          </fieldset>
+          <div className="actions"><button type="button" className="btn btn-tinted" onClick={() => setAdding(false)}>Cancel</button><button type="submit" className="btn btn-filled">Record</button></div>
+        </form>
+      )}
     </section>
   )
 }
 
-function CustomFieldsSection({ person, orgId, act, canSensitive }: { person: Person; orgId: string; act: (fn: () => Promise<unknown>) => Promise<void>; canSensitive: boolean }) {
+function CustomFieldsSection({ person, orgId, act, canSensitive }: { person: Person; orgId: string; act: Act; canSensitive: boolean }) {
   const [defs, setDefs] = useState<CustomFieldDef[]>([])
   const [sensitive, setSensitive] = useState<SensitiveValue[]>([])
   const [draft, setDraft] = useState<Record<string, string>>({})
@@ -350,7 +443,9 @@ function CustomFieldsSection({ person, orgId, act, canSensitive }: { person: Per
   if (shown.length === 0) return null
   const valueOf = (d: CustomFieldDef): string => {
     const raw = d.sensitive ? sensitive.find((s) => s.field_id === d.id)?.value : custom[d.key]
-    return raw === undefined || raw === null ? '' : typeof raw === 'string' ? raw : JSON.stringify(raw)
+    if (raw === undefined || raw === null) return ''
+    if (Array.isArray(raw)) return raw.join(', ')
+    return typeof raw === 'string' ? raw : String(raw)
   }
   const save = (d: CustomFieldDef, text: string) => {
     const value: unknown = d.field_type === 'boolean' ? text === 'true' : d.field_type === 'number' ? (text === '' ? null : Number(text)) : d.field_type === 'multiselect' ? text.split(',').map((s) => s.trim()).filter(Boolean) : (text || null)
@@ -365,15 +460,21 @@ function CustomFieldsSection({ person, orgId, act, canSensitive }: { person: Per
       <div className="group">
         {shown.map((d) => {
           const current = draft[d.id] ?? valueOf(d)
+          if (d.field_type === 'boolean') {
+            return (
+              <div key={d.id} className="field">
+                <Switch label={d.label} checked={current === 'true'} onChange={(on) => save(d, on ? 'true' : 'false')} />
+                {d.sensitive && <span className="chip chip-warn">Sensitive</span>}
+              </div>
+            )
+          }
           return (
             <label key={d.id} className="field">
               <span>{d.label}{d.sensitive && <span className="chip chip-warn">Sensitive</span>}</span>
-              {d.field_type === 'boolean' ? (
-                <Switch label="" checked={current === 'true'} onChange={(on) => save(d, on ? 'true' : 'false')} />
-              ) : d.field_type === 'select' ? (
+              {d.field_type === 'select' ? (
                 <select value={current} onChange={(e) => save(d, e.target.value)}><option value="">—</option>{d.options.map((o) => <option key={o} value={o}>{o}</option>)}</select>
               ) : (
-                <input type={d.field_type === 'date' ? 'date' : d.field_type === 'number' ? 'number' : 'text'} value={current}
+                <input type={d.field_type === 'date' ? 'date' : d.field_type === 'number' ? 'number' : 'text'} value={current} data-empty={!current}
                   onChange={(e) => setDraft({ ...draft, [d.id]: e.target.value })} onBlur={() => { if (draft[d.id] !== undefined && draft[d.id] !== valueOf(d)) save(d, draft[d.id]) }}
                   placeholder={d.field_type === 'multiselect' ? d.options.join(', ') : ''} />
               )}

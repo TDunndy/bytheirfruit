@@ -17,6 +17,7 @@ export function HouseholdExtras({ householdId, memberNames }: { householdId: str
   const [flag, setFlagKind] = useState<HouseholdFlag['flag']>('exempt')
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
+  const [status, setStatus] = useState('')
   const load = useCallback(async () => {
     if (!org) return
     try {
@@ -28,18 +29,19 @@ export function HouseholdExtras({ householdId, memberNames }: { householdId: str
   }, [org, householdId, can])
   useEffect(() => { load() }, [load])
   if (!org) return null
-  const act = async (fn: () => Promise<unknown>) => { try { await fn(); await load() } catch (e) { setError(errorMessage(e)) } }
+  const act = async (fn: () => Promise<unknown>) => { setStatus(''); try { await fn(); await load(); setStatus('Saved') } catch (e) { setError(errorMessage(e)) } }
   const active = flags.filter((f) => !f.cleared_at)
 
   return (
     <>
+      <p className="sr-only" role="status">{status}</p>
       {error && <p className="error" role="alert">{error}</p>}
       {can('people.edit') && members.some((m) => m.relationship !== 'child') && (
         <section className="section narrow">
           <h2 className="group-head">Who may check children in</h2>
           <div className="group">
             {members.filter((m) => m.relationship !== 'child').map((m) => (
-              <div key={m.person_id} className="field">
+              <div key={m.person_id} className="field" role="group" aria-label={memberNames.get(m.person_id) ?? 'Someone'}>
                 <span>{memberNames.get(m.person_id) ?? 'Someone'}</span>
                 <span className="row">
                   <Switch label="Guardian" checked={m.is_guardian} onChange={(on) => act(() => setMemberFlags(householdId, m.person_id, { is_guardian: on }))} />
@@ -63,7 +65,7 @@ export function HouseholdExtras({ householdId, memberNames }: { householdId: str
                   <span className="cell-title">{FLAGS.find((x) => x.value === f.flag)?.label ?? f.flag}</span>
                   <span className="cell-sub">{f.note ? `${f.note} · ` : ''}{f.set_by_person_id ? names.get(f.set_by_person_id) ?? 'A leader' : 'Church admin'} · {fmt(f.set_at)}</span>
                 </span>
-                <button className="btn btn-plain btn-small" onClick={() => act(() => clearFlag(f.id))}>Clear</button>
+                <button className="btn btn-plain btn-small" aria-label={`Clear ${FLAGS.find((x) => x.value === f.flag)?.label ?? f.flag}`} onClick={() => act(() => clearFlag(f.id))}>Clear</button>
               </li>
             ))}
             <li className="cell add-member">

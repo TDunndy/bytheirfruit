@@ -24,10 +24,25 @@ export type Baseline = Tables['attendance_baselines']['Row']
 export type RoomOverride = Tables['room_overrides']['Row']
 export type Restriction = Tables['checkin_restrictions']['Row']
 
-export const AREA_KINDS = ['kids', 'volunteer', 'event', 'group', 'general'] as const
-export const SCHEDULE_KINDS = ['service', 'class', 'event', 'group', 'other'] as const
-export const STATION_MODES = ['kiosk', 'staffed', 'roster', 'volunteer'] as const
+export const AREA_KINDS: { value: Area['kind']; label: string }[] = [
+  { value: 'kids', label: 'Kids' }, { value: 'volunteer', label: 'Volunteers' }, { value: 'event', label: 'Events' },
+  { value: 'group', label: 'Groups' }, { value: 'general', label: 'General' },
+]
+export const SCHEDULE_KINDS: { value: Schedule['kind']; label: string }[] = [
+  { value: 'service', label: 'Service' }, { value: 'class', label: 'Class' }, { value: 'event', label: 'Event' },
+  { value: 'group', label: 'Group' }, { value: 'other', label: 'Other' },
+]
+export const STATION_MODES: { value: Station['mode']; label: string; help: string }[] = [
+  { value: 'kiosk', label: 'Self-serve kiosk', help: 'Parents check in by phone number or scan' },
+  { value: 'staffed', label: 'Staffed desk', help: 'A volunteer runs it; last-4 lookup and guest add' },
+  { value: 'roster', label: 'Room roster', help: 'A classroom device: live roster, move, check out' },
+  { value: 'volunteer', label: 'Volunteer check-in', help: 'Volunteers check in; own label stock' },
+]
+export const PRINTER_CONNECTIONS: { value: Printer['connection']; label: string }[] = [
+  { value: 'wifi', label: 'Wi-Fi' }, { value: 'bluetooth', label: 'Bluetooth' }, { value: 'usb', label: 'USB' }, { value: 'system', label: 'System printer' },
+]
 export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+export const label = <T extends string>(list: { value: T; label: string }[], value: T): string => list.find((x) => x.value === value)?.label ?? value
 
 function one<T>(r: { data: T | null; error: { message: string } | null }): T {
   if (r.error) throw r.error
@@ -188,7 +203,7 @@ export async function generateOccurrences(orgId: string, through: string, from?:
   return data ?? 0
 }
 
-export async function setOccurrenceStatus(id: string, status: 'scheduled' | 'cancelled', note?: string | null) {
+export async function setOccurrenceStatus(id: string, status: 'scheduled' | 'cancelled' | 'open', note?: string | null) {
   const { error } = await supabase.from('occurrences').update({ status, ...(note !== undefined ? { note } : {}) }).eq('id', id)
   if (error) throw error
 }
@@ -283,19 +298,21 @@ export interface TemplateInput {
 
 export async function saveTemplate(orgId: string, t: TemplateInput): Promise<LabelTemplate> {
   const row = { name: t.name, kind: t.kind, stock: t.stock, width_mm: t.width_mm, height_mm: t.height_mm, layout: t.layout as LabelTemplate['layout'], is_default: t.is_default }
-  if (t.id) {
-    if (t.is_default) {
-      // One default per kind: clear the previous default first.
-      const { error } = await supabase.from('label_templates').update({ is_default: false }).eq('org_id', orgId).eq('kind', t.kind).eq('is_default', true).neq('id', t.id)
-      if (error) throw error
-    }
-    return one(await supabase.from('label_templates').update({ ...row, version: undefined }).eq('id', t.id).select('*').single())
-  }
+  // One default per kind: the previous default steps aside first, and steps back if the save fails.
+  let previous: string | null = null
   if (t.is_default) {
-    const { error } = await supabase.from('label_templates').update({ is_default: false }).eq('org_id', orgId).eq('kind', t.kind).eq('is_default', true)
-    if (error) throw error
+    const prev = await supabase.from('label_templates').select('id').eq('org_id', orgId).eq('kind', t.kind).eq('is_default', true).neq('id', t.id ?? '00000000-0000-0000-0000-000000000000').maybeSingle()
+    if (prev.error) throw prev.error
+    previous = prev.data?.id ?? null
+    if (previous) { const { error } = await supabase.from('label_templates').update({ is_default: false }).eq('id', previous); if (error) throw error }
   }
-  return one(await supabase.from('label_templates').insert({ org_id: orgId, ...row }).select('*').single())
+  try {
+    if (t.id) return one(await supabase.from('label_templates').update(row).eq('id', t.id).select('*').single())
+    return one(await supabase.from('label_templates').insert({ org_id: orgId, ...row }).select('*').single())
+  } catch (e) {
+    if (previous) await supabase.from('label_templates').update({ is_default: true }).eq('id', previous)
+    throw e
+  }
 }
 
 export async function archiveTemplate(id: string) {
@@ -414,9 +431,19 @@ export function fmtInstant(iso: string, timeZone?: string | null): string {
   }
 }
 
-/** 'YYYY-MM-DD' for a date in the browser's zone, offset by n days. */
-export function dayOffset(n: number, from = new Date()): string {
-  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + n)
+/** Today as 'YYYY-MM-DD' in the church's zone (the browser's when none is known). */
+export function todayIn(timeZone?: string | null): string {
+  try {
+    if (timeZone) return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  } catch { /* unknown zone: fall through */ }
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** A 'YYYY-MM-DD' date n days from a date (today in the browser's zone by default). */
+export function dayOffset(n: number, from?: Date | string): string {
+  const base = typeof from === 'string' ? new Date(from + 'T00:00:00') : (from ?? new Date())
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + n)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 

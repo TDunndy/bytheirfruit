@@ -29,6 +29,11 @@ export const CREDENTIAL_KINDS: { value: Credential['kind']; label: string }[] = 
   { value: 'child_safety', label: 'Child safety' },
 ]
 
+export const FIELD_TYPES: { value: CustomFieldDef['field_type']; label: string }[] = [
+  { value: 'text', label: 'Text' }, { value: 'number', label: 'Number' }, { value: 'date', label: 'Date' },
+  { value: 'boolean', label: 'Yes or no' }, { value: 'select', label: 'Choice' }, { value: 'multiselect', label: 'Multiple choice' },
+]
+
 export const FLAGS: { value: HouseholdFlag['flag']; label: string; help: string }[] = [
   { value: 'exempt', label: 'Exempt', help: 'The serve policy does not apply to this family' },
   { value: 'joining_team', label: 'Joining a team', help: 'They have said yes and are being onboarded' },

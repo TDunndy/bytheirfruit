@@ -38,7 +38,7 @@ export function describeCriteria(c: unknown): string {
 }
 
 function bound(r: { min?: number | string; max?: number | string; min_inclusive?: boolean; max_inclusive?: boolean }, fmt: (v: number | string) => string): string {
-  const lo = r.min !== undefined ? `${r.min_inclusive ? 'from' : 'after'} ${fmt(r.min)}` : ''
+  const lo = r.min !== undefined ? `${r.min_inclusive ? 'from' : 'over'} ${fmt(r.min)}` : ''
   const hi = r.max !== undefined ? `${r.max_inclusive ? 'to' : 'under'} ${fmt(r.max)}` : ''
   return [lo, hi].filter(Boolean).join(' ')
 }
@@ -55,7 +55,7 @@ export function describeRule(r: Rule): string {
   }
 }
 
-export function CriteriaEditor({ value, onChange, fieldKeys }: { value: Criteria; onChange: (c: Criteria) => void; fieldKeys: string[] }) {
+export function CriteriaEditor({ value, onChange, fields }: { value: Criteria; onChange: (c: Criteria) => void; fields: { key: string; label: string }[] }) {
   const rules = value.rules
   const set = (i: number, r: Rule) => onChange({ ...value, rules: rules.map((x, j) => (j === i ? r : x)) })
   const remove = (i: number) => onChange({ ...value, rules: rules.filter((_, j) => j !== i) })
@@ -75,12 +75,12 @@ export function CriteriaEditor({ value, onChange, fieldKeys }: { value: Criteria
         <ul className="group rules">
           {rules.map((r, i) => (
             <li key={i} className="cell rule">
-              <button type="button" className="remove-btn" aria-label={`Remove rule ${i + 1}`} onClick={() => remove(i)}><RemoveGlyph /></button>
+              <button type="button" className="remove-btn" aria-label={`Remove rule ${i + 1}: ${describeRule(r)}`} onClick={() => remove(i)}><RemoveGlyph /></button>
               <div className="rule-body">
                 <select className="popup" aria-label="Rule kind" value={r.kind} onChange={(e) => set(i, blank(e.target.value as Rule['kind']))}>
                   {KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
                 </select>
-                <RuleFields rule={r} onChange={(x) => set(i, x)} fieldKeys={fieldKeys} />
+                <RuleFields rule={r} onChange={(x) => set(i, x)} fields={fields} />
               </div>
             </li>
           ))}
@@ -96,7 +96,7 @@ export function CriteriaEditor({ value, onChange, fieldKeys }: { value: Criteria
   )
 }
 
-function RuleFields({ rule, onChange, fieldKeys }: { rule: Rule; onChange: (r: Rule) => void; fieldKeys: string[] }) {
+function RuleFields({ rule, onChange, fields }: { rule: Rule; onChange: (r: Rule) => void; fields: { key: string; label: string }[] }) {
   if (rule.kind === 'age_months' || rule.kind === 'age_years') {
     const unit = rule.kind === 'age_months' ? 'months' : 'years'
     return (
@@ -135,9 +135,9 @@ function RuleFields({ rule, onChange, fieldKeys }: { rule: Rule; onChange: (r: R
   if (rule.kind === 'birthdate') {
     return (
       <div className="rule-row">
-        <input type="date" aria-label="Born on or after" value={rule.min ?? ''} onChange={(e) => onChange(e.target.value ? { ...rule, min: e.target.value, min_inclusive: true } : strip(rule, 'min'))} />
+        <input type="date" aria-label="Born on or after" value={rule.min ?? ''} data-empty={!rule.min} onChange={(e) => onChange(e.target.value ? { ...rule, min: e.target.value, min_inclusive: true } : strip(rule, 'min'))} />
         <span className="muted">and</span>
-        <input type="date" aria-label="Born on or before" value={rule.max ?? ''} onChange={(e) => onChange(e.target.value ? { ...rule, max: e.target.value, max_inclusive: true } : strip(rule, 'max'))} />
+        <input type="date" aria-label="Born on or before" value={rule.max ?? ''} data-empty={!rule.max} onChange={(e) => onChange(e.target.value ? { ...rule, max: e.target.value, max_inclusive: true } : strip(rule, 'max'))} />
       </div>
     )
   }
@@ -154,7 +154,7 @@ function RuleFields({ rule, onChange, fieldKeys }: { rule: Rule; onChange: (r: R
   return (
     <div className="rule-row">
       <select className="popup" aria-label="Field" value={rule.key} onChange={(e) => onChange({ ...rule, key: e.target.value })}>
-        <option value="">Field…</option>{fieldKeys.map((k) => <option key={k} value={k}>{k}</option>)}
+        <option value="">Field…</option>{fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
       </select>
       <span className="muted">equals</span>
       <input aria-label="Value" value={String(rule.value)} onChange={(e) => onChange({ ...rule, value: parse(e.target.value) })} />

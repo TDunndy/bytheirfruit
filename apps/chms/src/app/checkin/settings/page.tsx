@@ -6,10 +6,9 @@ import { NoAccess } from '@/components/checkin/CheckinNav'
 import { RemoveGlyph, Spinner, Switch } from '@/components/ui'
 import { errorMessage } from '@/lib/people'
 import { getSettings, guessTimeZone, saveSettings, setMyStaffPin, type CheckinSettings } from '@/lib/checkin'
-import { archiveFieldDef, listFieldDefs, saveFieldDef, type CustomFieldDef } from '@/lib/kids'
+import { FIELD_TYPES, archiveFieldDef, listFieldDefs, saveFieldDef, type CustomFieldDef } from '@/lib/kids'
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const FIELD_TYPES: CustomFieldDef['field_type'][] = ['text', 'number', 'date', 'boolean', 'select', 'multiselect']
 
 function zones(): string[] {
   try {
@@ -36,15 +35,16 @@ export default function SettingsPage() {
 
   if (!org) return <Spinner />
   if (!can('checkin.manage') && !can('checkin.station') && !can('org.manage')) return <NoAccess what="check-in settings" />
-  if (settings === undefined) return <Spinner />
+  if (settings === undefined && !error) return <Spinner />
 
   return (
     <div className="stack">
       {error && <p className="error" role="alert">{error}</p>}
-      {saved && <p className="sr-only" role="status">{saved}</p>}
+      <p className="muted" role="status">{saved}</p>
       {can('checkin.manage') && (
-        <SettingsForm initial={settings} onSave={async (v) => {
-          try { setSettings(await saveSettings(org.id, v)); setSaved('Settings saved'); setError('') } catch (e) { setError(errorMessage(e)) }
+        <SettingsForm initial={settings ?? null} onSave={async (v) => {
+          setSaved('')
+          try { setSettings(await saveSettings(org.id, v)); setSaved('Settings saved.'); setError('') } catch (e) { setError(errorMessage(e)) }
         }} />
       )}
       {(can('checkin.station') || can('checkin.manage')) && <PinForm onSave={async (pin) => { await setMyStaffPin(org.id, pin) }} />}
@@ -74,7 +74,7 @@ function SettingsForm({ initial, onSave }: { initial: CheckinSettings | null; on
         <legend className="group-head">Church</legend>
         <div className="group">
           <label className="field"><span>Time zone</span>
-            <input list="tz-list" value={tz} onChange={(e) => setTz(e.target.value)} required />
+            <input autoFocus list="tz-list" value={tz} onChange={(e) => setTz(e.target.value)} required />
             <datalist id="tz-list">{zones().map((z) => <option key={z} value={z} />)}</datalist>
           </label>
         </div>
@@ -115,6 +115,7 @@ function PinForm({ onSave }: { onSave: (pin: string) => Promise<void> }) {
       if (pin !== again) { setErr("The two PINs don't match."); return }
       try { await onSave(pin); setMsg('Your station PIN is set.'); setPin(''); setAgain('') } catch (e) { setErr(errorMessage(e)) }
     }}>
+      <p className="sr-only" role="status">{msg}</p>
       <fieldset>
         <legend className="group-head">My station PIN</legend>
         <div className="group">
@@ -124,7 +125,7 @@ function PinForm({ onSave }: { onSave: (pin: string) => Promise<void> }) {
         <p className="group-foot">Stations ask for it to override a room or exit the kiosk. Five wrong tries lock it for fifteen minutes.</p>
       </fieldset>
       {err && <p className="error" role="alert">{err}</p>}
-      {msg && <p className="muted" role="status">{msg}</p>}
+      {msg && <p className="muted">{msg}</p>}
       <div className="actions"><button type="submit" className="btn btn-filled">Set PIN</button></div>
     </form>
   )
@@ -148,10 +149,10 @@ function FieldDefs({ defs, onAdd, onArchive }: {
         {defs.length === 0 && <li className="cell muted">No custom fields yet.</li>}
         {defs.map((d) => (
           <li key={d.id} className="cell">
-            <button className="remove-btn" aria-label={`Remove the ${d.label} field`} onClick={() => onArchive(d.id)}><RemoveGlyph /></button>
+            <button className="remove-btn" aria-label={`Remove the ${d.label} field`} onClick={() => { if (window.confirm(`Remove the ${d.label} field? Values already entered are kept.`)) onArchive(d.id) }}><RemoveGlyph /></button>
             <span className="cell-text">
               <span className="cell-title">{d.label}{d.sensitive && <span className="chip chip-warn">Sensitive</span>}</span>
-              <span className="cell-sub">{d.applies_to === 'person' ? 'People' : 'Families'} · {d.field_type}{d.options.length ? ` · ${d.options.join(', ')}` : ''}</span>
+              <span className="cell-sub">{d.applies_to === 'person' ? 'People' : 'Families'} · {FIELD_TYPES.find((t) => t.value === d.field_type)?.label ?? d.field_type}{d.options.length ? ` · ${d.options.join(', ')}` : ''}</span>
             </span>
           </li>
         ))}
@@ -170,12 +171,12 @@ function FieldDefs({ defs, onAdd, onArchive }: {
               <select value={appliesTo} onChange={(e) => setAppliesTo(e.target.value as 'person' | 'household')}><option value="person">People</option><option value="household">Families</option></select>
             </label>
             <label className="field"><span>Type</span>
-              <select value={type} onChange={(e) => setType(e.target.value as CustomFieldDef['field_type'])}>{FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+              <select value={type} onChange={(e) => setType(e.target.value as CustomFieldDef['field_type'])}>{FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</select>
             </label>
             {(type === 'select' || type === 'multiselect') && <label className="field"><span>Options</span><input value={options} onChange={(e) => setOptions(e.target.value)} placeholder="Comma separated" /></label>}
             <div className="field"><Switch label="Sensitive (care team only)" checked={sensitive} onChange={setSensitive} /></div>
           </div>
-          <p className="group-foot">Sensitive values are stored apart from the directory and need kids.care to read.</p>
+          <p className="group-foot">Sensitive values are stored apart from the directory. Only the care team can read them.</p>
         </fieldset>
         <div className="actions"><button type="submit" className="btn btn-filled" disabled={!key}>Add field</button></div>
       </form>

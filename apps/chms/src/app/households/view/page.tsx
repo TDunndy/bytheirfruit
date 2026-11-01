@@ -100,7 +100,7 @@ function HouseholdView() {
           )}
         </ul>
       </section>
-      <HouseholdExtras householdId={household.id} memberNames={new Map(members.map((m) => [m.person.id, displayName(m.person)]))} />
+      <HouseholdExtras key={members.map((m) => m.person.id).join(',')} householdId={household.id} memberNames={new Map(members.map((m) => [m.person.id, displayName(m.person)]))} />
     </section>
   )
 }

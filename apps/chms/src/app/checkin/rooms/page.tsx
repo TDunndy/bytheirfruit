@@ -9,11 +9,13 @@ import { PersonPicker } from '@/components/PersonPicker'
 import { Avatar, IconTile, RemoveGlyph, Spinner, Switch } from '@/components/ui'
 import { errorMessage, listRoles, peopleNames, todayLocal, type OrgRole } from '@/lib/people'
 import {
-  AREA_KINDS, addAreaLeader, addRoomLeader, archiveArea, archiveRoom, getSettings, listAreaLeaders, listAreas, listRoomLeaders, listRooms,
+  AREA_KINDS, addAreaLeader, addRoomLeader, archiveArea, archiveRoom, getSettings, label, listAreaLeaders, listAreas, listRoomLeaders, listRooms,
   previewPeople, removeAreaLeader, removeRoomLeader, saveArea, saveRoom,
   type Area, type AreaLeader, type CheckinSettings, type PreviewPerson, type Room, type RoomInput, type RoomLeader,
 } from '@/lib/checkin'
 import { listFieldDefs } from '@/lib/kids'
+
+type Ctx = { on: string; settings: { cutoffMonth: number; cutoffDay: number; promotionMonth?: number; promotionDay?: number } }
 
 export default function RoomsPage() {
   const { org, can } = useSession()
@@ -25,10 +27,12 @@ export default function RoomsPage() {
   const [names, setNames] = useState<Map<string, string>>(new Map())
   const [settings, setSettings] = useState<CheckinSettings | null>(null)
   const [kids, setKids] = useState<PreviewPerson[]>([])
-  const [fieldKeys, setFieldKeys] = useState<string[]>([])
+  const [fields, setFields] = useState<{ key: string; label: string }[]>([])
+  const [showArchived, setShowArchived] = useState(false)
   const [editingArea, setEditingArea] = useState<Partial<Area> | null>(null)
   const [editingRoom, setEditingRoom] = useState<Partial<RoomInput> | null>(null)
   const [error, setError] = useState('')
+  const [status, setStatus] = useState('')
   const [loaded, setLoaded] = useState(false)
   const manage = can('checkin.manage')
   const allowed = manage || can('checkin.station') || can('kids.view')
@@ -37,10 +41,10 @@ export default function RoomsPage() {
     if (!org || !allowed) return
     try {
       const [a, r, al, rl, ro, s, defs] = await Promise.all([
-        listAreas(org.id), listRooms(org.id), listAreaLeaders(org.id), listRoomLeaders(org.id), listRoles(org.id), getSettings(org.id), listFieldDefs(org.id),
+        listAreas(org.id, true), listRooms(org.id, true), listAreaLeaders(org.id), listRoomLeaders(org.id), listRoles(org.id), getSettings(org.id), listFieldDefs(org.id),
       ])
       setAreas(a); setRooms(r); setAreaLeaders(al); setRoomLeaders(rl); setRoles(ro); setSettings(s)
-      setFieldKeys(defs.filter((d) => d.applies_to === 'person' && !d.sensitive).map((d) => d.key))
+      setFields(defs.filter((d) => d.applies_to === 'person' && !d.sensitive).map((d) => ({ key: d.key, label: d.label })))
       setNames(await peopleNames([...al, ...rl].map((l) => l.person_id ?? '')))
       if (can('kids.view')) setKids(await previewPeople(org.id))
       setError(''); setLoaded(true)
@@ -48,9 +52,17 @@ export default function RoomsPage() {
   }, [org, allowed, can])
   useEffect(() => { load() }, [load])
 
-  const act = async (fn: () => Promise<unknown>) => { try { await fn(); await load() } catch (e) { setError(errorMessage(e)) } }
-  const ctx = useMemo(() => ({ on: todayLocal(), settings: { cutoffMonth: settings?.grade_cutoff_month ?? 8, cutoffDay: settings?.grade_cutoff_day ?? 16 } }), [settings])
+  const act = async (fn: () => Promise<unknown>, done = 'Saved') => {
+    setStatus('')
+    try { await fn(); await load(); setStatus(done) } catch (e) { setError(errorMessage(e)) }
+  }
+  const ctx = useMemo<Ctx>(() => {
+    const p = settings?.promotion_date?.split('-')
+    return { on: todayLocal(), settings: { cutoffMonth: settings?.grade_cutoff_month ?? 8, cutoffDay: settings?.grade_cutoff_day ?? 16, ...(p ? { promotionMonth: Number(p[1]), promotionDay: Number(p[2]) } : {}) } }
+  }, [settings])
   const roleName = useMemo(() => new Map(roles.map((r) => [r.id, r.name])), [roles])
+  const liveAreas = areas.filter((a) => showArchived || !a.archived_at)
+  const liveRooms = rooms.filter((r) => showArchived || !r.archived_at)
 
   // How many known children each room's criteria would place today.
   const counts = useMemo(() => {
@@ -66,54 +78,76 @@ export default function RoomsPage() {
   if (!allowed) return <NoAccess what="rooms" />
   if (!loaded && !error) return <Spinner />
 
+  if (editingArea) {
+    return (
+      <AreaForm key={editingArea.id ?? 'new'} initial={editingArea} onCancel={() => setEditingArea(null)}
+        onSave={(a) => act(async () => { await saveArea(org.id, { ...a, id: editingArea.id }); setEditingArea(null) }, 'Area saved')} />
+    )
+  }
+  if (editingRoom) {
+    return (
+      <RoomForm key={editingRoom.id ?? 'new'} initial={editingRoom} areas={areas.filter((a) => !a.archived_at)} rooms={rooms.filter((r) => !r.archived_at)} kids={kids} ctx={ctx} fields={fields}
+        onCancel={() => setEditingRoom(null)}
+        onSave={(r) => act(async () => { await saveRoom(org.id, r); setEditingRoom(null) }, 'Room saved')} />
+    )
+  }
+
   return (
     <div className="stack">
+      <p className="sr-only" role="status">{status}</p>
       {error && <p className="error" role="alert">{error}</p>}
-      {manage && !editingArea && !editingRoom && (
-        <div className="row">
-          <button className="btn btn-tinted" onClick={() => setEditingArea({ name: '', kind: 'kids' })}>Add area</button>
-          {areas.length > 0 && <button className="btn btn-filled" onClick={() => setEditingRoom({ area_id: areas[0].id, criteria: { rules: [] }, priority: (rooms.length + 1) * 10, active: true })}>Add room</button>}
-        </div>
-      )}
-      {editingArea && (
-        <AreaForm initial={editingArea} onCancel={() => setEditingArea(null)}
-          onSave={(a) => act(async () => { await saveArea(org.id, { ...a, id: editingArea.id }); setEditingArea(null) })} />
-      )}
-      {editingRoom && (
-        <RoomForm initial={editingRoom} areas={areas} rooms={rooms} kids={kids} ctx={ctx} fieldKeys={fieldKeys} onCancel={() => setEditingRoom(null)}
-          onSave={(r) => act(async () => { await saveRoom(org.id, r); setEditingRoom(null) })} />
-      )}
-      {areas.length === 0 && !editingArea && <div className="card empty"><p className="muted">No areas yet. Start with the kids area, then add its rooms.</p></div>}
-      {areas.map((a) => (
+      <div className="toolbar-row">
+        {manage && <button className="btn btn-tinted" onClick={() => setEditingArea({ name: '', kind: 'kids' })}>Add area</button>}
+        {manage && areas.some((a) => !a.archived_at) && (
+          <button className="btn btn-filled" onClick={() => setEditingRoom({ area_id: areas.find((a) => !a.archived_at)?.id, criteria: { manual_only: true, rules: [] }, priority: (rooms.length + 1) * 10, active: true })}>Add room</button>
+        )}
+        <div className="toolbar-end"><Switch label="Show archived" checked={showArchived} onChange={setShowArchived} /></div>
+      </div>
+      {liveAreas.length === 0 && <div className="card empty"><p className="muted">No areas yet. Start with the kids area, then add its rooms.</p></div>}
+      {liveAreas.map((a) => (
         <section key={a.id} className="section">
           <div className="group-head-row">
-            <h2 className="group-head">{a.name} <span className="muted cap">· {a.kind}</span></h2>
+            <h2 className="area-title">
+              {a.name}
+              {a.kind !== 'kids' && <span className="chip">{label(AREA_KINDS, a.kind)}</span>}
+              {a.archived_at && <span className="chip">Archived</span>}
+            </h2>
             {manage && (
               <div className="actions">
-                <button className="btn btn-plain btn-small" onClick={() => setEditingArea(a)}>Edit</button>
-                <button className="btn btn-plain btn-small" onClick={() => act(() => archiveArea(a.id, true))}>Archive</button>
+                {!a.archived_at && <button className="btn btn-plain btn-small" aria-label={`Edit ${a.name}`} onClick={() => setEditingArea(a)}>Edit</button>}
+                {!a.archived_at ? (
+                  <button className="btn btn-plain btn-small" aria-label={`Archive ${a.name}`} onClick={() => {
+                    const n = rooms.filter((r) => r.area_id === a.id && !r.archived_at).length
+                    if (window.confirm(`Archive ${a.name}${n ? ` and its ${n} ${n === 1 ? 'room' : 'rooms'}` : ''}? Stations will stop offering them.`)) act(() => archiveArea(a.id, true), 'Area archived')
+                  }}>Archive</button>
+                ) : (
+                  <button className="btn btn-plain btn-small" aria-label={`Restore ${a.name}`} onClick={() => act(() => archiveArea(a.id, false), 'Area restored')}>Restore</button>
+                )}
               </div>
             )}
           </div>
+          <h3 className="group-head">Rooms{kids.length > 0 ? ' · who would land here today' : ''}</h3>
           <ul className="group">
-            {rooms.filter((r) => r.area_id === a.id).map((r) => (
+            {liveRooms.filter((r) => r.area_id === a.id).map((r) => (
               <li key={r.id} className="cell">
                 <IconTile name="room" />
                 <span className="cell-text">
-                  <span className="cell-title">{r.name}{!r.active && <span className="chip">Inactive</span>}</span>
+                  <span className="cell-title">{r.name}{!r.active && !r.archived_at && <span className="chip">Inactive</span>}{r.archived_at && <span className="chip">Archived</span>}</span>
                   <span className="cell-sub">{describeCriteria(r.criteria)}{r.capacity ? ` · up to ${r.capacity}` : ''}{r.children_per_adult ? ` · 1 adult per ${r.children_per_adult}` : ''}</span>
                 </span>
-                {kids.length > 0 && <span className="cell-value" title="Children who would land here today">{counts.get(r.id) ?? 0}</span>}
-                {manage && <button className="btn btn-plain btn-small" onClick={() => setEditingRoom(toInput(r))}>Edit</button>}
+                {kids.length > 0 && !r.archived_at && <span className="cell-value">{counts.get(r.id) ?? 0} today</span>}
+                {manage && !r.archived_at && <button className="btn btn-plain btn-small" aria-label={`Edit ${r.name}`} onClick={() => setEditingRoom(toInput(r))}>Edit</button>}
+                {manage && !r.archived_at && <button className="btn btn-plain btn-small" aria-label={`Archive ${r.name}`} onClick={() => { if (window.confirm(`Archive ${r.name}?`)) act(() => archiveRoom(r.id, true), 'Room archived') }}>Archive</button>}
+                {manage && r.archived_at && <button className="btn btn-plain btn-small" aria-label={`Restore ${r.name}`} onClick={() => act(() => archiveRoom(r.id, false), 'Room restored')}>Restore</button>}
               </li>
             ))}
-            {rooms.filter((r) => r.area_id === a.id).length === 0 && <li className="cell muted">No rooms in this area.</li>}
+            {liveRooms.filter((r) => r.area_id === a.id).length === 0 && <li className="cell muted">No rooms in this area.</li>}
           </ul>
           <Leaders title="Area leaders" leaders={areaLeaders.filter((l) => l.area_id === a.id)} names={names} roleName={roleName} roles={roles} manage={manage} orgId={org.id}
-            onAdd={(who, kind) => act(() => addAreaLeader(org.id, a.id, who, kind))} onRemove={(id) => act(() => removeAreaLeader(id))} />
-          {rooms.filter((r) => r.area_id === a.id).map((r) => (
+            onAdd={(who, kind) => act(() => addAreaLeader(org.id, a.id, who, kind), 'Leader added')} onRemove={(id) => act(() => removeAreaLeader(id), 'Leader removed')} />
+          {liveRooms.filter((r) => r.area_id === a.id && !r.archived_at).map((r) => (
             <Leaders key={r.id} title={`${r.name} leaders`} compact leaders={roomLeaders.filter((l) => l.room_id === r.id)} names={names} roleName={roleName} roles={roles} manage={manage} orgId={org.id}
-              onAdd={(who, kind) => act(() => addRoomLeader(org.id, r.id, who, kind))} onRemove={(id) => act(() => removeRoomLeader(id))} />
+              onAdd={(who, kind) => act(() => addRoomLeader(org.id, r.id, who, kind), 'Leader added')} onRemove={(id) => act(() => removeRoomLeader(id), 'Leader removed')} />
           ))}
         </section>
       ))}
@@ -139,46 +173,48 @@ function toInput(r: Room): RoomInput {
 function AreaForm({ initial, onSave, onCancel }: { initial: Partial<Area>; onSave: (a: { name: string; kind: Area['kind']; sort_order: number }) => Promise<void>; onCancel: () => void }) {
   const [name, setName] = useState(initial.name ?? '')
   const [kind, setKind] = useState<Area['kind']>(initial.kind ?? 'kids')
+  const [busy, setBusy] = useState(false)
   return (
-    <form className="card form" onSubmit={(e) => { e.preventDefault(); if (name.trim()) onSave({ name: name.trim(), kind, sort_order: initial.sort_order ?? 0 }) }}>
+    <form className="card form" onSubmit={async (e) => { e.preventDefault(); if (!name.trim()) return; setBusy(true); await onSave({ name: name.trim(), kind, sort_order: initial.sort_order ?? 0 }); setBusy(false) }}>
       <fieldset>
         <legend className="group-head">{initial.id ? 'Edit area' : 'New area'}</legend>
         <div className="group">
-          <label className="field"><span>Name</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. The Barn" required /></label>
+          <label className="field"><span>Name</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. The Barn" required /></label>
           <label className="field"><span>Kind</span>
-            <select value={kind} onChange={(e) => setKind(e.target.value as Area['kind'])}>{AREA_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}</select>
+            <select value={kind} onChange={(e) => setKind(e.target.value as Area['kind'])}>{AREA_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select>
           </label>
         </div>
       </fieldset>
-      <div className="actions"><button type="button" className="btn btn-tinted" onClick={onCancel}>Cancel</button><button type="submit" className="btn btn-filled">Save</button></div>
+      <div className="actions"><button type="button" className="btn btn-tinted" onClick={onCancel}>Cancel</button><button type="submit" className="btn btn-filled" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button></div>
     </form>
   )
 }
 
-function RoomForm({ initial, areas, rooms, kids, ctx, fieldKeys, onSave, onCancel }: {
+function RoomForm({ initial, areas, rooms, kids, ctx, fields, onSave, onCancel }: {
   initial: Partial<RoomInput>
   areas: Area[]
   rooms: Room[]
   kids: PreviewPerson[]
-  ctx: { on: string; settings: { cutoffMonth: number; cutoffDay: number } }
-  fieldKeys: string[]
+  ctx: Ctx
+  fields: { key: string; label: string }[]
   onSave: (r: RoomInput) => Promise<void>
   onCancel: () => void
 }) {
   const [v, setV] = useState<RoomInput>({
     id: initial.id, area_id: initial.area_id ?? areas[0]?.id ?? '', name: initial.name ?? '', capacity: initial.capacity ?? null,
     children_per_adult: initial.children_per_adult ?? null, overflow_room_id: initial.overflow_room_id ?? null, priority: initial.priority ?? 10,
-    criteria: initial.criteria ?? { rules: [] }, active: initial.active ?? true,
+    criteria: initial.criteria ?? { manual_only: true, rules: [] }, active: initial.active ?? true,
   })
+  const [busy, setBusy] = useState(false)
   const valid = isCriteria(v.criteria)
   const preview = useMemo(() => (valid ? kids.filter((k) => matches(v.criteria, child(k), ctx)) : []), [valid, kids, v.criteria, ctx])
   const num = (s: string) => (s === '' ? null : Number(s))
   return (
-    <form className="card form" onSubmit={(e) => { e.preventDefault(); if (v.name.trim() && valid) onSave({ ...v, name: v.name.trim() }) }}>
+    <form className="card form" onSubmit={async (e) => { e.preventDefault(); if (!v.name.trim() || !valid) return; setBusy(true); await onSave({ ...v, name: v.name.trim() }); setBusy(false) }}>
       <fieldset>
         <legend className="group-head">{v.id ? 'Edit room' : 'New room'}</legend>
         <div className="group">
-          <label className="field"><span>Name</span><input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="e.g. Ducklings" required /></label>
+          <label className="field"><span>Name</span><input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="e.g. Ducklings" required /></label>
           <label className="field"><span>Area</span>
             <select value={v.area_id} onChange={(e) => setV({ ...v, area_id: e.target.value })}>{areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
           </label>
@@ -194,8 +230,8 @@ function RoomForm({ initial, areas, rooms, kids, ctx, fieldKeys, onSave, onCance
         </div>
         <p className="group-foot">When several rooms match, the lowest priority number is suggested first.</p>
       </fieldset>
-      <CriteriaEditor value={v.criteria} onChange={(c) => setV({ ...v, criteria: c })} fieldKeys={fieldKeys} />
-      {!valid && <p className="error" role="alert">Each bound needs a value, and lower bounds must not exceed upper ones.</p>}
+      <CriteriaEditor value={v.criteria} onChange={(c) => setV({ ...v, criteria: c })} fields={fields} />
+      {!valid && <p className="error" role="alert">Add a rule or switch on Staff picks. Bounds need whole numbers in order; tags and field names cannot be blank.</p>}
       {kids.length > 0 && valid && !v.criteria.manual_only && (
         <section className="section">
           <h2 className="group-head">Who would land here today · {preview.length}</h2>
@@ -208,7 +244,7 @@ function RoomForm({ initial, areas, rooms, kids, ctx, fieldKeys, onSave, onCance
           </ul>
         </section>
       )}
-      <div className="actions"><button type="button" className="btn btn-tinted" onClick={onCancel}>Cancel</button><button type="submit" className="btn btn-filled" disabled={!valid}>Save room</button></div>
+      <div className="actions"><button type="button" className="btn btn-tinted" onClick={onCancel}>Cancel</button><button type="submit" className="btn btn-filled" disabled={!valid || busy}>{busy ? 'Saving…' : 'Save room'}</button></div>
     </form>
   )
 }
@@ -226,26 +262,30 @@ function Leaders({ title, leaders, names, roleName, roles, manage, orgId, compac
   onRemove: (id: string) => void
 }) {
   const [kind, setKind] = useState<'director' | 'leader'>('leader')
+  const [adding, setAdding] = useState(false)
   if (!manage && leaders.length === 0) return null
+  const nameOf = (l: AreaLeader | RoomLeader) => (l.person_id ? names.get(l.person_id) ?? 'Someone' : `${roleName.get(l.role_id ?? '') ?? 'Role'} (everyone with the role)`)
   return (
     <div className={compact ? 'leaders compact' : 'leaders'}>
       <h3 className="group-head">{title}</h3>
       <ul className="group">
         {leaders.map((l) => (
           <li key={l.id} className="cell">
-            {manage && <button className="remove-btn" aria-label="Remove leader" onClick={() => onRemove(l.id)}><RemoveGlyph /></button>}
+            {manage && <button className="remove-btn" aria-label={`Remove ${nameOf(l)}`} onClick={() => onRemove(l.id)}><RemoveGlyph /></button>}
             {l.person_id ? <Avatar name={names.get(l.person_id) ?? 'Someone'} size="xs" /> : <IconTile name="board" />}
-            <span className="cell-title">{l.person_id ? names.get(l.person_id) ?? 'Someone' : `${roleName.get(l.role_id ?? '') ?? 'Role'} (everyone with the role)`}</span>
+            <span className="cell-title">{nameOf(l)}</span>
             <span className="cell-value cap">{l.kind}</span>
           </li>
         ))}
-        {manage && (
+        {manage && !adding && <li><button className="cell-link cell-action" onClick={() => setAdding(true)}>Add leader</button></li>}
+        {manage && adding && (
           <li className="cell add-member">
             <select className="popup" aria-label="Leader kind" value={kind} onChange={(e) => setKind(e.target.value as 'director' | 'leader')}><option value="leader">Leader</option><option value="director">Director</option></select>
-            <PersonPicker orgId={orgId} placeholder="Add a person" onPick={(p) => onAdd({ personId: p.id }, kind)} />
-            <select className="row-select action" aria-label="Add a role" value="" onChange={(e) => e.target.value && onAdd({ roleId: e.target.value }, kind)}>
+            <PersonPicker orgId={orgId} placeholder="Add a person" onPick={(p) => { onAdd({ personId: p.id }, kind); setAdding(false) }} />
+            <select className="row-select action" aria-label="Add a role" value="" onChange={(e) => { if (e.target.value) { onAdd({ roleId: e.target.value }, kind); setAdding(false) } }}>
               <option value="">Or a role…</option>{roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
+            <button type="button" className="btn btn-plain btn-small" onClick={() => setAdding(false)}>Cancel</button>
           </li>
         )}
       </ul>

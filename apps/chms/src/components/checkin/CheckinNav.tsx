@@ -6,13 +6,13 @@ import { useSession, type Permission } from '../Session'
 
 const TABS: { href: string; label: string; needs?: Permission[] }[] = [
   { href: '/checkin', label: 'Overview' },
-  { href: '/checkin/rooms', label: 'Rooms' },
-  { href: '/checkin/schedules', label: 'Schedules' },
-  { href: '/checkin/volunteers', label: 'Volunteers' },
-  { href: '/checkin/labels', label: 'Labels' },
-  { href: '/checkin/stations', label: 'Stations' },
-  { href: '/checkin/baselines', label: 'Baselines', needs: ['checkin.manage', 'attendance.reports'] },
-  { href: '/checkin/settings', label: 'Settings' },
+  { href: '/checkin/rooms', label: 'Rooms', needs: ['checkin.manage', 'checkin.station', 'kids.view'] },
+  { href: '/checkin/schedules', label: 'Schedules', needs: ['checkin.manage', 'checkin.station', 'kids.view', 'attendance.reports'] },
+  { href: '/checkin/volunteers', label: 'Volunteers', needs: ['checkin.manage', 'checkin.station', 'attendance.reports'] },
+  { href: '/checkin/labels', label: 'Labels', needs: ['checkin.manage', 'checkin.station'] },
+  { href: '/checkin/stations', label: 'Stations', needs: ['checkin.manage', 'checkin.station'] },
+  { href: '/checkin/baselines', label: 'Past check-ins', needs: ['checkin.manage', 'attendance.reports'] },
+  { href: '/checkin/settings', label: 'Settings', needs: ['checkin.manage', 'checkin.station', 'org.manage'] },
 ]
 
 /** The section's tabs: a scrollable pill row on phones, a second-level list on wide screens. */

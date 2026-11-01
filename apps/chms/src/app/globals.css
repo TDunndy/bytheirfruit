@@ -1002,7 +1002,7 @@ select { cursor: pointer; }
 }
 
 /* ------------------------------------------------------------ check-in -- */
-.subnav { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 14px; margin: -2px 0 6px; scrollbar-width: none; }
+.subnav { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0 14px; margin: -6px 0 6px; scrollbar-width: none; }
 .subnav::-webkit-scrollbar { display: none; }
 .subnav-item {
   flex: none; padding: 7px 14px; border-radius: 999px; font-size: 15px; line-height: 20px;
@@ -1010,43 +1010,68 @@ select { cursor: pointer; }
 }
 .subnav-item:hover { text-decoration: none; background: var(--fill-2); }
 .subnav-item.active { background: var(--tint-fill); color: #fff; }
-.group-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.group-head-row .group-head { margin-right: auto; }
-.group-head .chip, .cell-title .chip { margin-left: 8px; }
+.subnav-item:focus-visible { outline-offset: -3px; }
+.stack > .section { margin-bottom: 0; }
+.group-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
+.group-head-row .group-head { margin-right: auto; margin-bottom: 0; }
+.area-title { font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.2px; margin: 0 0 8px; display: flex; align-items: center; gap: 10px; }
+.group-head .chip, .cell-title .chip, .field > span:first-child .chip { margin-left: 8px; }
 .callout { display: flex; gap: 12px; align-items: flex-start; }
 .callout p { margin: 2px 0 0; }
 .callout-icon { flex: none; color: var(--orange-text); margin-top: 1px; }
 .chip-warn { background: var(--visitor-bg); color: var(--visitor-fg); }
 .chip-tint { background: var(--tint-soft); color: var(--tint-soft-text); }
-.chip-check { cursor: pointer; }
+.chip-check { position: relative; cursor: pointer; }
 .chip-check input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .chip-check.on { background: var(--tint-fill); color: #fff; }
 .chip-check:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chip-remove { background: none; border: 0; padding: 0 0 0 4px; color: inherit; cursor: pointer; font: inherit; line-height: 1; }
 .rules .rule { align-items: flex-start; }
+.rules .rule > .remove-btn { margin-top: 0; margin-bottom: 0; }
 .rule-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .rule-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .rule-row input[type="number"] { width: 72px; }
-.rule-row input, .rule-body > input { padding: 6px 10px; border: var(--hairline) solid var(--separator-opaque); border-radius: 8px; background: var(--bg-raised); min-height: 36px; }
+.field-input, .rule-row input, .rule-body > input, .baseline-edit input, .add-member input:not([type="checkbox"]):not([type="radio"]) {
+  border: 0; background: var(--fill-3); border-radius: 8px; height: 32px; padding: 0 10px; color: var(--label); min-width: 0;
+}
+.add-member input:not([type="checkbox"]):not([type="radio"]) { flex: 1; min-width: 120px; }
+.group .field > .switch-label { flex: 1; justify-content: space-between; }
+.group input[data-empty="true"]::-webkit-datetime-edit { color: var(--label-2); }
 .leaders { margin-top: 12px; }
 .leaders.compact .group-head { font-size: 13px; }
 .preview .cell { min-height: 40px; padding-top: 7px; padding-bottom: 7px; }
 .slot-day { margin-top: 16px; }
 .warn-text { color: var(--orange-text); }
 .warn-icon { color: var(--orange-text); flex: none; }
-.baseline-edit input { width: 92px; padding: 6px 10px; border: var(--hairline) solid var(--separator-opaque); border-radius: 8px; background: var(--bg-raised); min-height: 36px; text-align: right; }
+.baseline-edit { flex: none; flex-wrap: nowrap; }
+.baseline-edit input { width: 92px; text-align: right; }
 .label-preview { display: inline-block; overflow: hidden; background: #fff; border: var(--hairline) solid var(--separator-opaque); border-radius: 4px; flex: none; }
 .label-preview.large { border-radius: 6px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
-.layout-edit { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
-.layout-edit textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; min-height: 240px; }
+.layout-edit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.layout-edit textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; min-height: 240px; }
 .layout-preview { padding: 8px 0; max-width: 100%; overflow: auto; }
-.photo { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; flex: none; }
+details.disclosure > summary { cursor: pointer; color: var(--tint-text); padding: 8px 0; list-style: none; }
+details.disclosure > summary::-webkit-details-marker { display: none; }
+details.disclosure > summary::before { content: '▸ '; }
+details.disclosure[open] > summary::before { content: '▾ '; }
+.photo { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; flex: none; }
 .file-btn { cursor: pointer; }
+.file-btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .pre { white-space: pre-wrap; }
-.btn-plain.destructive, .link-btn.destructive { color: var(--red-text); }
 .status-closed { background: var(--inactive-bg); color: var(--inactive-fg); }
-.add-member input, .add-member .popup { min-height: 36px; }
-.add-member input[type="text"], .add-member input:not([type]), .add-member input[type="date"] { flex: 1; min-width: 120px; padding: 6px 10px; border: var(--hairline) solid var(--separator-opaque); border-radius: 8px; background: var(--bg-raised); }
-@media (max-width: 760px) {
-  .layout-edit { grid-template-columns: minmax(0, 1fr); }
+.add-member input, .add-member .popup { min-height: 32px; }
+@media (max-width: 767px), (pointer: coarse) {
+  .subnav-item { min-height: 44px; padding: 12px 16px; }
+  .chip-check { min-height: 36px; padding: 0 12px; }
+  .field .chips { gap: 8px; padding: 4px 0; }
+  .field-input, .rule-row input, .rule-body > input, .baseline-edit input, .add-member input:not([type="checkbox"]):not([type="radio"]) { height: 44px; border-radius: 10px; }
+  .add-member input, .add-member .popup { min-height: 44px; }
+}
+@media (max-width: 767px) {
+  .layout-edit textarea { font-size: 16px; }
   .group-head-row { flex-wrap: wrap; }
+  .subnav { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; }
+}
+@media (forced-colors: active) {
+  .subnav-item.active, .chip-check.on { outline: 2px solid Highlight; outline-offset: -2px; }
 }

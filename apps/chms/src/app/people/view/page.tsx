@@ -8,7 +8,7 @@ import { PersonForm, StatusBadge } from '@/components/PersonParts'
 import { PersonPicker } from '@/components/PersonPicker'
 import { Avatar, BackLink, Chevron, IconTile, RemoveGlyph, Spinner } from '@/components/ui'
 import { useDocumentTitle } from '@/components/useDocumentTitle'
-import { KidsSections } from '@/components/kids/KidsSections'
+import { KidsSections, KidsSideSections } from '@/components/kids/KidsSections'
 import {
   addChartLine, addNote, addRole, addToHousehold, age, chartFor, createHousehold, deleteNote, displayName,
   errorMessage, getPerson, historyFor, householdsOf, listRoles, notesFor, peopleNames, personRoleIds,
@@ -86,6 +86,9 @@ function PersonView() {
     person.address_line1, person.address_line2,
     [[person.city, person.state].filter(Boolean).join(', '), person.postal_code].filter(Boolean).join(' '),
   ].filter(Boolean)
+
+  // A child: under 18, or a child in one of their families (guests often have no birthdate yet).
+  const isChild = (a !== null && a < 18) || families.some((f) => f.relationship === 'child')
 
   const hasDetails = Boolean(person.email || person.phone || addressLines.length > 0 || person.birthdate || person.gender
     || person.first_visit_date || person.joined_date || person.tags.length > 0)
@@ -173,7 +176,7 @@ function PersonView() {
               </ul>
             </section>
 
-            <KidsSections person={person} onChange={load} />
+            <KidsSections person={person} isChild={isChild} onChange={load} />
 
             {can('people.notes') && (
               <NotesCard
@@ -273,6 +276,8 @@ function PersonView() {
                 ))}
               </ul>
             </section>
+
+            <KidsSideSections person={person} isChild={isChild} onChange={load} />
 
             <section className="section">
               <h2 className="group-head">History</h2>
