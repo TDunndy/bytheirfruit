@@ -8,7 +8,8 @@ Live at https://bytheirfruit.church.
 | Layer | What | Where |
 |---|---|---|
 | Public site | Next.js 14 static export (`output: 'export'`) | `src/` → Cloudflare Pages |
-| Church app (ChMS) | Next.js 14 static export at app.bytheirfruit.church, same Supabase project and accounts (ADR-0004) | `apps/chms/` → its own Cloudflare Pages project |
+| Church app (ChMS) | Next.js 14 static export at app.bytheirfruit.church, same Supabase project and accounts (ADR-0004) | `apps/chms/` → Cloudflare Worker `bytheirfruit-chms` |
+| Shared check-in logic | Ages, grades, room criteria, labels, codes (ADR-0005) | `packages/core/` (vitest) |
 | Church pages for crawlers | Cloudflare Pages Function injecting meta + JSON-LD into the SPA shell | `functions/church/[[path]].ts` |
 | Sitemaps | Cloudflare Pages Functions | `functions/sitemap*.ts` |
 | Database, auth, storage | Supabase project `ffqmbhftivmiubvtzhhr` | `supabase/migrations/` |

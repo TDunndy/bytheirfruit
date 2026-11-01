@@ -14,6 +14,7 @@ frontend. The order below keeps the live site working at every step.
 | 4a. Profiles private (restrictive policy) | **applied to production on 2026-10-27** (20261027190746); anon reads 0 profiles, users their own row, admins all. The one review carrying reviewer coordinates was cleared (copy kept in `review_locations`) |
 | 4b. Organizations (tenancy) | **applied to production on 2026-10-28** (20261028043405), written without drop/revoke statements so no confirmation prompt was needed; backfill created one organization (the admin's test listing) |
 | 4c. Church app: People | **applied to production on 2026-10-31** (20261031041359); `send-verification-email` redeployed (v12, free-mail website domains no longer auto-verify). Pilot data for Lakewood Ranch Baptist Church (owner, 6 staff, chart, 100 fictional people) loaded with a seed script kept outside the repo; the public listing stays unclaimed |
+| 4d. Check-in A/B/C + core | **pending** (branch `claude/gifted-knuth-8pa9bv`): `20261101120000_chms_checkin_a_people`, `20261101130000_chms_checkin_b_config`, `20261101140000_chms_checkin_c_attendance`. A drops/re-adds the `org_roles` and `people_audit` CHECK constraints, so the owner must approve the connector's prompt within 60 s. After A–C: deploy `document-url` and redeploy `send-verification-email` (station guard), regenerate types, load `supabase/seed/lwr-checkin.sql` (idempotent; run as the owner), run the advisors, verify as Tyler (Barn rooms, a week's volunteer schedule), fast-forward `main` |
 | 4. Privacy lockdown | pending: its policy and column drops need the owner to approve Supabase's confirmation prompt within 60 s; profiles are already private via 4a. Apply together with `revoke execute ... from anon` on `is_org_member`, `has_active_subscription` and `org_role_rank` (anon can execute them through default privileges; they return false without a login) |
 | 5. Dashboard settings | pending |
 | Church app hosting | **live on 2026-11-01**: Cloudflare Worker `bytheirfruit-chms` (Workers Builds from `main`, root `apps/chms`, build `npm run build`, deploy `npx wrangler deploy`, config `apps/chms/wrangler.jsonc`), custom domain app.bytheirfruit.church; Supabase Auth redirect URL `https://app.bytheirfruit.church/**` |
@@ -92,6 +93,7 @@ paused, ADR-0003).
 
 ```bash
 npx supabase functions deploy send-verification-email
+npx supabase functions deploy document-url
 npx supabase functions deploy notify-admin-report
 npx supabase functions deploy notify-new-review --no-verify-jwt
 npx supabase functions deploy stripe-webhook --no-verify-jwt

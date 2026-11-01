@@ -50,6 +50,26 @@ npm run test:db          # migrations + RLS tests on a local Postgres
 npm run db:types         # same, plus regenerate database.types.ts
 ```
 
+## Check-in (migrations A–C, ADR-0005)
+- `attendance_events`, `checkin_sessions`, `security_codes`, `station_alerts`,
+  `access_log`, `chms_audit`, `people_audit`, `domain_events` and
+  `chms_private.audit_actors` are append-only for everyone, the database owner
+  included. Never add an UPDATE/DELETE policy or drop a `deny_changes` trigger.
+  Write attendance only through `ingest()`.
+- Permissions are the one list in `chms_private.all_permissions()`. `kids.view`
+  gates children in the directory; `kids.care` care notes and restriction
+  reasons; `custody.manage` pickups and custody documents; `checkin.manage`
+  configuration; `checkin.station` running a station. Care and custody imply
+  `kids.view` (CHECK on `org_roles`).
+- Stations are auth users with `app_metadata.kind = 'station'`, known only
+  through `chms_private.station_principals` (`chms_private.my_station()`).
+  Never trust the token's `station_id` claim. Every public RPC granted to
+  `authenticated` must refuse `public.is_station()` unless stations need it.
+- Room criteria, ages, grades and labels are computed in `packages/core`
+  (pure TypeScript, vitest); `chms_private.check_room_criteria` mirrors
+  `isCriteria`. Change both together.
+- Events carry ids and codes, never names or free text.
+
 ## Church app (`apps/chms`)
 - Separate Next.js app with its own `package.json`; run `npm ci` and its
   scripts inside `apps/chms`. It imports DB types only (`import type` from
