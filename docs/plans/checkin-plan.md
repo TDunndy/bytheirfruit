@@ -152,7 +152,7 @@ Permissions are hard-coded in three places: the `org_roles` CHECK constraint, th
 - **Writes go through `ingest(commands jsonb)`**, one definer RPC whose commands run in order:
   - `guest.create`: client ids for person, household, members, care, consent. People are tagged guest and unverified, never auto-merged; a "possible duplicates" staff queue and merge tool come in 1c;
   - `session.start`, then attendance events, then `alert.raise`;
-  - each command runs in its own savepoint and returns `accepted` / `duplicate` / `rejected(reason)` without blocking the rest;
+  - each command runs in its own savepoint and returns `accepted` / `duplicate` / `retry` (deadlock or lock timeout after three tries; resend) / `rejected(reason)` without blocking the rest;
   - scope comes from `my_station()` or room scope (§5).
 
 ### 3.4 Migration D: notifications (Phase 3)
@@ -238,7 +238,7 @@ This is idempotent, so retries are safe, and rejections land in a staff queue.
 
 **Live updates:**
 - Realtime **Broadcast from Database**: the projection trigger sends to the private topic `org:{org}:occ:{occ}`, with RLS on `realtime.messages` via membership or `my_station()`.
-- Catch-up pulls `attendance.rev > last_rev − overlap` and dedupes.
+- Catch-up pulls `attendance.rev > last_rev − overlap` and dedupes. Revs are drawn before commit, so a row can commit with a smaller rev than one already seen: overlap by at least 1000, or take `updated_at` within the last two minutes.
 - Both are guarded for CI.
 
 **Outage matrix (the drill tests both cases):**

@@ -294,7 +294,6 @@ create table chms_private.station_principals (
 -- One live pairing per station; a re-pair revokes the old row and keeps it.
 create unique index idx_station_principals_live on chms_private.station_principals (station_id) where revoked_at is null;
 alter table chms_private.station_principals enable row level security;
-revoke all on table chms_private.station_principals from anon, authenticated;
 
 create or replace function chms_private.my_station()
 returns uuid language sql stable security definer set search_path = public as $$
@@ -922,7 +921,6 @@ create table chms_private.staff_pins (
   foreign key (person_id, org_id) references public.people (id, org_id) on delete cascade
 );
 alter table chms_private.staff_pins enable row level security;
-revoke all on table chms_private.staff_pins from anon, authenticated;
 
 -- A successful PIN check at a station, so ingest() can attribute the next
 -- half hour of that station's actions to the person.
@@ -934,7 +932,6 @@ create table chms_private.pin_verifications (
 );
 create index idx_pin_verifications_recent on chms_private.pin_verifications (station_id, person_id, verified_at desc);
 alter table chms_private.pin_verifications enable row level security;
-revoke all on table chms_private.pin_verifications from anon, authenticated;
 
 create or replace function public.set_my_staff_pin(p_org_id uuid, p_pin text)
 returns void language plpgsql security definer set search_path = public, extensions as $$
@@ -1062,8 +1059,6 @@ begin
   return new;
 end;
 $$;
-revoke execute on function public.drop_station_profile() from public, anon, authenticated;
-drop trigger if exists on_auth_user_station on auth.users;
 create trigger on_auth_user_station after update of raw_app_meta_data on auth.users
   for each row execute function public.drop_station_profile();
 
@@ -1161,64 +1156,6 @@ begin
   end if;
 end $$;
 
--- verify_claim_code: same body as 20261031041359, plus the station guard.
-create or replace function public.verify_claim_code(p_church_id uuid, p_code text)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare
-  v_uid uuid := auth.uid();
-  v_claim public.church_claims%rowtype;
-  v_hash text;
-begin
-  if v_uid is null or public.is_station() then
-    raise exception 'Sign in required' using errcode = '42501';
-  end if;
-  select * into v_claim from public.church_claims
-  where church_id = p_church_id and user_id = v_uid for update;
-  if not found then
-    return jsonb_build_object('ok', false, 'error', 'No pending claim found. Please request a new code.');
-  end if;
-  if v_claim.review_status = 'rejected' then
-    return jsonb_build_object('ok', false, 'error', 'This claim was not approved. Request a new code to apply again.');
-  end if;
-  if v_claim.verified then
-    return jsonb_build_object('ok', true, 'already_verified', true,
-      'manual_review', v_claim.review_status = 'pending_review');
-  end if;
-  if v_claim.verify_attempts >= 5 then
-    return jsonb_build_object('ok', false, 'error', 'Too many attempts. Please request a new code.');
-  end if;
-  if v_claim.code_expires_at is null or v_claim.code_expires_at < now() then
-    return jsonb_build_object('ok', false, 'error', 'This code has expired. Please request a new code.');
-  end if;
-  v_hash := encode(extensions.digest(trim(p_code), 'sha256'), 'hex');
-  if v_claim.verification_code_hash is null or v_hash <> v_claim.verification_code_hash then
-    update public.church_claims set verify_attempts = verify_attempts + 1 where id = v_claim.id;
-    return jsonb_build_object('ok', false, 'error', 'Incorrect code. Please check your email and try again.');
-  end if;
-  if exists (select 1 from public.churches where id = p_church_id and claimed_by is not null and claimed_by <> v_uid) then
-    return jsonb_build_object('ok', false, 'error', 'This church has already been claimed.');
-  end if;
-  if v_claim.review_status <> 'pending_review'
-     and exists (select 1 from public.profiles where id = v_uid and role in ('admin', 'moderator')) then
-    v_claim.review_status := 'pending_review';
-    update public.church_claims
-      set review_status = 'pending_review', review_note = 'claimant is a site moderator; needs another reviewer'
-      where id = v_claim.id;
-  end if;
-  update public.church_claims
-    set verified = true, verified_at = now(), verification_code_hash = null
-    where id = v_claim.id;
-  if v_claim.review_status = 'pending_review' then
-    -- Email proven, ownership not: an admin approves through review_church_claim().
-    return jsonb_build_object('ok', true, 'manual_review', true);
-  end if;
-  update public.churches
-    set claimed_by = v_uid, claimed_at = now(), claim_email = v_claim.claim_email, claim_verified = true
-    where id = p_church_id;
-  return jsonb_build_object('ok', true, 'manual_review', false);
-end;
-$$;
-
 -- ------------------------------------------- audit, events, touch --
 create or replace function chms_private.config_events()
 returns trigger language plpgsql security definer set search_path = public as $$
@@ -1280,24 +1217,10 @@ create policy "Configuration audit follows check-in permissions" on public.chms_
                                                  or org_id = any ((select chms_private.orgs_with_permission('custody.manage'))::uuid[]))));
 
 -- ------------------------------------------------------------ grants --
-revoke execute on function
-  public.generate_occurrences(uuid, date, date), public.set_my_staff_pin(uuid, text), public.station_staff(),
-  public.verify_staff_pin(uuid, text), public.station_self()
-  from public, anon;
 grant execute on function
   public.generate_occurrences(uuid, date, date), public.set_my_staff_pin(uuid, text), public.station_staff(),
   public.verify_staff_pin(uuid, text), public.station_self()
   to authenticated, service_role;
-
--- Policy helpers (my_station, my_station_org, station_room_ids,
--- check_room_criteria) are evaluated as the caller and stay callable.
-revoke execute on function
-  chms_private.generate_all_occurrences(), chms_private.schedule_changed(), chms_private.settings_changed(), chms_private.require_time_zone(),
-  chms_private.config_events(), chms_private.stamp_set_by(), chms_private.check_assignment(), chms_private.check_overflow(),
-  chms_private.pin_leader(), chms_private.protect_occurrence(), chms_private.deny_station_writes(),
-  chms_private.active_restriction(uuid), chms_private.active_room_override(uuid)
-  from public, anon, authenticated;
-revoke execute on function public.handle_new_user() from public, anon, authenticated;
 
 -- ------------------------------------------------------------- cron --
 do $$

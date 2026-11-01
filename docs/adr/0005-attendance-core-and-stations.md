@@ -34,7 +34,10 @@ second check-in. `attendance` is recomputed per `(occurrence, person)` by
 folding every non-voided event in device order under an advisory lock, so a
 check-out that reaches the server before its move still folds correctly,
 and genuine inversions are kept and flagged (`anomalies`). A `rev` sequence
-lets clients catch up (`rev > last_rev − overlap`). `room_stays` is a view
+lets clients catch up (`rev > last_rev − overlap`; revs are drawn before
+commit, so a row can land with a smaller rev than one already seen: overlap
+by at least 1000, or take rows updated in the last two minutes, and dedupe
+by id). `room_stays` is a view
 over the same log, so time in a room is always reconstructable (exposure
 notices depend on it). We chose this over a generic event store: the
 tables are typed, indexed and readable by SQL reports.
@@ -43,8 +46,9 @@ tables are typed, indexed and readable by SQL reports.
 
 `ingest(commands)` is the only way to write sessions, events, alerts and
 guest families. Each command runs in its own savepoint and answers
-`accepted`, `duplicate` or `rejected(reason)`, so one bad command never
-blocks the rest. It enforces the station's room scope, refuses restricted
+`accepted`, `duplicate`, `retry` (a deadlock or lock timeout that outlived
+three attempts; the outbox resends) or `rejected(reason)`, so one bad
+command never blocks the rest. It enforces the station's room scope, refuses restricted
 check-ins and restricted pickups with `see_staff` plus a silent
 `station_alert`, binds security codes, and alerts on duplicate codes and
 missing background checks. The API has no INSERT policy on any log table.

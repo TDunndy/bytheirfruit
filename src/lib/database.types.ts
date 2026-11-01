@@ -1605,17 +1605,23 @@ isOneToOne: false
                   ]
                 },"security_codes": {
                   Row: {
-                    "allocated_at": string,"code": string,"id": string,"issued_at": string | null,"local_date": string,"org_id": string,"session_id": string | null,"station_id": string | null
+                    "allocated_at": string,"bound_person_id": string | null,"code": string,"id": string,"issued_at": string | null,"local_date": string,"org_id": string,"session_id": string | null,"station_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "allocated_at"?: string,"code": string,"id"?: string,"issued_at"?: string | null,"local_date": string,"org_id": string,"session_id"?: string | null,"station_id"?: string | null
+                    "allocated_at"?: string,"bound_person_id"?: string | null,"code": string,"id"?: string,"issued_at"?: string | null,"local_date": string,"org_id": string,"session_id"?: string | null,"station_id"?: string | null
                   }
                   Update: {
-                    "allocated_at"?: string,"code"?: string,"id"?: string,"issued_at"?: string | null,"local_date"?: string,"org_id"?: string,"session_id"?: string | null,"station_id"?: string | null
+                    "allocated_at"?: string,"bound_person_id"?: string | null,"code"?: string,"id"?: string,"issued_at"?: string | null,"local_date"?: string,"org_id"?: string,"session_id"?: string | null,"station_id"?: string | null
                   }
                   Relationships: [
                     {
+      foreignKeyName: "security_codes_bound_person_id_org_id_fkey"
+      columns: ["bound_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
       foreignKeyName: "security_codes_org_id_fkey"
       columns: ["org_id"]
 isOneToOne: false

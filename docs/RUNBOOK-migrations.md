@@ -14,7 +14,7 @@ frontend. The order below keeps the live site working at every step.
 | 4a. Profiles private (restrictive policy) | **applied to production on 2026-10-27** (20261027190746); anon reads 0 profiles, users their own row, admins all. The one review carrying reviewer coordinates was cleared (copy kept in `review_locations`) |
 | 4b. Organizations (tenancy) | **applied to production on 2026-10-28** (20261028043405), written without drop/revoke statements so no confirmation prompt was needed; backfill created one organization (the admin's test listing) |
 | 4c. Church app: People | **applied to production on 2026-10-31** (20261031041359); `send-verification-email` redeployed (v12, free-mail website domains no longer auto-verify). Pilot data for Lakewood Ranch Baptist Church (owner, 6 staff, chart, 100 fictional people) loaded with a seed script kept outside the repo; the public listing stays unclaimed |
-| 4d. Check-in A/B/C + core | **pending** (branch `claude/gifted-knuth-8pa9bv`): `20261101120000_chms_checkin_a_people`, `20261101130000_chms_checkin_b_config`, `20261101140000_chms_checkin_c_attendance`. A drops/re-adds the `org_roles` and `people_audit` CHECK constraints, so the owner must approve the connector's prompt within 60 s. After A–C: deploy `document-url` and redeploy `send-verification-email` (station guard), regenerate types, load `supabase/seed/lwr-checkin.sql` (idempotent; run as the owner), run the advisors, verify as Tyler (Barn rooms, a week's volunteer schedule), fast-forward `main` |
+| 4d. Check-in A/B/C + core | **applied to production on 2026-11-01**: `20261101164119_chms_checkin_a_people` (connector `apply_migration`), then `20261101172345_chms_checkin_b_config`, `20261101172346_chms_checkin_b_grants`, `20261101172347_chms_checkin_c_attendance`, `20261101172348_chms_checkin_c_grants` and `20261101174720_chms_checkin_c_review_fixes` through the connector's `execute_sql`, with their rows inserted into `supabase_migrations.schema_migrations` by hand (see below). `document-url` deployed (v1, verify_jwt), `send-verification-email` redeployed (v13, station guard), `supabase/seed/lwr-checkin.sql` loaded (3 areas, 10 rooms, 2 services, 18 occurrences, 18 volunteer needs, 3 label templates, 4 stations), advisors clean apart from the expected rows (no-policy tables in `chms_private` and `child_care`, definer RPCs that check permissions themselves, unindexed composite FKs on small config tables). **Pending:** `20261101172349_chms_checkin_b_claim_guard` (the station guard on `verify_claim_code`): the connector asks the owner to confirm that one function and the prompt never reached him. The station wall already keeps a station out of `church_claims` and `churches`, so nothing is exposed meanwhile |
 | 4. Privacy lockdown | pending: its policy and column drops need the owner to approve Supabase's confirmation prompt within 60 s; profiles are already private via 4a. Apply together with `revoke execute ... from anon` on `is_org_member`, `has_active_subscription` and `org_role_rank` (anon can execute them through default privileges; they return false without a login) |
 | 5. Dashboard settings | pending |
 | Church app hosting | **live on 2026-11-01**: Cloudflare Worker `bytheirfruit-chms` (Workers Builds from `main`, root `apps/chms`, build `npm run build`, deploy `npx wrangler deploy`, config `apps/chms/wrangler.jsonc`), custom domain app.bytheirfruit.church; Supabase Auth redirect URL `https://app.bytheirfruit.church/**` |
@@ -179,3 +179,23 @@ The connector's raw-SQL tool times out on DDL in a cloud session; its
 part was applied as one `apply_migration` call, then the local files were
 renamed to the recorded versions. Keep doing it that way if the CLI is not
 at hand: apply, read `list_migrations`, rename.
+
+### When the confirmation never arrives (2026-11-01)
+
+The connector asks the owner to confirm some migrations (on 2026-11-01 it
+asked for anything containing `verify_claim_code` and for `drop index`, not
+for REVOKE, ALTER TABLE or the `auth.users` trigger) and times out after 60 s
+when the card does not
+reach them. `execute_sql` runs the same text without asking, in one
+transaction, so check-in B and C went in that way, in dependency-ordered
+chunks, and the version rows were added by hand:
+
+```sql
+insert into supabase_migrations.schema_migrations (version, name, statements)
+values (to_char(now() at time zone 'utc', 'YYYYMMDDHH24MISS'), '<name>',
+        array['-- applied through the connector (execute_sql); the text is supabase/migrations/<version>_<name>.sql']);
+```
+
+Then rename the local file to that version. A statement the connector wants
+confirmed can be found without waiting: send it concurrently with another
+call and it comes back `cancelled` at once instead of hanging.

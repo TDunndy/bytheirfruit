@@ -518,7 +518,6 @@ select o.org_id, o.occurrence_id, o.person_id, o.role, o.room_id, o.at as from_a
 from ordered o
 join public.occurrences occ on occ.id = o.occurrence_id
 where o.type in ('check_in', 'move');
-revoke select on public.room_stays from anon;
 
 -- ------------------------------------------------------------ alerts --
 create table public.station_alerts (
@@ -1125,18 +1124,7 @@ begin
 end $$;
 
 -- ------------------------------------------------------------ grants --
-revoke execute on function
-  public.ingest(jsonb), public.allocate_codes(date, integer, uuid), public.roster(uuid, uuid), public.close_occurrence(uuid),
-  public.log_document_access(uuid)
-  from public, anon;
 grant execute on function
   public.ingest(jsonb), public.allocate_codes(date, integer, uuid), public.roster(uuid, uuid), public.close_occurrence(uuid),
   public.log_document_access(uuid)
   to authenticated, service_role;
--- effective_at is pure and the view needs it; my_led_room_ids and
--- can_see_room are policy helpers evaluated as the caller.
-revoke execute on function
-  chms_private.ingest_one(jsonb, uuid, uuid, uuid, uuid[]), chms_private.fold_attendance(uuid, uuid, uuid),
-  chms_private.attendance_event_inserted(), chms_private.check_attendance_event(), chms_private.protect_session(),
-  chms_private.protect_code(), chms_private.protect_alert()
-  from public, anon, authenticated;

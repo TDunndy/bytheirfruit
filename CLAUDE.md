@@ -50,12 +50,13 @@ npm run test:db          # migrations + RLS tests on a local Postgres
 npm run db:types         # same, plus regenerate database.types.ts
 ```
 
-## Check-in (migrations A–C, ADR-0005)
+## Check-in (migrations A–C and the C review fixes, ADR-0005)
 - `attendance_events`, `checkin_sessions`, `security_codes`, `station_alerts`,
   `access_log`, `chms_audit`, `people_audit`, `domain_events` and
   `chms_private.audit_actors` are append-only for everyone, the database owner
   included. Never add an UPDATE/DELETE policy or drop a `deny_changes` trigger.
-  Write attendance only through `ingest()`.
+  Write attendance only through `ingest()`; it answers `accepted`, `duplicate`,
+  `retry` or `rejected(reason)` per command.
 - Permissions are the one list in `chms_private.all_permissions()`. `kids.view`
   gates children in the directory; `kids.care` care notes and restriction
   reasons; `custody.manage` pickups and custody documents; `checkin.manage`
