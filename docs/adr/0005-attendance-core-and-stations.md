@@ -39,7 +39,10 @@ commit, so a row can land with a smaller rev than one already seen: overlap
 by at least 1000, or take rows updated in the last two minutes, and dedupe
 by id). `room_stays` is a view
 over the same log, so time in a room is always reconstructable (exposure
-notices depend on it). We chose this over a generic event store: the
+notices depend on it); it is computed over the whole log by a definer
+helper and then filtered to the rooms the reader may see, so a stay never
+runs on because its closing event was out of the reader's scope, and a
+child the projection has out is out. We chose this over a generic event store: the
 tables are typed, indexed and readable by SQL reports.
 
 ### One write path
