@@ -113,9 +113,11 @@ export async function archiveCredential(id: string) {
   if (error) throw error
 }
 
-export function credentialStatus(creds: Credential[], today: string): 'cleared' | 'expired' | 'none' {
+/** Mirrors chms_private.credential_status. */
+export function credentialStatus(creds: Credential[], today: string): 'cleared' | 'pending' | 'expired' | 'none' {
   const checks = creds.filter((c) => c.kind === 'background_check')
   if (checks.some((c) => c.completed_on <= today && (!c.expires_on || c.expires_on >= today))) return 'cleared'
+  if (checks.some((c) => c.completed_on > today)) return 'pending'
   return checks.length > 0 ? 'expired' : 'none'
 }
 

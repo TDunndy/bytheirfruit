@@ -306,7 +306,7 @@ function CredentialsSection({ person, orgId, act }: { person: Person; orgId: str
   const status = credentialStatus(rows, todayLocal())
   return (
     <section className="section">
-      <h2 className="group-head">Volunteer credentials <span className={`status status-${status === 'cleared' ? 'member' : status === 'expired' ? 'visitor' : 'inactive'}`}>{status === 'cleared' ? 'Cleared' : status === 'expired' ? 'Check expired' : 'No check'}</span></h2>
+      <h2 className="group-head">Volunteer credentials <span className={`status status-${status === 'cleared' ? 'member' : status === 'expired' ? 'visitor' : status === 'pending' ? 'regular' : 'inactive'}`}>{status === 'cleared' ? 'Cleared' : status === 'expired' ? 'Check expired' : status === 'pending' ? 'Check pending' : 'No check'}</span></h2>
       <ul className="group">
         {rows.length === 0 && <li className="cell muted">No credentials recorded.</li>}
         {rows.map((c) => (

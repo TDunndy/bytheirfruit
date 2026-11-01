@@ -1887,7 +1887,11 @@ select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
     jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000007', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000001',
       'person_id', '32000000-0000-0000-0000-000000000007', 'room_id', '73000000-0000-0000-0000-000000000001', 'session_id', '80000000-0000-0000-0000-000000000002',
       'code', 'ACD', 'device_at', '2027-03-07T17:30:00Z')
-  ))) = array['accepted', 'accepted', 'accepted'], 'a late check-in is accepted after its check-out');
+  ))) = array['accepted', 'rejected', 'accepted'], 'a check-out for a child the server has not seen waits; the check-in lands');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000008', 'type', 'check_out', 'occurrence_id', '78000000-0000-0000-0000-000000000001',
+      'person_id', '32000000-0000-0000-0000-000000000007', 'session_id', '80000000-0000-0000-0000-000000000002', 'device_at', '2027-03-07T17:35:00Z')
+  ))) = array['accepted'], 'the retried check-out is accepted');
 select pg_temp.as_postgres();
 select pg_temp.ok((select status = 'out' and anomalies = '{}' and pickup_status = 'unknown' from public.attendance where occurrence_id = '78000000-0000-0000-0000-000000000001' and person_id = '32000000-0000-0000-0000-000000000007'),
   'the fold puts the check-in first');
@@ -1920,9 +1924,15 @@ select pg_temp.ok((public.ingest(jsonb_build_array(
   'a station writes only within its rooms and its church');
 select pg_temp.as_station('00000000-0000-0000-0000-000000000027', '76000000-0000-0000-0000-000000000002');
 select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'session.start', 'id', '80000000-0000-0000-0000-000000000004', 'household_id', '42000000-0000-0000-0000-000000000001', 'device_at', '2027-03-14T15:58:00Z'),
     jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000010', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000002',
-      'person_id', '32000000-0000-0000-0000-000000000006', 'room_id', '73000000-0000-0000-0000-000000000004', 'device_at', '2027-03-14T16:00:00Z')))) = array['accepted'],
+      'person_id', '32000000-0000-0000-0000-000000000006', 'room_id', '73000000-0000-0000-0000-000000000004', 'session_id', '80000000-0000-0000-0000-000000000004', 'device_at', '2027-03-14T16:00:00Z')))) = array['accepted', 'accepted'],
   'an unscoped station reaches every room');
+select pg_temp.ok((select local_date from public.checkin_sessions where id = '80000000-0000-0000-0000-000000000004') = '2027-03-14', 'a pass is dated by the device''s moment in the church''s day');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000030', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000002',
+      'person_id', '32000000-0000-0000-0000-000000000011', 'room_id', '73000000-0000-0000-0000-000000000004', 'session_id', '80000000-0000-0000-0000-000000000001', 'device_at', '2027-03-14T16:00:00Z')))) = array['rejected'],
+  'another station''s pass cannot be used');
 select pg_temp.as_postgres();
 
 -- restrictions: see staff, silently
@@ -1931,9 +1941,14 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
   'an elder restricts a child');
 select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
 select pg_temp.ok((public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'session.start', 'id', '80000000-0000-0000-0000-000000000005', 'local_date', '2027-03-14', 'household_id', '42000000-0000-0000-0000-000000000009', 'device_at', '2027-03-14T16:04:00Z'),
     jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000012', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000002',
-      'person_id', '32000000-0000-0000-0000-000000000007', 'room_id', '73000000-0000-0000-0000-000000000001', 'device_at', '2027-03-14T16:05:00Z'))) -> 'results' -> 0 ->> 'reason') = 'see_staff',
+      'person_id', '32000000-0000-0000-0000-000000000007', 'room_id', '73000000-0000-0000-0000-000000000001', 'session_id', '80000000-0000-0000-0000-000000000005', 'device_at', '2027-03-14T16:05:00Z'))) -> 'results' -> 1 ->> 'reason') = 'see_staff',
   'a restricted child is sent to the desk');
+select pg_temp.ok((public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000012', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000002',
+      'person_id', '32000000-0000-0000-0000-000000000007', 'room_id', '73000000-0000-0000-0000-000000000001', 'session_id', '80000000-0000-0000-0000-000000000005', 'device_at', '2027-03-14T16:05:00Z'))) -> 'results' -> 0 ->> 'reason') = 'see_staff'
+  and (select count(*) from public.station_alerts where kind = 'restricted_checkin') = 1, 'a replayed refusal raises no second alert');
 select pg_temp.ok((public.ingest(jsonb_build_array(
     jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000013', 'type', 'check_out',
       'occurrence_id', (select id from occ where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-07'),
@@ -1979,7 +1994,9 @@ select pg_temp.ok(pg_temp.try_sql($$update public.attendance_events set code = '
   and pg_temp.try_sql($$delete from public.attendance_events$$) = '42501'
   and pg_temp.try_sql($$truncate public.attendance_events$$) in ('42501', '0A000')
   and pg_temp.try_sql($$delete from public.checkin_sessions$$) = '42501'
-  and pg_temp.try_sql($$update public.security_codes set code = 'ZZZ'$$) = '42501',
+  and pg_temp.try_sql($$update public.security_codes set code = 'ZZZ'$$) = '42501'
+  and pg_temp.try_sql($$truncate public.attendance_pickup_names$$) in ('42501', '0A000')
+  and pg_temp.try_sql($$truncate public.attendance_baselines$$) = '42501',
   'the attendance log is append-only even for the database owner');
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$update public.attendance set status = 'none'$$) = ''
   and (select count(*) from public.attendance where status = 'none') = 0, 'the projection is not editable');
@@ -2054,23 +2071,35 @@ select pg_temp.ok(pg_temp.try_sql($$select public.close_occurrence('78000000-000
 select pg_temp.as_user('00000000-0000-0000-0000-000000000023');
 select pg_temp.ok((select count(*) from public.station_alerts) + (select count(*) from public.attendance_baselines) = 0, 'people.view reads no alerts or baselines');
 select pg_temp.ok(pg_temp.try_sql($$select public.ingest('[]'::jsonb)$$) = '42501', 'people.view cannot ingest');
+select pg_temp.as_postgres();
+insert into public.room_leaders (org_id, room_id, person_id) values ('20000000-0000-0000-0000-000000000003', '73000000-0000-0000-0000-000000000004', '32000000-0000-0000-0000-000000000001');
 select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000031', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in',
+      'occurrence_id', '78000000-0000-0000-0000-000000000002', 'person_id', '32000000-0000-0000-0000-000000000011', 'room_id', '73000000-0000-0000-0000-000000000001', 'device_at', '2027-03-14T16:10:00Z'))) -> 'results' -> 0 ->> 'reason') = 'room_out_of_scope',
+  'a staff login without checkin.manage writes only the rooms it leads');
 select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
     jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000020', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in',
       'occurrence_id', '78000000-0000-0000-0000-000000000002', 'person_id', '32000000-0000-0000-0000-000000000011', 'room_id', '73000000-0000-0000-0000-000000000004',
       'source', 'import', 'device_at', '2027-03-14T16:10:00Z'),
     jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000021', 'org_id', '20000000-0000-0000-0000-000000000001', 'type', 'check_in',
       'occurrence_id', '78000000-0000-0000-0000-000000000002', 'person_id', '32000000-0000-0000-0000-000000000011', 'room_id', '73000000-0000-0000-0000-000000000004', 'device_at', '2027-03-14T16:10:00Z')
-  ))) = array['accepted', 'rejected'], 'a staff login records a check-in for its own church only');
+  ))) = array['rejected', 'rejected'], 'a staff login cannot import, nor write another church');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000020', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in',
+      'occurrence_id', '78000000-0000-0000-0000-000000000002', 'person_id', '32000000-0000-0000-0000-000000000011', 'room_id', '73000000-0000-0000-0000-000000000004',
+      'actor_person_id', '32000000-0000-0000-0000-000000000004', 'device_at', '2027-03-14T16:10:00Z')))) = array['accepted'], 'a staff login records a check-in by hand');
 select pg_temp.as_postgres();
 select pg_temp.ok((select source = 'admin' and actor_person_id = '32000000-0000-0000-0000-000000000001' and station_id is null from public.attendance_events where id = '81000000-0000-0000-0000-000000000020'),
-  'admin entries name the person and never pass as imports without checkin.manage');
+  'admin entries name the signed-in person, whatever the command claims');
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$select public.close_occurrence('78000000-0000-0000-0000-000000000001')$$) = '', 'a manager closes an occurrence');
 select pg_temp.ok((select status = 'closed' and closed_at is not null from public.occurrences where id = '78000000-0000-0000-0000-000000000001'), 'the occurrence is closed');
 select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
 select pg_temp.ok(cardinality(public.allocate_codes(current_date, 5)) = 5, 'a station draws a block of codes for the day');
 select pg_temp.ok((select count(distinct code) from public.security_codes where station_id = '76000000-0000-0000-0000-000000000001' and local_date = current_date) = 5, 'the block is recorded against the station');
 select pg_temp.ok(pg_temp.try_sql($$select public.allocate_codes('2027-03-07', 5)$$) = '22023', 'blocks are drawn for the coming weeks only');
+select pg_temp.ok(cardinality(public.allocate_codes(current_date, 300)) = 295 and pg_temp.try_sql($$select public.allocate_codes(current_date, 1)$$) = '22023',
+  'a station holds at most three hundred unissued codes a day');
 select pg_temp.as_postgres();
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.allocate_codes(current_date, 2, '76000000-0000-0000-0000-000000000002')$$) = '42501'
   and pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$select public.allocate_codes(current_date, 2, '76000000-0000-0000-0000-000000000002')$$) = '',
@@ -2080,6 +2109,54 @@ select pg_temp.ok((select array_agg(distinct type order by type) from public.dom
   = array['checkin.checked_out', 'checkin.created', 'checkin.moved', 'checkin.voided', 'label.requested', 'occurrence.closed', 'occurrence.open'],
   'attendance emits the platform events');
 select pg_temp.ok(not exists (select 1 from public.domain_events where payload::text ~* 'grandma|peanut|gigi|eggs'), 'event payloads carry no names');
+
+-- review fixes: scope covers moves, check-outs and voids; guests are new people; pickups by row; actors; device time
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000040', 'type', 'check_out', 'occurrence_id', '78000000-0000-0000-0000-000000000002',
+      'person_id', '32000000-0000-0000-0000-000000000006', 'device_at', '2027-03-14T17:00:00Z'))) -> 'results' -> 0 ->> 'reason') = 'room_out_of_scope'
+  and (public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000041', 'type', 'move', 'occurrence_id', '78000000-0000-0000-0000-000000000002',
+      'person_id', '32000000-0000-0000-0000-000000000006', 'from_room_id', '73000000-0000-0000-0000-000000000004', 'room_id', '73000000-0000-0000-0000-000000000001', 'device_at', '2027-03-14T17:00:00Z'))) -> 'results' -> 0 ->> 'reason') = 'room_out_of_scope'
+  and (public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000042', 'type', 'void', 'occurrence_id', '78000000-0000-0000-0000-000000000002',
+      'person_id', '32000000-0000-0000-0000-000000000006', 'target_event_id', '81000000-0000-0000-0000-000000000010', 'device_at', '2027-03-14T17:00:00Z'))) -> 'results' -> 0 ->> 'reason') = 'room_out_of_scope',
+  'a Barn station cannot check out, pull or void a child in the K/5 area');
+select pg_temp.ok((public.ingest(jsonb_build_array(jsonb_build_object('op', 'guest.create', 'id', '42000000-0000-0000-0000-000000000011',
+    'household', jsonb_build_object('id', '42000000-0000-0000-0000-000000000011', 'name', 'The Grafters'),
+    'people', jsonb_build_array(jsonb_build_object('id', '32000000-0000-0000-0000-000000000008', 'first_name', 'Uri', 'relationship', 'head'))))) -> 'results' -> 0 ->> 'reason') = 'existing_person'
+  and (select count(*) from public.households where id = '42000000-0000-0000-0000-000000000011') = 0,
+  'a kiosk cannot graft an existing person into a new family');
+select pg_temp.ok((public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000043', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000001',
+      'person_id', '32000000-0000-0000-0000-000000000006', 'room_id', '73000000-0000-0000-0000-000000000001', 'session_id', '80000000-0000-0000-0000-000000000001', 'device_at', '2027-03-10T17:00:00Z'))) -> 'results' -> 0 ->> 'reason') = 'device_time_out_of_range',
+  'an event days away from its service is refused');
+select pg_temp.as_postgres();
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$insert into public.pickup_people (id, org_id, child_person_id, person_id, kind) values ('83000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000008', 'authorized');
+    insert into public.pickup_people (id, org_id, child_person_id, name, kind, valid_to) values ('83000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', 'Old sitter', 'authorized', '2026-01-01')$$) = '',
+  'a custody manager records an authorized row for a restricted person and an expired sitter');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000027', '76000000-0000-0000-0000-000000000002');
+select pg_temp.ok((public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000044', 'type', 'check_out', 'occurrence_id', '78000000-0000-0000-0000-000000000002',
+      'person_id', '32000000-0000-0000-0000-000000000006', 'picked_up_by_pickup_id', '83000000-0000-0000-0000-000000000001', 'device_at', '2027-03-14T17:01:00Z'))) -> 'results' -> 0 ->> 'reason') = 'see_staff',
+  'an authorized row never outranks a restriction');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000045', 'type', 'check_out', 'occurrence_id', '78000000-0000-0000-0000-000000000002',
+      'person_id', '32000000-0000-0000-0000-000000000006', 'picked_up_by_pickup_id', '83000000-0000-0000-0000-000000000002', 'code', 'ACD', 'device_at', '2027-03-14T17:02:00Z')))) = array['accepted'],
+  'an expired sitter is recorded as unknown');
+select pg_temp.as_postgres();
+select pg_temp.ok((select pickup_status = 'unknown' and code = 'ACD' and code_matched = false from public.attendance_events where id = '81000000-0000-0000-0000-000000000045'),
+  'and the presented code is checked by the server, not the device');
+select pg_temp.ok((select actor_person_id is null from public.attendance_events where id = '81000000-0000-0000-0000-000000000016'), 'a station''s events name no actor without a PIN check');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '2468') ->> 'ok')::boolean
+  and pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000046', 'type', 'label_print_requested', 'occurrence_id', '78000000-0000-0000-0000-000000000001',
+      'person_id', '32000000-0000-0000-0000-000000000006', 'label_kind', 'child', 'actor_person_id', '32000000-0000-0000-0000-000000000001', 'device_at', '2027-03-07T18:00:00Z')))) = array['accepted'],
+  'after a PIN check the station names the staff member');
+select pg_temp.as_postgres();
+select pg_temp.ok((select actor_person_id = '32000000-0000-0000-0000-000000000001' from public.attendance_events where id = '81000000-0000-0000-0000-000000000046'), 'and the event carries them');
 -- documents are opened through a logged RPC
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
   $$select public.log_document_access((select id from public.person_documents where title = 'Order'))$$) = ''

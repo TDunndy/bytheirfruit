@@ -921,6 +921,18 @@ create table chms_private.staff_pins (
 alter table chms_private.staff_pins enable row level security;
 revoke all on table chms_private.staff_pins from anon, authenticated;
 
+-- A successful PIN check at a station, so ingest() can attribute the next
+-- half hour of that station's actions to the person.
+create table chms_private.pin_verifications (
+  id bigint generated always as identity primary key,
+  station_id uuid not null,
+  person_id uuid not null,
+  verified_at timestamptz not null default now()
+);
+create index idx_pin_verifications_recent on chms_private.pin_verifications (station_id, person_id, verified_at desc);
+alter table chms_private.pin_verifications enable row level security;
+revoke all on table chms_private.pin_verifications from anon, authenticated;
+
 create or replace function public.set_my_staff_pin(p_org_id uuid, p_pin text)
 returns void language plpgsql security definer set search_path = public, extensions as $$
 declare
@@ -995,6 +1007,7 @@ begin
       return jsonb_build_object('ok', false, 'error', 'PIN not accepted.');
     end if;
     update chms_private.staff_pins set failed_count = 0, locked_until = null where person_id = p_person_id;
+    insert into chms_private.pin_verifications (station_id, person_id) values (chms_private.my_station(), p_person_id);
     perform chms_private.log_access(v_org, 'staff_pin.verify', p_person_id, 1, jsonb_build_object('ok', true));
     return jsonb_build_object('ok', true, 'person_id', p_person_id,
       'permissions', to_jsonb(array(select x from unnest(v_perms) x

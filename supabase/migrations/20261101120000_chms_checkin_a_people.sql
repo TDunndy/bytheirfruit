@@ -956,6 +956,8 @@ returns text language sql stable security definer set search_path = public as $$
                  where c.person_id = p_person_id and c.kind = 'background_check' and c.archived_at is null
                    and c.completed_on <= p_on and (c.expires_on is null or c.expires_on >= p_on)) then 'cleared'
     when exists (select 1 from public.person_credentials c
+                 where c.person_id = p_person_id and c.kind = 'background_check' and c.archived_at is null and c.completed_on > p_on) then 'pending'
+    when exists (select 1 from public.person_credentials c
                  where c.person_id = p_person_id and c.kind = 'background_check' and c.archived_at is null) then 'expired'
     else 'none'
   end;

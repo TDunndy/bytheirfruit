@@ -1935,7 +1935,7 @@ isOneToOne: false
 { Args: { "p_token": string }; Returns: Json
                            },
 "allocate_codes":
-{ Args: { "p_local_date": string,"p_n": number,"p_station_id"?: string }; Returns: (string)[]
+{ Args: { "p_local_date"?: string,"p_n"?: number,"p_station_id"?: string }; Returns: (string)[]
                            },
 "child_care_summary":
 { Args: { "p_org_id": string }; Returns: {
