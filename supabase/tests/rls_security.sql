@@ -1474,8 +1474,16 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
   and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
   $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad6', '{"rules": [{"kind": "gender", "value": "other"}]}')$$) = '23514'
   and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
-  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad7', '{"rules": [{"kind": "birthdate", "min": "2020-13-45", "min_inclusive": true}], "extra": 1}')$$) = '23514',
-  'criteria with an unknown kind, min above max, a bound without its flag, an age without measured_on, no rules, a bad gender or an extra key are refused');
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad7', '{"rules": [{"kind": "birthdate", "min": "2020-13-45", "min_inclusive": true}], "extra": 1}')$$) = '23514'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad8', '{"rules": [{"kind": "birthdate", "min": "2020-02-30", "min_inclusive": true}]}')$$) = '23514'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad9', '{"rules": [{"kind": "grade", "min": 13, "min_inclusive": true}]}')$$) = '23514'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad10', '{"rules": [{"kind": "age_months", "min": 3, "min_inclusive": true, "max": 3, "max_inclusive": false, "measured_on": "occurrence"}]}')$$) = '23514'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad11', '{"rules": [{"kind": "tag", "value": "   "}]}')$$) = '23514',
+  'criteria with an unknown kind, min above max, a bound without its flag, an age without measured_on, no rules, a bad gender, an extra key, an impossible date, a grade past 12, an empty range or a blank tag are refused');
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
   $$insert into public.rooms (org_id, area_id, name) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Mine')$$) = '42501',
   'checkin.station alone cannot add rooms');
@@ -1567,7 +1575,7 @@ select pg_temp.ok(pg_temp.try_sql($$insert into public.org_members (org_id, user
 select pg_temp.as_postgres();
 update chms_private.station_principals set revoked_at = now() where station_id = '76000000-0000-0000-0000-000000000001';
 select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
-select pg_temp.ok(public.station_self() is null and (select count(*) from public.rooms) = 0, 'an unpaired station is nobody');
+select pg_temp.ok((public.station_self() ->> 'status') = 'unpaired' and (select count(*) from public.rooms) = 0, 'an unpaired station is nobody, and learns why');
 select pg_temp.as_postgres();
 update chms_private.station_principals set revoked_at = null where station_id = '76000000-0000-0000-0000-000000000001';
 
@@ -1662,6 +1670,113 @@ select pg_temp.ok(not has_function_privilege('authenticated', 'chms_private.acti
   and not has_function_privilege('anon', 'public.verify_staff_pin(uuid,text)', 'execute')
   and not has_function_privilege('anon', 'public.station_self()', 'execute'),
   'check-in B helpers are not callable by anon or as internals');
+
+
+-- review fixes: occurrences follow the rules both ways; manual rows are left alone
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$select public.generate_occurrences('20000000-0000-0000-0000-000000000003', null, '2027-03-01')$$) = '22023', 'generation needs a through date');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.schedules (id, org_id, name, local_time, weekdays, interval_weeks, starts_on) values ('74000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000003', 'Biweekly Sunday', '17:00', '{0}', 2, '2027-03-03')$$) = '',
+  'a biweekly schedule may start midweek');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok(public.generate_occurrences('20000000-0000-0000-0000-000000000003', '2027-03-31', '2027-03-01') = 2, 'generation adds the new schedule''s dates');
+select pg_temp.ok((select array_agg(local_date order by local_date) from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000004') = array['2027-03-07', '2027-03-21']::date[],
+  'the first Sunday after a midweek start counts');
+select pg_temp.as_postgres();
+update public.schedules set exdates = '{}' where id = '74000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select status from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-21') = 'scheduled', 'removing a skipped date brings the occurrence back');
+update public.schedules set interval_weeks = 2 where id = '74000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select array_agg(local_date order by local_date) from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and status = 'cancelled') = array['2027-03-14', '2027-03-28']::date[],
+  'every other week cancels the off weeks');
+update public.schedules set interval_weeks = 1 where id = '74000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select count(*) from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and status = 'cancelled') = 0, 'and weekly brings them back');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$update public.occurrences set status = 'cancelled' where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-14'$$) = '', 'a manager cancels one Sunday');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok(public.generate_occurrences('20000000-0000-0000-0000-000000000003', '2027-03-31', '2027-03-01') = 0, 'generation adds nothing');
+select pg_temp.as_postgres();
+select pg_temp.ok((select status from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-14') = 'cancelled', 'and a manual cancel is not undone');
+update public.occurrences set status = 'scheduled' where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-14';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.occurrences (id, org_id, schedule_id, local_date, starts_at, ends_at) values ('78000000-0000-0000-0000-000000000009', '20000000-0000-0000-0000-000000000003', '74000000-0000-0000-0000-000000000001', '2027-03-10', '2027-03-10 23:00:00+00', '2027-03-11 00:30:00+00')$$) = '',
+  'a manager adds a one-off Wednesday');
+update public.schedules set duration_minutes = 80 where id = '74000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select status = 'scheduled' and starts_at = '2027-03-10 23:00:00+00' and not generated from public.occurrences where id = '78000000-0000-0000-0000-000000000009'), 'a schedule edit leaves the one-off alone');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.volunteer_assignments (org_id, slot_id, person_id, local_date) values ('20000000-0000-0000-0000-000000000003', '77000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000003', '2027-03-11')$$) = '22023',
+  'nobody is scheduled for a day the service does not run');
+update public.org_checkin_settings set time_zone = 'America/Chicago' where org_id = '20000000-0000-0000-0000-000000000003';
+select pg_temp.ok((select starts_at from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-07') = '2027-03-07 16:45:00+00', 'a new time zone moves future services');
+update public.org_checkin_settings set time_zone = 'America/New_York' where org_id = '20000000-0000-0000-0000-000000000003';
+select pg_temp.ok((select starts_at from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-07') = '2027-03-07 15:45:00+00'
+  and (select count(*) from public.chms_audit where table_name = 'org_checkin_settings' and row_id = '20000000-0000-0000-0000-000000000003') >= 2, 'and back, audited');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((public.station_self() -> 'settings' ->> 'time_zone') = 'America/New_York' and (public.station_self() ->> 'local_today') is not null and (select count(*) from public.org_checkin_settings) = 1,
+  'a station knows its church''s zone and settings');
+select pg_temp.as_postgres();
+
+-- review fixes: PINs
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.set_my_staff_pin('20000000-0000-0000-0000-000000000003', '4321')$$) = '22023'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.set_my_staff_pin('20000000-0000-0000-0000-000000000003', '2468')$$) = '', 'sequences are weak PINs');
+update chms_private.staff_pins set failed_count = 5, locked_until = now() - interval '1 minute' where person_id = '32000000-0000-0000-0000-000000000001';
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok(not (public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '0000') ->> 'ok')::boolean
+  and (public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '2468') ->> 'ok')::boolean, 'an expired lock starts a fresh count of five');
+select pg_temp.ok(not (public.verify_staff_pin('30000000-0000-0000-0000-000000000001', '2468') ->> 'ok')::boolean, 'another church''s person is refused');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.access_log where action = 'staff_pin.verify' and subject_person_id = '30000000-0000-0000-0000-000000000001') = 0, 'and never named in this church''s log');
+delete from public.person_roles where person_id = '32000000-0000-0000-0000-000000000001';
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok(not (public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '2468') ->> 'ok')::boolean and (select count(*) from public.station_staff()) = 0, 'a PIN outlives a role; the permission does not');
+select pg_temp.as_postgres();
+insert into public.person_roles (person_id, role_id, org_id)
+  select '32000000-0000-0000-0000-000000000001', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Staff';
+
+-- review fixes: the wall holds even if a station's user is listed as a member
+insert into public.org_members (org_id, user_id, role) values ('20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000026', 'admin');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((select count(*) from public.people) = 0 and not public.has_org_permission('20000000-0000-0000-0000-000000000003', 'kids.view')
+  and not public.is_org_member('20000000-0000-0000-0000-000000000003') and (public.station_self() ->> 'status') = 'active', 'a station token never derives membership');
+select pg_temp.as_postgres();
+delete from public.org_members where user_id = '00000000-0000-0000-0000-000000000026';
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-000000000028', 'late-station@stations.invalid');
+select pg_temp.ok((select count(*) from public.profiles where id = '00000000-0000-0000-0000-000000000028') = 1, 'a plain sign-up gets a profile');
+update auth.users set raw_app_meta_data = '{"kind": "station"}' where id = '00000000-0000-0000-0000-000000000028';
+select pg_temp.ok((select count(*) from public.profiles where id = '00000000-0000-0000-0000-000000000028') = 0, 'a user that turns out to be a station loses it');
+
+-- review fixes: restrictions and overrides are pinned
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$insert into public.checkin_restrictions (org_id, person_id, kind, note) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', 'see_staff', 'paperwork')$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$update public.checkin_restrictions set person_id = '32000000-0000-0000-0000-000000000007', cleared_by_person_id = '32000000-0000-0000-0000-000000000001' where person_id = '32000000-0000-0000-0000-000000000006' and cleared_at is null$$) = '',
+  'an elder sets and edits a restriction');
+select pg_temp.ok((select count(*) from public.checkin_restrictions where person_id = '32000000-0000-0000-0000-000000000006' and cleared_at is null and cleared_by_person_id is null) = 1, 'but cannot re-point it or fake a clearing');
+insert into public.org_roles (org_id, name, permissions) values ('20000000-0000-0000-0000-000000000003', 'Custody only', '{people.view,kids.view,custody.manage}');
+insert into public.person_roles (person_id, role_id, org_id) select '32000000-0000-0000-0000-000000000003', id, org_id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Custody only';
+select pg_temp.as_user('00000000-0000-0000-0000-000000000024');
+select pg_temp.ok((select count(*) from public.checkin_restrictions where cleared_at is null) = 1, 'custody managers read the restrictions they may set');
+select pg_temp.as_postgres();
+delete from public.person_roles where person_id = '32000000-0000-0000-0000-000000000003' and role_id = (select id from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Custody only');
+update public.checkin_restrictions set cleared_at = now() where person_id = '32000000-0000-0000-0000-000000000006' and cleared_at is null;
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025', $$update public.checkin_restrictions set ends_on = current_date + 10 where person_id = '32000000-0000-0000-0000-000000000006'$$) = '42501', 'a cleared restriction is history');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.room_overrides (org_id, person_id, room_id, ends_on) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000007', '73000000-0000-0000-0000-000000000001', current_date - 1)$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.room_overrides (org_id, person_id, room_id) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000007', '73000000-0000-0000-0000-000000000002')$$) = '',
+  'an ended override makes way for the next');
+select pg_temp.ok(chms_private.active_room_override('32000000-0000-0000-0000-000000000007') = '73000000-0000-0000-0000-000000000002'
+  and (select count(*) from public.room_overrides where person_id = '32000000-0000-0000-0000-000000000007' and archived_at is null) = 1, 'and only the live one counts');
+update public.room_overrides set archived_at = now() where person_id = '32000000-0000-0000-0000-000000000007';
+
+-- review fixes: rooms and leaders
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$update public.rooms set overflow_room_id = '73000000-0000-0000-0000-000000000002' where id = '73000000-0000-0000-0000-000000000001'$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$update public.rooms set overflow_room_id = '73000000-0000-0000-0000-000000000001' where id = '73000000-0000-0000-0000-000000000002'$$) = '22023',
+  'overflow rooms cannot loop');
+update public.rooms set overflow_room_id = null where id = '73000000-0000-0000-0000-000000000001';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.area_leaders (id, org_id, area_id, person_id, kind) values ('79000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000001', 'leader')$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$update public.area_leaders set kind = 'director', area_id = '72000000-0000-0000-0000-000000000002' where id = '79000000-0000-0000-0000-000000000001'$$) = '',
+  'a manager promotes a leader');
+select pg_temp.ok((select kind = 'director' and area_id = '72000000-0000-0000-0000-000000000001' from public.area_leaders where id = '79000000-0000-0000-0000-000000000001'), 'the kind changes; the area is pinned');
 
 \echo '== chms: check-in C (attendance core) ============================='
 

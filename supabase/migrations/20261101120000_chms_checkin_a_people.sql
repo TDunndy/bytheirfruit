@@ -566,7 +566,7 @@ begin
   end if;
   select * into a from chms_private.actor_for(v_org);
   insert into public.chms_audit (org_id, table_name, row_id, action, actor_person_id, actor_kind, station_id, old_row, new_row)
-  values (v_org, tg_table_name, coalesce(v_row ->> 'id', v_row ->> 'person_id', v_row ->> 'subject_id')::uuid,
+  values (v_org, tg_table_name, coalesce(v_row ->> 'id', v_row ->> 'person_id', v_row ->> 'subject_id', v_row ->> 'org_id')::uuid,
           lower(tg_op), a.person_id, a.kind, a.station_id, v_old, v_new)
   returning id into v_id;
   perform chms_private.note_actor('chms_audit', v_id, a.person_id);

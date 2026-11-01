@@ -65,20 +65,30 @@ begin
         if r ? 'measured_on' then return false; end if;
         if (r ? 'min' and (jsonb_typeof(r -> 'min') <> 'string' or (r ->> 'min') !~ '^\d{4}-\d{2}-\d{2}$'))
            or (r ? 'max' and (jsonb_typeof(r -> 'max') <> 'string' or (r ->> 'max') !~ '^\d{4}-\d{2}-\d{2}$')) then return false; end if;
-        if r ? 'min' and r ? 'max' and (r ->> 'min')::date > (r ->> 'max')::date then return false; end if;
+        -- each bound must be a real date in a sane window (a bad one raises into the handler below)
+        if r ? 'min' and (r ->> 'min')::date not between '1900-01-01' and '2100-12-31' then return false; end if;
+        if r ? 'max' and (r ->> 'max')::date not between '1900-01-01' and '2100-12-31' then return false; end if;
+        if r ? 'min' and r ? 'max' then
+          if (r ->> 'min')::date > (r ->> 'max')::date then return false; end if;
+          if (r ->> 'min')::date = (r ->> 'max')::date and not ((r -> 'min_inclusive')::boolean and (r -> 'max_inclusive')::boolean) then return false; end if;
+        end if;
       else
         if (r ? 'min' and jsonb_typeof(r -> 'min') <> 'number') or (r ? 'max' and jsonb_typeof(r -> 'max') <> 'number') then return false; end if;
         v_min := (r ->> 'min')::numeric;
         v_max := (r ->> 'max')::numeric;
         if (v_min is not null and v_min <> trunc(v_min)) or (v_max is not null and v_max <> trunc(v_max)) then return false; end if;
-        if v_min is not null and v_max is not null and v_min > v_max then return false; end if;
+        if v_min is not null and v_max is not null then
+          if v_min > v_max then return false; end if;
+          if v_min = v_max and not ((r -> 'min_inclusive')::boolean and (r -> 'max_inclusive')::boolean) then return false; end if;
+        end if;
         if k = 'grade' then
           if r ? 'measured_on' then return false; end if;
-          if coalesce(v_min, -1) < -1 or coalesce(v_max, 12) > 12 then return false; end if;
+          if coalesce(v_min, -1) not between -1 and 12 or coalesce(v_max, 12) not between -1 and 12 then return false; end if;
         else
           if not (r ? 'measured_on') or jsonb_typeof(r -> 'measured_on') <> 'string'
              or (r ->> 'measured_on') not in ('occurrence', 'cutoff') then return false; end if;
-          if coalesce(v_min, 0) < 0 or coalesce(v_max, 0) > (case k when 'age_months' then 1500 else 125 end) then return false; end if;
+          if coalesce(v_min, 0) not between 0 and (case k when 'age_months' then 1500 else 125 end)
+             or coalesce(v_max, 0) not between 0 and (case k when 'age_months' then 1500 else 125 end) then return false; end if;
         end if;
       end if;
     elsif k = 'gender' then
@@ -86,10 +96,10 @@ begin
       if jsonb_typeof(r -> 'value') <> 'string' or (r ->> 'value') not in ('male', 'female') then return false; end if;
     elsif k = 'tag' then
       if exists (select 1 from jsonb_object_keys(r) key where key not in ('kind', 'value')) then return false; end if;
-      if jsonb_typeof(r -> 'value') <> 'string' or length(r ->> 'value') not between 1 and 60 then return false; end if;
+      if jsonb_typeof(r -> 'value') <> 'string' or length(btrim(r ->> 'value')) not between 1 and 60 then return false; end if;
     elsif k = 'custom_field' then
       if exists (select 1 from jsonb_object_keys(r) key where key not in ('kind', 'key', 'value')) then return false; end if;
-      if jsonb_typeof(r -> 'key') <> 'string' or length(r ->> 'key') not between 1 and 60 then return false; end if;
+      if jsonb_typeof(r -> 'key') <> 'string' or length(btrim(r ->> 'key')) not between 1 and 60 then return false; end if;
       if jsonb_typeof(r -> 'value') not in ('string', 'number', 'boolean') then return false; end if;
     else
       return false;
@@ -135,9 +145,29 @@ create table public.rooms (
   foreign key (area_id, org_id) references public.areas (id, org_id) on delete restrict,
   foreign key (overflow_room_id, org_id) references public.rooms (id, org_id) on delete restrict
 );
-create unique index idx_rooms_org_name on public.rooms (org_id, lower(name)) where archived_at is null;
+create unique index idx_rooms_area_name on public.rooms (area_id, lower(name)) where archived_at is null;
 create index idx_rooms_area on public.rooms (area_id);
 alter table public.rooms enable row level security;
+
+-- Overflow rooms never form a loop (A → B → A).
+create or replace function chms_private.check_overflow()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_next uuid := new.overflow_room_id;
+  v_steps integer := 0;
+begin
+  while v_next is not null and v_steps < 20 loop
+    if v_next = new.id then
+      raise exception 'overflow rooms cannot form a loop' using errcode = '22023';
+    end if;
+    select overflow_room_id into v_next from public.rooms where id = v_next;
+    v_steps := v_steps + 1;
+  end loop;
+  return new;
+end;
+$$;
+create trigger trg_rooms_overflow before insert or update of overflow_room_id on public.rooms
+  for each row execute function chms_private.check_overflow();
 
 -- Leaders: a person or a role, as director or leader of an area or a room.
 create table public.area_leaders (
@@ -292,25 +322,49 @@ returns uuid[] language sql stable security definer set search_path = public as 
   with st as (select chms_private.my_station() as id, chms_private.my_station_org() as org_id)
   select coalesce(array_agg(r.id), '{}')
   from st, public.rooms r
-  where st.id is not null and r.org_id = st.org_id and r.archived_at is null
+  join public.areas ar on ar.id = r.area_id and ar.archived_at is null
+  where st.id is not null and r.org_id = st.org_id and r.archived_at is null and r.active
     and (not exists (select 1 from public.station_scopes sc where sc.station_id = st.id)
          or r.id in (select sc.room_id from public.station_scopes sc where sc.station_id = st.id and sc.room_id is not null)
          or r.area_id in (select sc.area_id from public.station_scopes sc where sc.station_id = st.id and sc.area_id is not null));
 $$;
 
--- What a station learns about itself at boot. Null for anyone else.
+-- What a station learns about itself at boot: its church's settings and local
+-- day too. A paired device that was unpaired, switched off or removed learns
+-- only that (status), so it can tell the user why. Null for anyone else.
 create or replace function public.station_self()
 returns jsonb language sql stable security definer set search_path = public as $$
-  select jsonb_build_object(
-    'station_id', s.id, 'org_id', s.org_id, 'org_name', o.name, 'name', s.name, 'mode', s.mode,
-    'printer_id', s.printer_id, 'label_stock', s.label_stock,
-    'room_ids', to_jsonb(chms_private.station_room_ids()))
-  from public.stations s
-  join public.organizations o on o.id = s.org_id
-  where s.id = chms_private.my_station();
+  select case
+    when chms_private.my_station() is not null then (
+      select jsonb_build_object(
+        'status', 'active',
+        'station_id', s.id, 'org_id', s.org_id, 'org_name', o.name, 'name', s.name, 'mode', s.mode,
+        'printer_id', s.printer_id, 'label_stock', s.label_stock,
+        'room_ids', to_jsonb(chms_private.station_room_ids()),
+        'local_today', chms_private.local_today(s.org_id),
+        'settings', (select jsonb_build_object('time_zone', st.time_zone, 'grade_cutoff_month', st.grade_cutoff_month,
+                       'grade_cutoff_day', st.grade_cutoff_day, 'promotion_date', st.promotion_date,
+                       'punctuality_grace_minutes', st.punctuality_grace_minutes, 'label_defaults', st.label_defaults)
+                     from public.org_checkin_settings st where st.org_id = s.org_id))
+      from public.stations s
+      join public.organizations o on o.id = s.org_id
+      where s.id = chms_private.my_station())
+    when public.is_station() then (
+      select jsonb_build_object('status',
+        case when sp.revoked_at is not null then 'unpaired' when s.archived_at is not null then 'removed'
+             when not s.active then 'inactive' else 'unknown' end)
+      from chms_private.station_principals sp
+      join public.stations s on s.id = sp.station_id
+      where sp.user_id = auth.uid())
+    else null
+  end;
 $$;
 
 -- ------------------------------------------------- configuration RLS --
+-- A station reads its church's settings (time zone, cutoff, grace).
+create policy "Stations read their church's check-in settings" on public.org_checkin_settings for select
+  using (org_id = (select chms_private.my_station_org()));
+
 -- Members read; check-in managers write; a station reads its own church's
 -- configuration and only the rooms in its scope.
 create policy "Members and stations read areas" on public.areas for select
@@ -335,12 +389,32 @@ create policy "Check-in managers add area leaders" on public.area_leaders for in
   with check (org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]));
 create policy "Check-in managers remove area leaders" on public.area_leaders for delete
   using (org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]));
+create policy "Check-in managers change area leaders" on public.area_leaders for update
+  using (org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]))
+  with check (org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]));
 create policy "Members read room leaders" on public.room_leaders for select
   using (org_id = any ((select chms_private.my_orgs())::uuid[]));
 create policy "Check-in managers add room leaders" on public.room_leaders for insert
   with check (org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]));
 create policy "Check-in managers remove room leaders" on public.room_leaders for delete
   using (org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]));
+create policy "Check-in managers change room leaders" on public.room_leaders for update
+  using (org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]))
+  with check (org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]));
+
+-- Only a leader's kind changes; who and where are pinned.
+create or replace function chms_private.pin_leader()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  new.org_id := old.org_id;
+  new.person_id := old.person_id;
+  new.role_id := old.role_id;
+  if tg_table_name = 'area_leaders' then new.area_id := old.area_id; else new.room_id := old.room_id; end if;
+  return new;
+end;
+$$;
+create trigger trg_area_leaders_pin before update on public.area_leaders for each row execute function chms_private.pin_leader();
+create trigger trg_room_leaders_pin before update on public.room_leaders for each row execute function chms_private.pin_leader();
 
 create policy "Members and stations read printers" on public.printers for select
   using (org_id = any ((select chms_private.my_orgs())::uuid[]) or org_id = (select chms_private.my_station_org()));
@@ -417,6 +491,8 @@ create table public.occurrences (
   starts_at timestamptz not null,
   ends_at timestamptz not null check (ends_at > starts_at),
   status text not null default 'scheduled' check (status in ('scheduled', 'open', 'closed', 'cancelled')),
+  generated boolean not null default false,       -- made by generate_occurrences (schedule edits may move or cancel it)
+  rule_cancelled boolean not null default false,  -- cancelled by the schedule's rules, so the rules may revive it
   opened_at timestamptz,
   closed_at timestamptz,
   note text check (note is null or length(note) <= 500),
@@ -428,6 +504,42 @@ create table public.occurrences (
 );
 create index idx_occurrences_org_date on public.occurrences (org_id, local_date);
 alter table public.occurrences enable row level security;
+
+-- API edits change status, times and the note; the system columns are pinned
+-- and a manual cancel is never a rule cancel.
+create or replace function chms_private.protect_occurrence()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if not public.is_privileged() then
+    new.schedule_id := old.schedule_id;
+    new.local_date := old.local_date;
+    new.generated := old.generated;
+    new.opened_at := old.opened_at;
+    new.closed_at := old.closed_at;
+    new.rule_cancelled := false;
+  end if;
+  return new;
+end;
+$$;
+create trigger trg_occurrences_protect before update on public.occurrences
+  for each row execute function chms_private.protect_occurrence();
+
+-- Does a schedule run on a date? Weeks count from the week of the first date
+-- it runs on or after starts_on, so a biweekly schedule never skips its first
+-- Sunday because starts_on was a Wednesday.
+create or replace function chms_private.schedule_anchor(s public.schedules)
+returns date language sql immutable set search_path = public as $$
+  select f - extract(dow from f)::int
+  from (select min(s.starts_on + ((w - extract(dow from s.starts_on)::int + 7) % 7)) as f from unnest(s.weekdays) w) x;
+$$;
+create or replace function chms_private.schedule_runs_on(s public.schedules, d date)
+returns boolean language sql immutable set search_path = public as $$
+  select s.active and s.archived_at is null
+     and d >= s.starts_on and (s.until is null or d <= s.until)
+     and extract(dow from d)::smallint = any (s.weekdays)
+     and not (d = any (s.exdates))
+     and (((d - chms_private.schedule_anchor(s)) / 7) % s.interval_weeks) = 0;
+$$;
 
 -- A schedule needs the church's time zone before any occurrence can exist.
 create or replace function chms_private.require_time_zone()
@@ -451,7 +563,10 @@ declare
   v_from date;
   v_n integer;
 begin
-  if auth.uid() is not null and (public.is_station() or not public.has_org_permission(p_org_id, 'checkin.manage')) then
+  -- Church managers, the nightly job (no session) and the service role; never
+  -- a station or an anonymous caller.
+  if public.is_station() or (auth.uid() is null and current_user in ('anon', 'authenticated'))
+     or (auth.uid() is not null and not public.has_org_permission(p_org_id, 'checkin.manage')) then
     raise exception 'Not allowed' using errcode = '42501';
   end if;
   select time_zone into v_tz from public.org_checkin_settings where org_id = p_org_id;
@@ -459,7 +574,7 @@ begin
     raise exception 'set the church time zone in check-in settings first' using errcode = '22023';
   end if;
   v_from := coalesce(p_from, chms_private.local_today(p_org_id));
-  if p_through < v_from or p_through > v_from + 366 then
+  if p_through is null or p_through < v_from or p_through > v_from + 366 then
     raise exception 'the through date must fall within a year of the start' using errcode = '22023';
   end if;
 
@@ -468,18 +583,17 @@ begin
     from public.schedules s
     cross join lateral generate_series(greatest(s.starts_on, v_from)::timestamp,
                                        least(coalesce(s.until, p_through), p_through)::timestamp, interval '1 day') d
-    where s.org_id = p_org_id and s.active and s.archived_at is null
-      and extract(dow from d)::smallint = any (s.weekdays)
-      -- weeks are counted from the Sunday on or before starts_on
-      and (((d::date - (s.starts_on - extract(dow from s.starts_on)::int)) / 7) % s.interval_weeks) = 0
-      and not (d::date = any (s.exdates))
+    where s.org_id = p_org_id and chms_private.schedule_runs_on(s, d::date)
   )
-  insert into public.occurrences (org_id, schedule_id, local_date, starts_at, ends_at)
+  insert into public.occurrences (org_id, schedule_id, local_date, starts_at, ends_at, generated)
   select p_org_id, schedule_id, local_date,
          (local_date + local_time) at time zone v_tz,
-         ((local_date + local_time) at time zone v_tz) + make_interval(mins => duration_minutes)
+         ((local_date + local_time) at time zone v_tz) + make_interval(mins => duration_minutes),
+         true
   from days
-  on conflict (schedule_id, local_date) do nothing;
+  -- a date the rules had cancelled comes back; a manual cancel stays
+  on conflict (schedule_id, local_date) do update set status = 'scheduled', rule_cancelled = false
+    where public.occurrences.status = 'cancelled' and public.occurrences.rule_cancelled and public.occurrences.opened_at is null;
   get diagnostics v_n = row_count;
   return v_n;
 end;
@@ -497,8 +611,9 @@ begin
 end;
 $$;
 
--- Editing a schedule moves its future occurrences that nobody has used yet
--- and cancels the ones its new rules no longer produce.
+-- Editing a schedule moves its generated future occurrences that nobody has
+-- used yet, cancels the ones its rules no longer produce and revives the ones
+-- they produce again. Manual occurrences and manual cancels are left alone.
 create or replace function chms_private.schedule_changed()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
@@ -508,16 +623,34 @@ begin
   update public.occurrences o
     set starts_at = (o.local_date + new.local_time) at time zone v_tz,
         ends_at = ((o.local_date + new.local_time) at time zone v_tz) + make_interval(mins => new.duration_minutes),
-        status = case
-          when o.local_date = any (new.exdates) or not new.active or new.archived_at is not null
-               or o.local_date < new.starts_on or (new.until is not null and o.local_date > new.until)
-               or not (extract(dow from o.local_date)::smallint = any (new.weekdays))
-          then 'cancelled' else o.status end
-  where o.schedule_id = new.id and o.status = 'scheduled' and o.opened_at is null
-    and o.local_date >= chms_private.local_today(new.org_id);
+        status = case when chms_private.schedule_runs_on(new, o.local_date) then 'scheduled' else 'cancelled' end,
+        rule_cancelled = not chms_private.schedule_runs_on(new, o.local_date)
+  where o.schedule_id = new.id and o.generated and o.opened_at is null
+    and o.local_date >= chms_private.local_today(new.org_id)
+    and (o.status = 'scheduled' or (o.status = 'cancelled' and o.rule_cancelled));
   return null;
 end;
 $$;
+
+-- A new time zone moves every generated, unused future occurrence with it.
+create or replace function chms_private.settings_changed()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.time_zone is distinct from old.time_zone then
+    update public.occurrences o
+      set starts_at = (o.local_date + s.local_time) at time zone new.time_zone,
+          ends_at = ((o.local_date + s.local_time) at time zone new.time_zone) + make_interval(mins => s.duration_minutes)
+    from public.schedules s
+    where s.id = o.schedule_id and o.org_id = new.org_id and o.generated and o.opened_at is null
+      and o.local_date >= chms_private.local_today(new.org_id);
+  end if;
+  return null;
+end;
+$$;
+create trigger trg_checkin_settings_changed after update of time_zone on public.org_checkin_settings
+  for each row execute function chms_private.settings_changed();
+create trigger trg_audit_checkin_settings after insert or update or delete on public.org_checkin_settings
+  for each row execute function chms_private.audit_row();
 create trigger trg_schedules_changed after update of local_time, duration_minutes, weekdays, interval_weeks, starts_on, until, exdates, active, archived_at
   on public.schedules for each row execute function chms_private.schedule_changed();
 
@@ -562,8 +695,9 @@ create table public.room_overrides (
 );
 create unique index idx_room_overrides_active on public.room_overrides (person_id) where archived_at is null;
 alter table public.room_overrides enable row level security;
-create policy "Kids viewers read room overrides" on public.room_overrides for select
-  using (org_id = any ((select chms_private.orgs_with_permission('kids.view'))::uuid[]));
+create policy "Kids viewers and check-in managers read room overrides" on public.room_overrides for select
+  using (org_id = any ((select chms_private.orgs_with_permission('kids.view'))::uuid[])
+      or org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]));
 create policy "Check-in managers add room overrides" on public.room_overrides for insert
   with check (org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]));
 create policy "Check-in managers edit room overrides" on public.room_overrides for update
@@ -590,9 +724,19 @@ create table public.checkin_restrictions (
 );
 create index idx_checkin_restrictions_person on public.checkin_restrictions (person_id) where cleared_at is null;
 alter table public.checkin_restrictions enable row level security;
-create policy "Care holders and check-in managers read restrictions" on public.checkin_restrictions for select
+create policy "Care, custody and check-in managers read restrictions" on public.checkin_restrictions for select
   using (org_id = any ((select chms_private.orgs_with_permission('kids.care'))::uuid[])
-      or org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]));
+      or org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[])
+      or org_id = any ((select chms_private.orgs_with_permission('custody.manage'))::uuid[]));
+
+-- The live override for a child, if any (archived or ended ones do not count).
+create or replace function chms_private.active_room_override(p_person_id uuid)
+returns uuid language sql stable security definer set search_path = public as $$
+  select o.room_id from public.room_overrides o
+  where o.person_id = p_person_id and o.archived_at is null
+    and (o.ends_on is null or o.ends_on >= chms_private.local_today(o.org_id))
+  order by o.created_at desc limit 1;
+$$;
 create policy "Check-in and custody managers add restrictions" on public.checkin_restrictions for insert
   with check (org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[])
            or org_id = any ((select chms_private.orgs_with_permission('custody.manage'))::uuid[]));
@@ -662,12 +806,17 @@ create or replace function chms_private.check_assignment()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
   v_date date;
+  v_schedule uuid;
 begin
-  select o.local_date into v_date
-  from public.volunteer_slots s join public.occurrences o on o.id = s.occurrence_id
+  select o.local_date, s.schedule_id into v_date, v_schedule
+  from public.volunteer_slots s left join public.occurrences o on o.id = s.occurrence_id
   where s.id = new.slot_id;
   if v_date is not null and v_date <> new.local_date then
     raise exception 'the assignment date must match the occurrence' using errcode = '22023';
+  end if;
+  if v_date is null and not exists (select 1 from public.occurrences o
+                                    where o.schedule_id = v_schedule and o.local_date = new.local_date and o.status <> 'cancelled') then
+    raise exception 'no service runs on that date' using errcode = '22023';
   end if;
   return new;
 end;
@@ -704,22 +853,47 @@ begin
   select * into a from chms_private.actor_for(new.org_id);
   if tg_op = 'INSERT' then
     new.set_by_person_id := a.person_id;
+    new.created_at := now();
   else
-    new.set_by_person_id := old.set_by_person_id;
+    new.org_id := old.org_id;
+    new.created_at := old.created_at;
+    new.set_by_person_id := case when tg_table_name = 'attendance_baselines' then a.person_id else old.set_by_person_id end;
   end if;
   if tg_table_name = 'checkin_restrictions' then
     if tg_op = 'INSERT' then
       new.starts_on := coalesce(new.starts_on, chms_private.local_today(new.org_id));
       new.cleared_at := null;
       new.cleared_by_person_id := null;
-    elsif old.cleared_at is not null then
-      -- clearing is final
-      new.cleared_at := old.cleared_at;
-      new.cleared_by_person_id := old.cleared_by_person_id;
-    elsif new.cleared_at is not null then
-      new.cleared_at := now();
-      new.cleared_by_person_id := a.person_id;
+    else
+      -- the subject, the kind and the start never change
+      new.person_id := old.person_id;
+      new.kind := old.kind;
+      new.starts_on := old.starts_on;
+      if old.cleared_at is not null then
+        -- clearing is final: a cleared restriction is history (its note may still be corrected)
+        if new.ends_on is distinct from old.ends_on then
+          raise exception 'a cleared restriction cannot be changed' using errcode = '42501';
+        end if;
+        new.cleared_at := old.cleared_at;
+        new.cleared_by_person_id := old.cleared_by_person_id;
+      elsif new.cleared_at is not null then
+        new.cleared_at := now();
+        new.cleared_by_person_id := a.person_id;
+      else
+        new.cleared_by_person_id := null;
+      end if;
     end if;
+  elsif tg_table_name = 'room_overrides' then
+    if tg_op = 'INSERT' then
+      -- an override whose end has passed makes way for the next one
+      update public.room_overrides set archived_at = now()
+        where person_id = new.person_id and archived_at is null
+          and ends_on is not null and ends_on < chms_private.local_today(new.org_id);
+    else
+      new.person_id := old.person_id;
+    end if;
+  elsif tg_table_name = 'volunteer_assignments' and tg_op = 'UPDATE' then
+    new.person_id := old.person_id;
   end if;
   return new;
 end;
@@ -762,7 +936,8 @@ begin
   if v_person is null then
     raise exception 'your login is not linked to a person at this church' using errcode = '42501';
   end if;
-  if p_pin !~ '^\d{4,8}$' or p_pin ~ '^(\d)\1+$' or p_pin in ('1234', '12345', '123456', '0000') then
+  if p_pin !~ '^\d{4,8}$' or p_pin ~ '^(\d)\1+$'
+     or position(p_pin in '0123456789') > 0 or position(p_pin in '9876543210') > 0 then
     raise exception 'choose 4 to 8 digits that are not all the same or in sequence' using errcode = '22023';
   end if;
   insert into chms_private.staff_pins (person_id, org_id, pin_hash)
@@ -793,13 +968,17 @@ declare
   v_row chms_private.staff_pins%rowtype;
   v_ok boolean := false;
   v_perms text[];
+  v_fails smallint;
+  v_subject uuid;
 begin
   if v_org is null then
     raise exception 'stations only' using errcode = '42501';
   end if;
+  -- the subject is logged only when it is one of this church's people
+  select p.id into v_subject from public.people p where p.id = p_person_id and p.org_id = v_org and p.archived_at is null;
   select * into v_row from chms_private.staff_pins where person_id = p_person_id and org_id = v_org for update;
-  if not found or not exists (select 1 from public.people p where p.id = p_person_id and p.archived_at is null) then
-    perform chms_private.log_access(v_org, 'staff_pin.verify', p_person_id, 1, jsonb_build_object('ok', false, 'reason', 'unknown'));
+  if v_subject is null or not found then
+    perform chms_private.log_access(v_org, 'staff_pin.verify', v_subject, 1, jsonb_build_object('ok', false, 'reason', 'unknown'));
     return jsonb_build_object('ok', false, 'error', 'PIN not accepted.');
   end if;
   if v_row.locked_until is not null and v_row.locked_until > now() then
@@ -808,17 +987,24 @@ begin
   end if;
   v_ok := p_pin ~ '^\d{4,8}$' and extensions.crypt(p_pin, v_row.pin_hash) = v_row.pin_hash;
   if v_ok then
-    update chms_private.staff_pins set failed_count = 0, locked_until = null where person_id = p_person_id;
     v_perms := case when chms_private.person_is_church_admin(p_person_id) then chms_private.all_permissions()
                     else chms_private.person_role_permissions(p_person_id) end;
+    -- a PIN outlives a role; the permission does not
+    if not (v_perms && array['checkin.station', 'checkin.manage']) then
+      perform chms_private.log_access(v_org, 'staff_pin.verify', p_person_id, 1, jsonb_build_object('ok', false, 'reason', 'no_permission'));
+      return jsonb_build_object('ok', false, 'error', 'PIN not accepted.');
+    end if;
+    update chms_private.staff_pins set failed_count = 0, locked_until = null where person_id = p_person_id;
     perform chms_private.log_access(v_org, 'staff_pin.verify', p_person_id, 1, jsonb_build_object('ok', true));
     return jsonb_build_object('ok', true, 'person_id', p_person_id,
       'permissions', to_jsonb(array(select x from unnest(v_perms) x
                                     where x in ('checkin.station', 'checkin.manage', 'kids.view', 'kids.care', 'custody.manage'))));
   end if;
+  -- an expired lock starts a fresh window of five tries
+  v_fails := case when v_row.locked_until is not null then 1 else v_row.failed_count + 1 end;
   update chms_private.staff_pins
-    set failed_count = failed_count + 1,
-        locked_until = case when failed_count + 1 >= 5 then now() + interval '15 minutes' else locked_until end
+    set failed_count = v_fails,
+        locked_until = case when v_fails >= 5 then now() + interval '15 minutes' else null end
     where person_id = p_person_id;
   perform chms_private.log_access(v_org, 'staff_pin.verify', p_person_id, 1, jsonb_build_object('ok', false, 'reason', 'mismatch'));
   return jsonb_build_object('ok', false, 'error', 'PIN not accepted.');
@@ -847,6 +1033,80 @@ begin
   );
   return new;
 end;
+$$;
+
+-- GoTrue inserts the auth row before some flows write app_metadata: a profile
+-- made for a user that later turns out to be a station is dropped.
+create or replace function public.drop_station_profile()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if coalesce(new.raw_app_meta_data ->> 'kind', '') = 'station' then
+    delete from public.profiles where id = new.id;
+  end if;
+  return new;
+end;
+$$;
+revoke execute on function public.drop_station_profile() from public, anon, authenticated;
+drop trigger if exists on_auth_user_station on auth.users;
+create trigger on_auth_user_station after update of raw_app_meta_data on auth.users
+  for each row execute function public.drop_station_profile();
+
+-- Membership is never derived for a station token, whatever org_members holds.
+create or replace function chms_private.my_orgs()
+returns uuid[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(org_id), '{}') from public.org_members where user_id = auth.uid() and not public.is_station();
+$$;
+create or replace function chms_private.my_person_ids()
+returns uuid[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(pl.person_id), '{}')
+  from public.person_logins pl
+  join public.people p on p.id = pl.person_id and p.archived_at is null
+  join public.org_members m on m.org_id = pl.org_id and m.user_id = pl.user_id
+  where pl.user_id = auth.uid() and not public.is_station();
+$$;
+create or replace function chms_private.orgs_with_permission(p_permission text)
+returns uuid[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(distinct s.org_id), '{}')
+  from (
+    select m.org_id from public.org_members m
+    where m.user_id = auth.uid() and m.role in ('owner', 'admin')
+    union
+    select m.org_id
+    from public.org_members m
+    join public.person_logins pl on pl.org_id = m.org_id and pl.user_id = m.user_id
+    join public.people p on p.id = pl.person_id and p.archived_at is null
+    join public.person_roles pr on pr.person_id = p.id
+    join public.org_roles r on r.id = pr.role_id
+    where m.user_id = auth.uid() and p_permission = any (r.permissions)
+  ) s
+  where not public.is_station();
+$$;
+create or replace function chms_private.user_permissions(p_org_id uuid, p_user_id uuid)
+returns text[] language sql stable security definer set search_path = public as $$
+  select case
+    when p_user_id is null or public.is_station() then '{}'::text[]
+    when exists (select 1 from public.org_members m
+                 where m.org_id = p_org_id and m.user_id = p_user_id and m.role in ('owner', 'admin'))
+      then chms_private.all_permissions()
+    else coalesce((
+      select array_agg(distinct perm order by perm)
+      from public.org_members m
+      join public.person_logins pl on pl.org_id = m.org_id and pl.user_id = m.user_id
+      join public.people p on p.id = pl.person_id and p.archived_at is null
+      join public.person_roles pr on pr.person_id = p.id
+      join public.org_roles r on r.id = pr.role_id
+      cross join unnest(r.permissions) perm
+      where m.org_id = p_org_id and m.user_id = p_user_id
+    ), '{}'::text[])
+  end;
+$$;
+create or replace function public.is_org_member(p_org_id uuid, p_min_role text default 'volunteer')
+returns boolean language sql stable security definer set search_path = public as $$
+  select not public.is_station() and exists (
+    select 1 from public.org_members m
+    where m.org_id = p_org_id and m.user_id = auth.uid()
+      and public.org_role_rank(m.role) >= public.org_role_rank(p_min_role)
+  );
 $$;
 
 -- Holds inside SECURITY DEFINER functions too, where row policies do not.
@@ -999,7 +1259,9 @@ create policy "Configuration audit follows check-in permissions" on public.chms_
                     'printers', 'label_templates', 'stations', 'station_scopes', 'volunteer_slots', 'volunteer_assignments')
        and org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]))
     or (table_name = 'room_overrides' and org_id = any ((select chms_private.orgs_with_permission('kids.view'))::uuid[]))
-    or (table_name = 'checkin_restrictions' and org_id = any ((select chms_private.orgs_with_permission('kids.care'))::uuid[])));
+    or (table_name = 'org_checkin_settings' and org_id = any ((select chms_private.orgs_with_permission('checkin.manage'))::uuid[]))
+    or (table_name = 'checkin_restrictions' and (org_id = any ((select chms_private.orgs_with_permission('kids.care'))::uuid[])
+                                                 or org_id = any ((select chms_private.orgs_with_permission('custody.manage'))::uuid[]))));
 
 -- ------------------------------------------------------------ grants --
 revoke execute on function
@@ -1014,9 +1276,10 @@ grant execute on function
 -- Policy helpers (my_station, my_station_org, station_room_ids,
 -- check_room_criteria) are evaluated as the caller and stay callable.
 revoke execute on function
-  chms_private.generate_all_occurrences(), chms_private.schedule_changed(), chms_private.require_time_zone(),
-  chms_private.config_events(), chms_private.stamp_set_by(), chms_private.check_assignment(),
-  chms_private.deny_station_writes(), chms_private.active_restriction(uuid)
+  chms_private.generate_all_occurrences(), chms_private.schedule_changed(), chms_private.settings_changed(), chms_private.require_time_zone(),
+  chms_private.config_events(), chms_private.stamp_set_by(), chms_private.check_assignment(), chms_private.check_overflow(),
+  chms_private.pin_leader(), chms_private.protect_occurrence(), chms_private.deny_station_writes(),
+  chms_private.active_restriction(uuid), chms_private.active_room_override(uuid)
   from public, anon, authenticated;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 

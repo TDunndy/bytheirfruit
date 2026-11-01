@@ -843,14 +843,14 @@ isOneToOne: false
                   ]
                 },"occurrences": {
                   Row: {
-                    "closed_at": string | null,"created_at": string,"ends_at": string,"id": string,"local_date": string,"note": string | null,"opened_at": string | null,"org_id": string,"schedule_id": string,"starts_at": string,"status": string,"updated_at": string
+                    "closed_at": string | null,"created_at": string,"ends_at": string,"generated": boolean,"id": string,"local_date": string,"note": string | null,"opened_at": string | null,"org_id": string,"rule_cancelled": boolean,"schedule_id": string,"starts_at": string,"status": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "closed_at"?: string | null,"created_at"?: string,"ends_at": string,"id"?: string,"local_date": string,"note"?: string | null,"opened_at"?: string | null,"org_id": string,"schedule_id": string,"starts_at": string,"status"?: string,"updated_at"?: string
+                    "closed_at"?: string | null,"created_at"?: string,"ends_at": string,"generated"?: boolean,"id"?: string,"local_date": string,"note"?: string | null,"opened_at"?: string | null,"org_id": string,"rule_cancelled"?: boolean,"schedule_id": string,"starts_at": string,"status"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "closed_at"?: string | null,"created_at"?: string,"ends_at"?: string,"id"?: string,"local_date"?: string,"note"?: string | null,"opened_at"?: string | null,"org_id"?: string,"schedule_id"?: string,"starts_at"?: string,"status"?: string,"updated_at"?: string
+                    "closed_at"?: string | null,"created_at"?: string,"ends_at"?: string,"generated"?: boolean,"id"?: string,"local_date"?: string,"note"?: string | null,"opened_at"?: string | null,"org_id"?: string,"rule_cancelled"?: boolean,"schedule_id"?: string,"starts_at"?: string,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {

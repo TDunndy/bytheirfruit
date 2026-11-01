@@ -48,6 +48,13 @@ describe('criteria shape (mirrors check_room_criteria)', () => {
       { match: 'some', rules: [{ kind: 'tag', value: 'x' }] },
       { manual_only: 'yes', rules: [] },
       { rules: [{ kind: 'custom_field', key: 'bus', value: { nested: true } }] },
+      { rules: [{ kind: 'birthdate', min: '2020-02-30', min_inclusive: true }] },
+      { rules: [{ kind: 'birthdate', min: '2020-05-05', min_inclusive: true, max: '2020-05-05', max_inclusive: false }] },
+      { rules: [{ kind: 'grade', min: 13, min_inclusive: true }] },
+      { rules: [{ kind: 'grade', max: -5, max_inclusive: true }] },
+      { rules: [{ kind: 'age_months', min: 3, min_inclusive: true, max: 3, max_inclusive: false, measured_on: 'occurrence' }] },
+      { rules: [{ kind: 'age_years', max: 200, max_inclusive: true, measured_on: 'cutoff' }] },
+      { rules: [{ kind: 'tag', value: '   ' }] },
       'not an object',
       null,
     ]

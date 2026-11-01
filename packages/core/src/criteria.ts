@@ -51,30 +51,34 @@ export function isRule(r: unknown): r is Rule {
     if (('min' in r) !== ('min_inclusive' in r) || ('max' in r) !== ('max_inclusive' in r)) return false
     if ('min_inclusive' in r && typeof r.min_inclusive !== 'boolean') return false
     if ('max_inclusive' in r && typeof r.max_inclusive !== 'boolean') return false
+    const bothInclusive = r.min_inclusive === true && r.max_inclusive === true
     if (k === 'birthdate') {
       if ('measured_on' in r) return false
-      if ('min' in r && !isLocalDate(r.min)) return false
-      if ('max' in r && !isLocalDate(r.max)) return false
-      if ('min' in r && 'max' in r && (r.min as string) > (r.max as string)) return false
+      if ('min' in r && (!isLocalDate(r.min) || r.min < '1900-01-01' || r.min > '2100-12-31')) return false
+      if ('max' in r && (!isLocalDate(r.max) || r.max < '1900-01-01' || r.max > '2100-12-31')) return false
+      if ('min' in r && 'max' in r) {
+        if ((r.min as string) > (r.max as string)) return false
+        if (r.min === r.max && !bothInclusive) return false
+      }
       return true
     }
     const min = 'min' in r ? r.min : undefined, max = 'max' in r ? r.max : undefined
     if (min !== undefined && (typeof min !== 'number' || !Number.isInteger(min))) return false
     if (max !== undefined && (typeof max !== 'number' || !Number.isInteger(max))) return false
-    if (min !== undefined && max !== undefined && min > max) return false
-    if (k === 'grade') {
-      if ('measured_on' in r) return false
-      if ((min ?? -1) < -1 || (max ?? 12) > 12) return false
-      return true
+    if (min !== undefined && max !== undefined) {
+      if (min > max) return false
+      if (min === max && !bothInclusive) return false
     }
-    if (!(r.measured_on === 'occurrence' || r.measured_on === 'cutoff')) return false
-    if ((min ?? 0) < 0 || (max ?? 0) > (k === 'age_months' ? 1500 : 125)) return false
-    return true
+    const [lo, hi] = k === 'grade' ? [-1, 12] : [0, k === 'age_months' ? 1500 : 125]
+    if (min !== undefined && (min < lo || min > hi)) return false
+    if (max !== undefined && (max < lo || max > hi)) return false
+    if (k === 'grade') return !('measured_on' in r)
+    return r.measured_on === 'occurrence' || r.measured_on === 'cutoff'
   }
   if (k === 'gender') return onlyKeys(r, ['kind', 'value']) && (r.value === 'male' || r.value === 'female')
-  if (k === 'tag') return onlyKeys(r, ['kind', 'value']) && typeof r.value === 'string' && r.value.length >= 1 && r.value.length <= 60
+  if (k === 'tag') return onlyKeys(r, ['kind', 'value']) && typeof r.value === 'string' && r.value.trim().length >= 1 && r.value.length <= 60
   if (k === 'custom_field') {
-    return onlyKeys(r, ['kind', 'key', 'value']) && typeof r.key === 'string' && r.key.length >= 1 && r.key.length <= 60
+    return onlyKeys(r, ['kind', 'key', 'value']) && typeof r.key === 'string' && r.key.trim().length >= 1 && r.key.length <= 60
       && (typeof r.value === 'string' || typeof r.value === 'number' || typeof r.value === 'boolean')
   }
   return false
