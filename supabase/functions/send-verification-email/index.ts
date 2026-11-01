@@ -83,6 +83,8 @@ Deno.serve(async (req) => {
     const caller = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
     const { data: { user }, error: userErr } = await caller.auth.getUser();
     if (userErr || !user) return reply({ error: "Please sign in to claim a church." }, 401);
+    // Paired check-in stations are not people; they never claim churches.
+    if (user.app_metadata?.kind === "station") return reply({ error: "Please sign in to claim a church." }, 401);
 
     const body = await req.json().catch(() => ({}));
     const churchId = String(body.churchId ?? "");

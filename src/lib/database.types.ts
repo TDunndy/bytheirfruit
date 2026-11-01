@@ -39,6 +39,64 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"area_leaders": {
+                  Row: {
+                    "area_id": string,"created_at": string,"id": string,"kind": string,"org_id": string,"person_id": string | null,"role_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "area_id": string,"created_at"?: string,"id"?: string,"kind"?: string,"org_id": string,"person_id"?: string | null,"role_id"?: string | null
+                  }
+                  Update: {
+                    "area_id"?: string,"created_at"?: string,"id"?: string,"kind"?: string,"org_id"?: string,"person_id"?: string | null,"role_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "area_leaders_area_id_org_id_fkey"
+      columns: ["area_id","org_id"]
+isOneToOne: false
+      referencedRelation: "areas"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "area_leaders_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "area_leaders_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "area_leaders_role_id_org_id_fkey"
+      columns: ["role_id","org_id"]
+isOneToOne: false
+      referencedRelation: "org_roles"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"areas": {
+                  Row: {
+                    "archived_at": string | null,"created_at": string,"id": string,"kind": string,"name": string,"org_id": string,"sort_order": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"kind": string,"name": string,"org_id": string,"sort_order"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"kind"?: string,"name"?: string,"org_id"?: string,"sort_order"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "areas_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"checkin_keys": {
                   Row: {
                     "household_id": string | null,"id": string,"issued_at": string,"kind": string,"org_id": string,"person_id": string | null,"revoked_at": string | null,"value": string
@@ -66,6 +124,44 @@ isOneToOne: false
     },{
       foreignKeyName: "checkin_keys_person_id_org_id_fkey"
       columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"checkin_restrictions": {
+                  Row: {
+                    "cleared_at": string | null,"cleared_by_person_id": string | null,"created_at": string,"ends_on": string | null,"id": string,"kind": string,"note": string | null,"org_id": string,"person_id": string,"set_by_person_id": string | null,"starts_on": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cleared_at"?: string | null,"cleared_by_person_id"?: string | null,"created_at"?: string,"ends_on"?: string | null,"id"?: string,"kind": string,"note"?: string | null,"org_id": string,"person_id": string,"set_by_person_id"?: string | null,"starts_on"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "cleared_at"?: string | null,"cleared_by_person_id"?: string | null,"created_at"?: string,"ends_on"?: string | null,"id"?: string,"kind"?: string,"note"?: string | null,"org_id"?: string,"person_id"?: string,"set_by_person_id"?: string | null,"starts_on"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "checkin_restrictions_cleared_by_person_id_org_id_fkey"
+      columns: ["cleared_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "checkin_restrictions_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "checkin_restrictions_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "checkin_restrictions_set_by_person_id_org_id_fkey"
+      columns: ["set_by_person_id","org_id"]
 isOneToOne: false
       referencedRelation: "people"
       referencedColumns: ["id","org_id"]
@@ -479,6 +575,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"label_templates": {
+                  Row: {
+                    "archived_at": string | null,"created_at": string,"height_mm": number,"id": string,"is_default": boolean,"kind": string,"layout": NonNullable<Json>,"name": string,"org_id": string,"stock": string,"updated_at": string,"version": number,"width_mm": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"created_at"?: string,"height_mm"?: number,"id"?: string,"is_default"?: boolean,"kind": string,"layout"?: NonNullable<Json>,"name": string,"org_id": string,"stock"?: string,"updated_at"?: string,"version"?: number,"width_mm"?: number
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"created_at"?: string,"height_mm"?: number,"id"?: string,"is_default"?: boolean,"kind"?: string,"layout"?: NonNullable<Json>,"name"?: string,"org_id"?: string,"stock"?: string,"updated_at"?: string,"version"?: number,"width_mm"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "label_templates_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"newsletter_subscribers": {
                   Row: {
                     "email": string,"id": string,"subscribed_at": string | null,"unsubscribed": boolean | null
@@ -492,6 +608,32 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"occurrences": {
+                  Row: {
+                    "closed_at": string | null,"created_at": string,"ends_at": string,"id": string,"local_date": string,"note": string | null,"opened_at": string | null,"org_id": string,"schedule_id": string,"starts_at": string,"status": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "closed_at"?: string | null,"created_at"?: string,"ends_at": string,"id"?: string,"local_date": string,"note"?: string | null,"opened_at"?: string | null,"org_id": string,"schedule_id": string,"starts_at": string,"status"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "closed_at"?: string | null,"created_at"?: string,"ends_at"?: string,"id"?: string,"local_date"?: string,"note"?: string | null,"opened_at"?: string | null,"org_id"?: string,"schedule_id"?: string,"starts_at"?: string,"status"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "occurrences_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "occurrences_schedule_id_org_id_fkey"
+      columns: ["schedule_id","org_id"]
+isOneToOne: false
+      referencedRelation: "schedules"
+      referencedColumns: ["id","org_id"]
+    }
                   ]
                 },"org_checkin_settings": {
                   Row: {
@@ -859,6 +1001,32 @@ isOneToOne: false
       referencedColumns: ["id","org_id"]
     }
                   ]
+                },"printers": {
+                  Row: {
+                    "active": boolean,"address": string | null,"archived_at": string | null,"area_id": string | null,"connection": string,"created_at": string,"id": string,"model": string | null,"name": string,"org_id": string,"stock": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"address"?: string | null,"archived_at"?: string | null,"area_id"?: string | null,"connection"?: string,"created_at"?: string,"id"?: string,"model"?: string | null,"name": string,"org_id": string,"stock"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "active"?: boolean,"address"?: string | null,"archived_at"?: string | null,"area_id"?: string | null,"connection"?: string,"created_at"?: string,"id"?: string,"model"?: string | null,"name"?: string,"org_id"?: string,"stock"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "printers_area_id_org_id_fkey"
+      columns: ["area_id","org_id"]
+isOneToOne: false
+      referencedRelation: "areas"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "printers_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"profiles": {
                   Row: {
                     "address": string | null,"age_range": string | null,"avatar_url": string | null,"created_at": string | null,"display_name": string,"email": string | null,"gender": string | null,"id": string,"income_bracket": string | null,"last_active_at": string | null,"phone": string | null,"provider": string | null,"review_suspended": boolean | null,"role": string | null,"status": string | null,"suspension_reason": string | null,"zip_code": string | null
@@ -1023,6 +1191,166 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"room_leaders": {
+                  Row: {
+                    "created_at": string,"id": string,"kind": string,"org_id": string,"person_id": string | null,"role_id": string | null,"room_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"kind"?: string,"org_id": string,"person_id"?: string | null,"role_id"?: string | null,"room_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"kind"?: string,"org_id"?: string,"person_id"?: string | null,"role_id"?: string | null,"room_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "room_leaders_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "room_leaders_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "room_leaders_role_id_org_id_fkey"
+      columns: ["role_id","org_id"]
+isOneToOne: false
+      referencedRelation: "org_roles"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "room_leaders_room_id_org_id_fkey"
+      columns: ["room_id","org_id"]
+isOneToOne: false
+      referencedRelation: "rooms"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"room_overrides": {
+                  Row: {
+                    "archived_at": string | null,"created_at": string,"ends_on": string | null,"id": string,"note": string | null,"org_id": string,"person_id": string,"room_id": string,"set_by_person_id": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"created_at"?: string,"ends_on"?: string | null,"id"?: string,"note"?: string | null,"org_id": string,"person_id": string,"room_id": string,"set_by_person_id"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"created_at"?: string,"ends_on"?: string | null,"id"?: string,"note"?: string | null,"org_id"?: string,"person_id"?: string,"room_id"?: string,"set_by_person_id"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "room_overrides_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "room_overrides_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "room_overrides_room_id_org_id_fkey"
+      columns: ["room_id","org_id"]
+isOneToOne: false
+      referencedRelation: "rooms"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "room_overrides_set_by_person_id_org_id_fkey"
+      columns: ["set_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"rooms": {
+                  Row: {
+                    "active": boolean,"archived_at": string | null,"area_id": string,"capacity": number | null,"children_per_adult": number | null,"created_at": string,"criteria": NonNullable<Json>,"id": string,"name": string,"org_id": string,"overflow_room_id": string | null,"priority": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"archived_at"?: string | null,"area_id": string,"capacity"?: number | null,"children_per_adult"?: number | null,"created_at"?: string,"criteria"?: NonNullable<Json>,"id"?: string,"name": string,"org_id": string,"overflow_room_id"?: string | null,"priority"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "active"?: boolean,"archived_at"?: string | null,"area_id"?: string,"capacity"?: number | null,"children_per_adult"?: number | null,"created_at"?: string,"criteria"?: NonNullable<Json>,"id"?: string,"name"?: string,"org_id"?: string,"overflow_room_id"?: string | null,"priority"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "rooms_area_id_org_id_fkey"
+      columns: ["area_id","org_id"]
+isOneToOne: false
+      referencedRelation: "areas"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "rooms_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "rooms_overflow_room_id_org_id_fkey"
+      columns: ["overflow_room_id","org_id"]
+isOneToOne: false
+      referencedRelation: "rooms"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"schedule_rooms": {
+                  Row: {
+                    "created_at": string,"id": string,"org_id": string,"room_id": string,"schedule_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"org_id": string,"room_id": string,"schedule_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"org_id"?: string,"room_id"?: string,"schedule_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "schedule_rooms_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "schedule_rooms_room_id_org_id_fkey"
+      columns: ["room_id","org_id"]
+isOneToOne: false
+      referencedRelation: "rooms"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "schedule_rooms_schedule_id_org_id_fkey"
+      columns: ["schedule_id","org_id"]
+isOneToOne: false
+      referencedRelation: "schedules"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"schedules": {
+                  Row: {
+                    "active": boolean,"archived_at": string | null,"created_at": string,"duration_minutes": number,"exdates": (string)[],"id": string,"interval_weeks": number,"kind": string,"local_time": string,"name": string,"org_id": string,"starts_on": string,"until": string | null,"updated_at": string,"weekdays": (number)[]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"archived_at"?: string | null,"created_at"?: string,"duration_minutes"?: number,"exdates"?: (string)[],"id"?: string,"interval_weeks"?: number,"kind"?: string,"local_time": string,"name": string,"org_id": string,"starts_on": string,"until"?: string | null,"updated_at"?: string,"weekdays": (number)[]
+                  }
+                  Update: {
+                    "active"?: boolean,"archived_at"?: string | null,"created_at"?: string,"duration_minutes"?: number,"exdates"?: (string)[],"id"?: string,"interval_weeks"?: number,"kind"?: string,"local_time"?: string,"name"?: string,"org_id"?: string,"starts_on"?: string,"until"?: string | null,"updated_at"?: string,"weekdays"?: (number)[]
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "schedules_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"score_snapshots": {
                   Row: {
                     "category": string,"church_id": string,"created_at": string | null,"id": string,"review_count": number | null,"score_value": number | null,"snapshot_date": string
@@ -1041,6 +1369,70 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "churches"
       referencedColumns: ["id"]
+    }
+                  ]
+                },"station_scopes": {
+                  Row: {
+                    "area_id": string | null,"created_at": string,"id": string,"org_id": string,"room_id": string | null,"station_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "area_id"?: string | null,"created_at"?: string,"id"?: string,"org_id": string,"room_id"?: string | null,"station_id": string
+                  }
+                  Update: {
+                    "area_id"?: string | null,"created_at"?: string,"id"?: string,"org_id"?: string,"room_id"?: string | null,"station_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "station_scopes_area_id_org_id_fkey"
+      columns: ["area_id","org_id"]
+isOneToOne: false
+      referencedRelation: "areas"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "station_scopes_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "station_scopes_room_id_org_id_fkey"
+      columns: ["room_id","org_id"]
+isOneToOne: false
+      referencedRelation: "rooms"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "station_scopes_station_id_org_id_fkey"
+      columns: ["station_id","org_id"]
+isOneToOne: false
+      referencedRelation: "stations"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"stations": {
+                  Row: {
+                    "active": boolean,"archived_at": string | null,"created_at": string,"id": string,"label_stock": string | null,"mode": string,"name": string,"org_id": string,"printer_id": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"archived_at"?: string | null,"created_at"?: string,"id"?: string,"label_stock"?: string | null,"mode": string,"name": string,"org_id": string,"printer_id"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "active"?: boolean,"archived_at"?: string | null,"created_at"?: string,"id"?: string,"label_stock"?: string | null,"mode"?: string,"name"?: string,"org_id"?: string,"printer_id"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "stations_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "stations_printer_id_org_id_fkey"
+      columns: ["printer_id","org_id"]
+isOneToOne: false
+      referencedRelation: "printers"
+      referencedColumns: ["id","org_id"]
     }
                   ]
                 },"subscription_events": {
@@ -1087,6 +1479,88 @@ isOneToOne: false
 isOneToOne: true
       referencedRelation: "organizations"
       referencedColumns: ["id"]
+    }
+                  ]
+                },"volunteer_assignments": {
+                  Row: {
+                    "created_at": string,"id": string,"local_date": string,"note": string | null,"org_id": string,"person_id": string,"set_by_person_id": string | null,"slot_id": string,"status": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"local_date": string,"note"?: string | null,"org_id": string,"person_id": string,"set_by_person_id"?: string | null,"slot_id": string,"status"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"local_date"?: string,"note"?: string | null,"org_id"?: string,"person_id"?: string,"set_by_person_id"?: string | null,"slot_id"?: string,"status"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "volunteer_assignments_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "volunteer_assignments_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "volunteer_assignments_set_by_person_id_org_id_fkey"
+      columns: ["set_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "volunteer_assignments_slot_id_org_id_fkey"
+      columns: ["slot_id","org_id"]
+isOneToOne: false
+      referencedRelation: "volunteer_slots"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"volunteer_slots": {
+                  Row: {
+                    "archived_at": string | null,"arrive_minutes_before": number,"created_at": string,"id": string,"label": string | null,"needed": number,"occurrence_id": string | null,"org_id": string,"role_id": string | null,"room_id": string | null,"schedule_id": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"arrive_minutes_before"?: number,"created_at"?: string,"id"?: string,"label"?: string | null,"needed"?: number,"occurrence_id"?: string | null,"org_id": string,"role_id"?: string | null,"room_id"?: string | null,"schedule_id"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"arrive_minutes_before"?: number,"created_at"?: string,"id"?: string,"label"?: string | null,"needed"?: number,"occurrence_id"?: string | null,"org_id"?: string,"role_id"?: string | null,"room_id"?: string | null,"schedule_id"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "volunteer_slots_occurrence_id_org_id_fkey"
+      columns: ["occurrence_id","org_id"]
+isOneToOne: false
+      referencedRelation: "occurrences"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "volunteer_slots_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "volunteer_slots_role_id_org_id_fkey"
+      columns: ["role_id","org_id"]
+isOneToOne: false
+      referencedRelation: "org_roles"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "volunteer_slots_room_id_org_id_fkey"
+      columns: ["room_id","org_id"]
+isOneToOne: false
+      referencedRelation: "rooms"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "volunteer_slots_schedule_id_org_id_fkey"
+      columns: ["schedule_id","org_id"]
+isOneToOne: false
+      referencedRelation: "schedules"
+      referencedColumns: ["id","org_id"]
     }
                   ]
                 }
@@ -1140,6 +1614,9 @@ isOneToOne: true
                            },
 "create_org_invitation":
 { Args: { "p_email": string,"p_member_role"?: string,"p_org_id": string,"p_person_id": string }; Returns: Json
+                           },
+"generate_occurrences":
+{ Args: { "p_from"?: string,"p_org_id": string,"p_through": string }; Returns: number
                            },
 "geocode_zip":
 { Args: { "p_zip": string }; Returns: {
@@ -1199,6 +1676,9 @@ isOneToOne: true
 "set_child_care":
 { Args: { "p_allergies": string,"p_allergy_short": string,"p_medical": string,"p_person_id": string,"p_special_needs": string }; Returns: undefined
                            },
+"set_my_staff_pin":
+{ Args: { "p_org_id": string,"p_pin": string }; Returns: undefined
+                           },
 "site_stats":
 { Args: Record<PropertyKey, never>; Returns: {
               "churches": number,"members": number,"reviews": number
@@ -1210,11 +1690,22 @@ isOneToOne: true
 "soft_delete_review":
 { Args: { "p_review_id": string }; Returns: undefined
                            },
+"station_self":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"station_staff":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "display_name": string,"person_id": string
+            }[]
+                           },
 "unlink_person_login":
 { Args: { "p_person_id": string }; Returns: undefined
                            },
 "verify_claim_code":
 { Args: { "p_church_id": string,"p_code": string }; Returns: Json
+                           },
+"verify_staff_pin":
+{ Args: { "p_person_id": string,"p_pin": string }; Returns: Json
                            }
           }
           Enums: {

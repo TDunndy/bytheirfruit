@@ -506,7 +506,9 @@ select pg_temp.ok(not exists (
   where table_schema = 'public'
     and table_name in ('people', 'people_audit', 'person_notes', 'org_invitations', 'households', 'person_roles', 'person_overseers', 'org_roles',
                        'org_checkin_settings', 'custom_field_defs', 'custom_field_values_sensitive', 'household_flags', 'access_log', 'chms_audit',
-                       'child_care', 'pickup_people', 'person_documents', 'person_credentials', 'contact_consents', 'checkin_keys', 'domain_events')
+                       'child_care', 'pickup_people', 'person_documents', 'person_credentials', 'contact_consents', 'checkin_keys', 'domain_events',
+                       'areas', 'rooms', 'area_leaders', 'room_leaders', 'printers', 'label_templates', 'stations', 'station_scopes', 'schedules',
+                       'schedule_rooms', 'occurrences', 'room_overrides', 'checkin_restrictions', 'volunteer_slots', 'volunteer_assignments')
     and (column_name in ('user_id', 'created_by', 'accepted_by', 'actor') or column_name like '%user%')),
   'no church table a leader can read carries an account id');
 
@@ -1345,6 +1347,247 @@ select pg_temp.ok(public.is_station(), 'a station token is recognised');
 select pg_temp.ok((select count(*) from public.people) = 0, 'a station reads no people through the directory');
 select pg_temp.ok(pg_temp.try_sql($$select public.get_child_care('32000000-0000-0000-0000-000000000006')$$) = '42501', 'a station cannot read care notes');
 select pg_temp.as_postgres();
+
+\echo '== chms: check-in B (configuration and stations) =================='
+
+-- Station claims without switching role: the deny trigger must hold even
+-- inside SECURITY DEFINER code, where row policies do not apply.
+create or replace function pg_temp.claims_station(p_uid uuid, p_station uuid) returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', p_uid, 'role', 'authenticated',
+    'app_metadata', json_build_object('kind', 'station', 'station_id', p_station))::text, true);
+  perform set_config('request.jwt.claim.sub', p_uid::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+end $$;
+
+select pg_temp.as_postgres();
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+  $$insert into public.schedules (org_id, name, local_time, weekdays, starts_on) values ('20000000-0000-0000-0000-000000000001', 'Early', '09:00', '{0}', '2027-03-01')$$) = '22023',
+  'a schedule needs the church time zone first');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.org_checkin_settings (org_id, time_zone) values ('20000000-0000-0000-0000-000000000003', 'America/New_York')
+    on conflict (org_id) do update set time_zone = excluded.time_zone$$) = '',
+  'the owner sets the time zone');
+
+-- areas and rooms
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$
+  insert into public.areas (id, org_id, name, kind) values
+    ('72000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'The Barn', 'kids'),
+    ('72000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', 'K/5', 'kids'),
+    ('72000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000003', 'Welcome desk', 'volunteer');
+  insert into public.rooms (id, org_id, area_id, name, capacity, children_per_adult, priority, criteria) values
+    ('73000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Ducklings', 12, 4, 10,
+      '{"rules": [{"kind": "age_months", "min": 30, "min_inclusive": true, "max": 36, "max_inclusive": false, "measured_on": "occurrence"}]}'),
+    ('73000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Cubs', 16, 6, 20,
+      '{"rules": [{"kind": "age_years", "min": 3, "min_inclusive": true, "max": 4, "max_inclusive": false, "measured_on": "cutoff"}]}'),
+    ('73000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Colts', 16, 6, 30,
+      '{"match": "all", "rules": [{"kind": "age_years", "min": 4, "min_inclusive": true, "max": 6, "max_inclusive": false, "measured_on": "cutoff"}, {"kind": "grade", "max": -1, "max_inclusive": true}]}'),
+    ('73000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000002', 'Kindergarten', 20, 8, 40,
+      '{"rules": [{"kind": "grade", "min": 0, "min_inclusive": true, "max": 0, "max_inclusive": true}, {"kind": "gender", "value": "female"}, {"kind": "tag", "value": "guest"}, {"kind": "custom_field", "key": "bus", "value": true}]}'),
+    ('73000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000002', 'Overflow', null, null, 90,
+      '{"manual_only": true, "rules": []}')$$) = '',
+  'a check-in manager builds areas and rooms with typed criteria');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad1', '{"rules": [{"kind": "shoe_size", "min": 1, "min_inclusive": true}]}')$$) = '23514'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad2', '{"rules": [{"kind": "age_months", "min": 36, "min_inclusive": true, "max": 30, "max_inclusive": false, "measured_on": "occurrence"}]}')$$) = '23514'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad3', '{"rules": [{"kind": "age_months", "min": 30, "max": 36, "max_inclusive": false, "measured_on": "occurrence"}]}')$$) = '23514'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad4', '{"rules": [{"kind": "age_years", "min": 3, "min_inclusive": true}]}')$$) = '23514'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad5', '{"rules": []}')$$) = '23514'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad6', '{"rules": [{"kind": "gender", "value": "other"}]}')$$) = '23514'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.rooms (org_id, area_id, name, criteria) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Bad7', '{"rules": [{"kind": "birthdate", "min": "2020-13-45", "min_inclusive": true}], "extra": 1}')$$) = '23514',
+  'criteria with an unknown kind, min above max, a bound without its flag, an age without measured_on, no rules, a bad gender or an extra key are refused');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$insert into public.rooms (org_id, area_id, name) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Mine')$$) = '42501',
+  'checkin.station alone cannot add rooms');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000023');
+select pg_temp.ok((select count(*) from public.rooms) = 5, 'any member reads the rooms');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+select pg_temp.ok((select count(*) from public.rooms) + (select count(*) from public.areas) = 0, 'another church''s owner sees no rooms or areas');
+select pg_temp.as_postgres();
+
+-- schedules → occurrences, across a DST change (US spring forward 2027-03-14)
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$
+  insert into public.schedules (id, org_id, name, local_time, duration_minutes, weekdays, starts_on) values
+    ('74000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'First service', '09:00', 75, '{0}', '2027-03-01'),
+    ('74000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', 'Biweekly', '18:30', 60, '{3}', '2027-03-03');
+  update public.schedules set interval_weeks = 2 where id = '74000000-0000-0000-0000-000000000002';
+  insert into public.schedule_rooms (org_id, schedule_id, room_id) values
+    ('20000000-0000-0000-0000-000000000003', '74000000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000001'),
+    ('20000000-0000-0000-0000-000000000003', '74000000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000002')$$) = '',
+  'a check-in manager creates schedules');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok(public.generate_occurrences('20000000-0000-0000-0000-000000000003', '2027-03-31', '2027-03-01') = 7, 'generation makes four Sundays and three alternate Wednesdays');
+select pg_temp.ok(public.generate_occurrences('20000000-0000-0000-0000-000000000003', '2027-03-31', '2027-03-01') = 0, 'generation is idempotent');
+select pg_temp.ok((select starts_at from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-07') = '2027-03-07 14:00:00+00'::timestamptz
+  and (select starts_at from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-14') = '2027-03-14 13:00:00+00'::timestamptz,
+  '9:00 stays 9:00 local across the DST change');
+select pg_temp.ok((select array_agg(local_date order by local_date) from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000002') = array['2027-03-03', '2027-03-17', '2027-03-31']::date[],
+  'every-two-weeks counts from the first week');
+select pg_temp.ok(pg_temp.try_sql($$select public.generate_occurrences('20000000-0000-0000-0000-000000000003', '2028-06-01', '2027-03-01')$$) = '22023', 'generation stops at a year');
+update public.schedules set exdates = '{2027-03-21}', local_time = '10:45' where id = '74000000-0000-0000-0000-000000000001';
+select pg_temp.ok((select status from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-21') = 'cancelled'
+  and (select starts_at from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-28') = '2027-03-28 14:45:00+00'::timestamptz,
+  'editing a schedule cancels excluded dates and moves unused future occurrences');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok(pg_temp.try_sql($$select public.generate_occurrences('20000000-0000-0000-0000-000000000003', '2027-04-30', '2027-03-01')$$) = '42501', 'checkin.station alone cannot generate occurrences');
+select pg_temp.ok((select count(*) from public.occurrences) = 7, 'members read occurrences');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+select pg_temp.ok((select count(*) from public.occurrences) + (select count(*) from public.schedules) = 0, 'another church''s owner sees no schedules');
+select pg_temp.as_postgres();
+
+-- stations: known by their pairing row, never by the token
+insert into auth.users (id, email, raw_app_meta_data) values ('00000000-0000-0000-0000-000000000027', 'station-2@stations.invalid', '{"kind": "station"}');
+select pg_temp.ok((select count(*) from public.profiles where id = '00000000-0000-0000-0000-000000000027') = 0, 'a station user gets no profile');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$
+  insert into public.printers (id, org_id, name, model, address) values ('75000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'Barn QL', 'QL-820NWB', '10.0.0.21');
+  insert into public.stations (id, org_id, name, mode, printer_id) values
+    ('76000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'Barn kiosk', 'kiosk', '75000000-0000-0000-0000-000000000001'),
+    ('76000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', 'Front desk', 'staffed', null);
+  insert into public.station_scopes (org_id, station_id, area_id) values ('20000000-0000-0000-0000-000000000003', '76000000-0000-0000-0000-000000000001', '72000000-0000-0000-0000-000000000001');
+  insert into public.label_templates (org_id, name, kind, is_default) values ('20000000-0000-0000-0000-000000000003', 'Child', 'child', true)$$) = '',
+  'a check-in manager creates printers, stations, scopes and templates');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.label_templates (org_id, name, kind, is_default) values ('20000000-0000-0000-0000-000000000003', 'Child 2', 'child', true)$$) = '23505',
+  'one default template per label kind');
+insert into chms_private.station_principals (station_id, org_id, user_id) values
+  ('76000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000026'),
+  ('76000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000027');
+
+-- the token claims the front desk; the pairing row says the Barn kiosk
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000002');
+select pg_temp.ok((public.station_self() ->> 'station_id') = '76000000-0000-0000-0000-000000000001' and (public.station_self() ->> 'name') = 'Barn kiosk',
+  'a station is identified by its pairing row, not by the token''s claim');
+select pg_temp.ok((select count(*) from public.rooms) = 3 and (select count(*) from public.rooms where area_id = '72000000-0000-0000-0000-000000000001') = 3,
+  'a scoped station reads only its area''s rooms');
+select pg_temp.ok((select count(*) from public.schedule_rooms) = 2 and (select count(*) from public.occurrences) = 7 and (select count(*) from public.printers) = 1
+  and (select count(*) from public.stations) = 1 and (select count(*) from public.label_templates) = 1,
+  'a station reads its church''s schedules, printers and templates, and only itself among stations');
+select pg_temp.ok((select count(*) from public.profiles) + (select count(*) from public.church_claims) + (select count(*) from public.org_members)
+  + (select count(*) from public.churches) + (select count(*) from public.reviews) + (select count(*) from public.organizations) = 0,
+  'a station reads nothing from the review site or the membership tables');
+select pg_temp.ok(pg_temp.try_sql($$insert into public.favorites (user_id, church_id) values ('00000000-0000-0000-0000-000000000026', '10000000-0000-0000-0000-000000000001')$$) = '42501'
+  and pg_temp.try_sql($$insert into public.reviews (church_id, user_id, reviewer_role, text, score_teaching) values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000026', 'Member', 'A station wrote this review, which must never happen at all.', 5)$$) = '42501'
+  and pg_temp.try_sql($$insert into public.church_claims (church_id, user_id, claim_email) values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000026', 'x@y.org')$$) = '42501',
+  'a station cannot post a review, favorite a church or start a claim');
+select pg_temp.ok(pg_temp.try_sql($$select public.verify_claim_code('10000000-0000-0000-0000-000000000001', '123456')$$) = '42501'
+  and pg_temp.try_sql($$select public.generate_occurrences('20000000-0000-0000-0000-000000000003', '2027-04-30', '2027-03-01')$$) = '42501'
+  and pg_temp.try_sql($$select public.set_my_staff_pin('20000000-0000-0000-0000-000000000003', '2468')$$) = '42501',
+  'a station cannot verify a claim, generate occurrences or set a PIN');
+select pg_temp.ok(pg_temp.try_sql($$insert into public.rooms (org_id, area_id, name) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000001', 'Hack')$$) = '42501'
+  and pg_temp.try_sql($$update public.stations set mode = 'staffed'$$) = '' and (select mode from public.stations) = 'kiosk',
+  'a station changes no configuration');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000027', '76000000-0000-0000-0000-000000000002');
+select pg_temp.ok((select count(*) from public.rooms) = 5 and jsonb_array_length(public.station_self() -> 'room_ids') = 5, 'an unscoped station reads every room of its church');
+select pg_temp.as_postgres();
+-- the wall holds inside definer code too
+select pg_temp.claims_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok(pg_temp.try_sql($$insert into public.org_members (org_id, user_id, role) values ('20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000026', 'owner')$$) = '42501'
+  and pg_temp.try_sql($$update public.churches set name = 'x' where id = '10000000-0000-0000-0000-000000000001'$$) = '42501',
+  'with a station token, even privileged code cannot add members or edit churches');
+select pg_temp.as_postgres();
+update chms_private.station_principals set revoked_at = now() where station_id = '76000000-0000-0000-0000-000000000001';
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok(public.station_self() is null and (select count(*) from public.rooms) = 0, 'an unpaired station is nobody');
+select pg_temp.as_postgres();
+update chms_private.station_principals set revoked_at = null where station_id = '76000000-0000-0000-0000-000000000001';
+
+-- staff PINs
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.set_my_staff_pin('20000000-0000-0000-0000-000000000003', '2468')$$) = '', 'a station user sets their PIN');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.set_my_staff_pin('20000000-0000-0000-0000-000000000003', '1111')$$) = '22023'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select public.set_my_staff_pin('20000000-0000-0000-0000-000000000003', '2468')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$select public.set_my_staff_pin('20000000-0000-0000-0000-000000000003', '2468')$$) = '42501',
+  'weak PINs, people without a check-in permission and logins without a person record are refused');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '2468')$$) = '42501', 'only a station verifies PINs');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((select array_agg(display_name) from public.station_staff()) = array['Sam S.'], 'a station lists PIN holders by first name and initial');
+select pg_temp.ok(not (public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '0000') ->> 'ok')::boolean, 'a wrong PIN is refused');
+select pg_temp.ok((public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '2468') ->> 'ok')::boolean
+  and (public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '2468') -> 'permissions') ? 'checkin.station'
+  and not ((public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '2468') -> 'permissions') ? 'attendance.reports'),
+  'the right PIN answers with the holder''s check-in permissions only');
+select pg_temp.ok(not (public.verify_staff_pin('32000000-0000-0000-0000-000000000002', '2468') ->> 'ok')::boolean, 'a person without a PIN is refused');
+select public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '9999') from generate_series(1, 5);
+select pg_temp.ok((public.verify_staff_pin('32000000-0000-0000-0000-000000000001', '2468') ->> 'locked_until') is not null, 'five misses lock the PIN, even for the right code');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.access_log where action = 'staff_pin.verify' and station_id = '76000000-0000-0000-0000-000000000001' and actor_kind = 'station') = 11
+  and (select count(*) from public.access_log where action = 'staff_pin.set' and actor_person_id = '32000000-0000-0000-0000-000000000001') = 1,
+  'every PIN use is logged against the station');
+
+-- overrides and restrictions
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$insert into public.checkin_restrictions (org_id, person_id, kind, note, set_by_person_id) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', 'see_staff', 'custody paperwork pending', '32000000-0000-0000-0000-000000000001')$$) = '',
+  'a custody manager sets a restriction');
+select pg_temp.ok((select set_by_person_id = '32000000-0000-0000-0000-000000000004' and starts_on = chms_private.local_today(org_id) from public.checkin_restrictions limit 1),
+  'the restriction records who really set it and when it starts');
+select pg_temp.ok(chms_private.active_restriction('32000000-0000-0000-0000-000000000006') = 'see_staff', 'the restriction is in force');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023',
+  $$insert into public.checkin_restrictions (org_id, person_id, kind) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', 'no_checkin')$$) = '42501',
+  'people.view cannot restrict a child');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000024');
+select pg_temp.ok((select count(*) from public.checkin_restrictions) = 0, 'kids.view alone does not see restrictions');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select count(*) from public.checkin_restrictions) = 1, 'a care holder sees restrictions');
+select pg_temp.as_postgres();
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025', $$update public.checkin_restrictions set cleared_at = now(), cleared_by_person_id = '32000000-0000-0000-0000-000000000001'$$) = '', 'a custody manager clears a restriction');
+select pg_temp.ok((select cleared_by_person_id = '32000000-0000-0000-0000-000000000004' from public.checkin_restrictions limit 1) and chms_private.active_restriction('32000000-0000-0000-0000-000000000006') is null,
+  'clearing records who cleared it and lifts the restriction');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025', $$update public.checkin_restrictions set cleared_at = null$$) = ''
+  and (select cleared_at is not null from public.checkin_restrictions limit 1), 'clearing is final');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.room_overrides (org_id, person_id, room_id, ends_on) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '73000000-0000-0000-0000-000000000002', current_date + 30)$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.room_overrides (org_id, person_id, room_id) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '73000000-0000-0000-0000-000000000001')$$) = '23505',
+  'a child has at most one live room override');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$insert into public.room_overrides (org_id, person_id, room_id) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000007', '73000000-0000-0000-0000-000000000001')$$) = '42501',
+  'checkin.station alone cannot set overrides');
+
+-- volunteer scheduling
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$
+  insert into public.volunteer_slots (id, org_id, schedule_id, room_id, needed, arrive_minutes_before) values
+    ('77000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '74000000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000001', 2, 20);
+  insert into public.volunteer_slots (id, org_id, occurrence_id, label) values
+    ('77000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003',
+     (select id from public.occurrences where schedule_id = '74000000-0000-0000-0000-000000000001' and local_date = '2027-03-07'), 'Greeter');
+  insert into public.volunteer_assignments (org_id, slot_id, person_id, local_date) values
+    ('20000000-0000-0000-0000-000000000003', '77000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000004', '2027-03-07')$$) = '',
+  'a check-in manager schedules volunteers');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.volunteer_assignments (org_id, slot_id, person_id, local_date) values ('20000000-0000-0000-0000-000000000003', '77000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000004', '2027-03-14')$$) = '22023',
+  'an assignment to a single occurrence must carry that date');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023',
+  $$insert into public.volunteer_assignments (org_id, slot_id, person_id, local_date) values ('20000000-0000-0000-0000-000000000003', '77000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000002', '2027-03-07')$$) = '42501',
+  'a volunteer cannot schedule themselves yet');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000023');
+select pg_temp.ok((select count(*) from public.volunteer_slots) = 2 and (select count(*) from public.volunteer_assignments) = 1, 'members read the volunteer schedule');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+select pg_temp.ok((select count(*) from public.volunteer_slots) + (select count(*) from public.volunteer_assignments) = 0, 'another church sees no volunteer schedule');
+select pg_temp.as_postgres();
+
+-- audit and events
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'rooms' and action = 'insert') = 5
+  and (select count(*) from public.chms_audit where table_name = 'checkin_restrictions') = 3,
+  'configuration and restrictions are audited');
+select pg_temp.ok((select array_agg(distinct type order by type) from public.domain_events where org_id = '20000000-0000-0000-0000-000000000003'
+                   and type in ('room.created', 'occurrence.created', 'occurrence.cancelled', 'schedule.updated', 'station.created', 'checkin_restriction.cleared', 'volunteer_assignment.created'))
+  = array['checkin_restriction.cleared', 'occurrence.cancelled', 'occurrence.created', 'room.created', 'schedule.updated', 'station.created', 'volunteer_assignment.created'],
+  'configuration changes emit domain events');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'rooms') = 0 and (select count(*) from public.chms_audit where table_name = 'checkin_restrictions') = 3,
+  'the configuration audit needs checkin.manage; the restriction audit follows kids.care');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'rooms') = 5, 'the owner reads the configuration audit');
+select pg_temp.as_postgres();
+select pg_temp.ok(not has_function_privilege('authenticated', 'chms_private.active_restriction(uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.verify_staff_pin(uuid,text)', 'execute')
+  and not has_function_privilege('anon', 'public.station_self()', 'execute'),
+  'check-in B helpers are not callable by anon or as internals');
 
 \echo
 \echo 'All tests passed.'
