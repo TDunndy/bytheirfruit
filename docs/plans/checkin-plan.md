@@ -22,6 +22,8 @@ Answers to the first draft's questions A–P, and what each changes.
 | M | Photos are captured; consent comes from participating in the ministry and being on campus. | Capture at quick-add or in admin. Private bucket, signed URLs. The church's written policy states the consent. |
 | O | Volunteers check in at front-desk iPads. | Roster mode runs on paired classroom devices bound to rooms. Volunteers need no app login. Personal logins are for staff with `checkin.manage` or a `room_leaders` assignment. |
 | P | Letters are emailed, unsigned, as a church-wide notice of the Barn participation policy. | The template is a church notice. Step 1 stays director-approved for the first season (a toggle), per pushback 3. |
+| Q1 | Count unit: one attendance per child per service. One child at both services is 2; two siblings at both services is 4. | The serve count is the number of `check_in` events (non-voided) for the household's children, one per child per occurrence. Threshold stays 10. |
+| B2, D2, E2 | Proposed defaults accepted. | Cubs from the third birthday (Ducklings while under 36 months on the service date; kindergarten at 5 by Aug 16). Serving window: a volunteer check-in in a kids area in the last 90 days. Both-areas families: one case, to the director with more of that family's check-ins this year, ties to the Barn. |
 
 ## 1. What People v1 gives us, and what it lacks
 
@@ -256,7 +258,7 @@ This is idempotent, so retries are safe, and rejections land in a staff queue.
   - **Workflows** are steps with waits. Exits are re-checked before each step; dedupe uses `rule_dedupe`.
 - **Serve policy seed rule:**
   - trigger: Mondays at 6 am in the church time zone;
-  - count: household child check-ins this calendar year plus the baseline, counted toward the household of the guardian who checked the child in (decision C), with the unit from Q1;
+  - count: one per child per occurrence (decision Q1), summed over the household's children this calendar year plus the baseline, counted toward the household of the guardian who checked the child in (decision C);
   - exclusions: an adult in the household with a volunteer check-in in a kids area within the window (D2), the flags exempt / joining / serving elsewhere / no longer attending / **pastoral hold**, and no check-in in the last 3 months;
   - dedupe: once per household per year;
   - routing: by area through `area_leaders` (Barn → Jenna, K/5 → Jenny). A family with children in both areas gets one case, assigned to the director whose area has more of its check-ins this year, ties to the Barn; the other director can see it (E2);
@@ -291,17 +293,11 @@ Groups and Events can start after 1b with no new core tables.
 7. **Keeping all data forever** (decision L) is fine for the pilot. Because events carry no personal data, a redaction path could be added later without touching the log if a legal request ever requires it.
 
 ## 10. Still open
-**From the spec's §12:**
-- Q1: count unit. Two kids at one service: 1 or 2? Both services one Sunday: 1 or 2?
-- Q2: Brother models at LWR; Wi-Fi or Bluetooth today.
-- Q3: K/5 rooms and grades per room; Move-Up Sunday date.
-- Q4: current label sizes (content is settled by decision J).
-- Q5: SMS budget; who may send emergency broadcasts.
+None of these block Phase 1a; each is needed by the phase named.
+- Q2: Brother models at LWR; Wi-Fi or Bluetooth today (1b dry run).
+- Q3: K/5 rooms and grades per room; Move-Up Sunday date (1a seed data; the Barn can be configured first).
+- Q4: current label sizes (1b; content is settled by decision J).
+- Q5: SMS budget; who may send emergency broadcasts (Phase 3).
 - Q6: parent app: Phase 5 or sooner.
 - Q7: multi-campus now or later. The plan leaves room to add a campus above areas.
-
-**Sub-points with a proposed default (confirm or change):**
-- **B2.** At exactly 36 months: Ducklings while under 36 months on the service date, Cubs from the third birthday; kindergarten entry at age 5 by Aug 16.
-- **D2.** Serving window for the automatic exclusion: any volunteer check-in in a kids area in the last 90 days.
-- **E2.** Family in both areas: one case, assigned to the director whose area has more of that family's check-ins this year, ties to the Barn.
-- **Jenny's full name and title**, for the People record and `area_leaders`.
+- Jenny's full name and title, for the People record and `area_leaders` (1a seed data).
