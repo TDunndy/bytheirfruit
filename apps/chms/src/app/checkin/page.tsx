@@ -59,16 +59,16 @@ export default function CheckinOverview() {
         <li><Link href="/checkin/labels" className="cell-link"><IconTile name="print" /><span className="cell-title">Printers and labels</span><Chevron /></Link></li>
       </ul>
       <section className="section">
-        <h2 className="group-head">Next two weeks</h2>
+        <h2 className="group-head">Services in the next two weeks</h2>
         <ul className="group">
-          {upcoming.length === 0 && <li className="cell muted">No occurrences yet. Generate them from the Schedules tab.</li>}
+          {upcoming.length === 0 && <li className="cell muted">No services on the calendar yet. Add a schedule to fill the next eight weeks.</li>}
           {upcoming.map((o) => (
             <li key={o.id} className="cell">
               <span className="cell-text">
                 <span className="cell-title">{name.get(o.schedule_id) ?? 'Service'}</span>
                 <span className="cell-sub">{fmtInstant(o.starts_at, settings?.time_zone)}</span>
               </span>
-              <span className={`status status-${o.status === 'open' ? 'member' : o.status === 'closed' ? 'inactive' : 'regular'}`}>{o.status}</span>
+              <span className={`status status-${o.status === 'open' ? 'member' : o.status === 'closed' ? 'inactive' : 'regular'}`}>{o.status === 'scheduled' ? 'Scheduled' : o.status === 'open' ? 'Open' : 'Closed'}</span>
             </li>
           ))}
         </ul>

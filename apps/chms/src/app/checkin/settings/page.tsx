@@ -94,7 +94,7 @@ function SettingsForm({ initial, onSave }: { initial: CheckinSettings | null; on
       <fieldset>
         <legend className="group-head">Volunteers</legend>
         <div className="group">
-          <label className="field"><span>Grace (minutes)</span><input type="number" min={0} max={120} value={grace} onChange={(e) => setGrace(Number(e.target.value))} /></label>
+          <label className="field"><span>On-time grace (min)</span><input type="number" min={0} max={120} value={grace} onChange={(e) => setGrace(Number(e.target.value))} /></label>
         </div>
         <p className="group-foot">A volunteer is on time within this many minutes of their slot&apos;s expected arrival.</p>
       </fieldset>
