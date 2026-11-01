@@ -1,3 +1,4 @@
+import { ageOn, isLocalDate, toLocalDate } from '@btf/core'
 import { supabase } from './supabase'
 import type { Database } from '@db/database.types'
 
@@ -25,13 +26,15 @@ export function displayName(p: Pick<Person, 'first_name' | 'last_name' | 'prefer
   return `${p.preferred_name || p.first_name} ${p.last_name}`.trim()
 }
 
-export function age(birthdate: string | null): number | null {
-  if (!birthdate) return null
-  const b = new Date(birthdate + 'T00:00:00')
+/** Today as a local calendar date ('YYYY-MM-DD') in the browser's zone. */
+export function todayLocal(): string {
   const now = new Date()
-  let a = now.getFullYear() - b.getFullYear()
-  if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) a -= 1
-  return a
+  return toLocalDate(now.getFullYear(), now.getMonth() + 1, now.getDate())
+}
+
+export function age(birthdate: string | null): number | null {
+  if (!birthdate || !isLocalDate(birthdate)) return null
+  return ageOn(birthdate, todayLocal()).years
 }
 
 export const PAGE_SIZE = 50
