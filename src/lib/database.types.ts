@@ -19,6 +19,98 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"access_log": {
+                  Row: {
+                    "action": string,"actor_kind": string,"actor_person_id": string | null,"at": string,"detail": NonNullable<Json>,"id": number,"org_id": string,"station_id": string | null,"subject_count": number,"subject_person_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_kind": string,"actor_person_id"?: string | null,"at"?: string,"detail"?: NonNullable<Json>,"id"?: never,"org_id": string,"station_id"?: string | null,"subject_count"?: number,"subject_person_id"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_kind"?: string,"actor_person_id"?: string | null,"at"?: string,"detail"?: NonNullable<Json>,"id"?: never,"org_id"?: string,"station_id"?: string | null,"subject_count"?: number,"subject_person_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "access_log_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"checkin_keys": {
+                  Row: {
+                    "household_id": string | null,"id": string,"issued_at": string,"kind": string,"org_id": string,"person_id": string | null,"revoked_at": string | null,"value": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "household_id"?: string | null,"id"?: string,"issued_at"?: string,"kind": string,"org_id": string,"person_id"?: string | null,"revoked_at"?: string | null,"value": string
+                  }
+                  Update: {
+                    "household_id"?: string | null,"id"?: string,"issued_at"?: string,"kind"?: string,"org_id"?: string,"person_id"?: string | null,"revoked_at"?: string | null,"value"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "checkin_keys_household_id_org_id_fkey"
+      columns: ["household_id","org_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "checkin_keys_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "checkin_keys_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"child_care": {
+                  Row: {
+                    "allergies": string | null,"allergy_short": string | null,"has_allergy": boolean,"has_medical": boolean,"has_special_needs": boolean,"medical": string | null,"org_id": string,"person_id": string,"special_needs": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "allergies"?: string | null,"allergy_short"?: string | null,"has_allergy"?: boolean,"has_medical"?: boolean,"has_special_needs"?: boolean,"medical"?: string | null,"org_id": string,"person_id": string,"special_needs"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "allergies"?: string | null,"allergy_short"?: string | null,"has_allergy"?: boolean,"has_medical"?: boolean,"has_special_needs"?: boolean,"medical"?: string | null,"org_id"?: string,"person_id"?: string,"special_needs"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "child_care_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"chms_audit": {
+                  Row: {
+                    "action": string,"actor_kind": string,"actor_person_id": string | null,"at": string,"id": number,"new_row": Json | null,"old_row": Json | null,"org_id": string,"row_id": string,"station_id": string | null,"table_name": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_kind": string,"actor_person_id"?: string | null,"at"?: string,"id"?: never,"new_row"?: Json | null,"old_row"?: Json | null,"org_id": string,"row_id": string,"station_id"?: string | null,"table_name": string
+                  }
+                  Update: {
+                    "action"?: string,"actor_kind"?: string,"actor_person_id"?: string | null,"at"?: string,"id"?: never,"new_row"?: Json | null,"old_row"?: Json | null,"org_id"?: string,"row_id"?: string,"station_id"?: string | null,"table_name"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "chms_audit_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"church_claims": {
                   Row: {
                     "church_id": string,"claim_email": string,"code_expires_at": string | null,"created_at": string | null,"id": string,"review_note": string | null,"review_status": string,"reviewed_at": string | null,"reviewed_by": string | null,"stripe_customer_id": string | null,"stripe_payment_id": string | null,"stripe_subscription_id": string | null,"subscription_status": string | null,"user_id": string,"verification_code_hash": string | null,"verified": boolean | null,"verified_at": string | null,"verify_attempts": number
@@ -203,6 +295,92 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"contact_consents": {
+                  Row: {
+                    "consented_at": string,"id": string,"org_id": string,"person_id": string | null,"phone_e164": string,"revoked_at": string | null,"revoked_source": string | null,"scope": string,"source": string,"station_id": string | null,"text_version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "consented_at"?: string,"id"?: string,"org_id": string,"person_id"?: string | null,"phone_e164": string,"revoked_at"?: string | null,"revoked_source"?: string | null,"scope": string,"source": string,"station_id"?: string | null,"text_version": string
+                  }
+                  Update: {
+                    "consented_at"?: string,"id"?: string,"org_id"?: string,"person_id"?: string | null,"phone_e164"?: string,"revoked_at"?: string | null,"revoked_source"?: string | null,"scope"?: string,"source"?: string,"station_id"?: string | null,"text_version"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "contact_consents_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "contact_consents_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"custom_field_defs": {
+                  Row: {
+                    "applies_to": string,"archived_at": string | null,"created_at": string,"field_type": string,"id": string,"key": string,"label": string,"options": (string)[],"org_id": string,"sensitive": boolean,"sort": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "applies_to": string,"archived_at"?: string | null,"created_at"?: string,"field_type": string,"id"?: string,"key": string,"label": string,"options"?: (string)[],"org_id": string,"sensitive"?: boolean,"sort"?: number
+                  }
+                  Update: {
+                    "applies_to"?: string,"archived_at"?: string | null,"created_at"?: string,"field_type"?: string,"id"?: string,"key"?: string,"label"?: string,"options"?: (string)[],"org_id"?: string,"sensitive"?: boolean,"sort"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "custom_field_defs_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"custom_field_values_sensitive": {
+                  Row: {
+                    "field_id": string,"org_id": string,"subject_id": string,"updated_at": string,"value": Json | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "field_id": string,"org_id": string,"subject_id": string,"updated_at"?: string,"value"?: Json | null
+                  }
+                  Update: {
+                    "field_id"?: string,"org_id"?: string,"subject_id"?: string,"updated_at"?: string,"value"?: Json | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "custom_field_values_sensitive_field_id_org_id_fkey"
+      columns: ["field_id","org_id"]
+isOneToOne: false
+      referencedRelation: "custom_field_defs"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"domain_events": {
+                  Row: {
+                    "actor_kind": string,"actor_person_id": string | null,"device_at": string | null,"id": string,"org_id": string,"payload": NonNullable<Json>,"recorded_at": string,"seq": number,"station_id": string | null,"subject_id": string | null,"subject_type": string,"type": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actor_kind": string,"actor_person_id"?: string | null,"device_at"?: string | null,"id"?: string,"org_id": string,"payload"?: NonNullable<Json>,"recorded_at"?: string,"seq"?: never,"station_id"?: string | null,"subject_id"?: string | null,"subject_type": string,"type": string
+                  }
+                  Update: {
+                    "actor_kind"?: string,"actor_person_id"?: string | null,"device_at"?: string | null,"id"?: string,"org_id"?: string,"payload"?: NonNullable<Json>,"recorded_at"?: string,"seq"?: never,"station_id"?: string | null,"subject_id"?: string | null,"subject_type"?: string,"type"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "domain_events_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"favorites": {
                   Row: {
                     "church_id": string,"created_at": string | null,"id": string,"user_id": string
@@ -223,16 +401,48 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"household_members": {
+                },"household_flags": {
                   Row: {
-                    "created_at": string,"household_id": string,"org_id": string,"person_id": string,"relationship": string
+                    "cleared_at": string | null,"cleared_by_person_id": string | null,"flag": string,"household_id": string,"id": string,"note": string | null,"org_id": string,"set_at": string,"set_by_person_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"household_id": string,"org_id": string,"person_id": string,"relationship"?: string
+                    "cleared_at"?: string | null,"cleared_by_person_id"?: string | null,"flag": string,"household_id": string,"id"?: string,"note"?: string | null,"org_id": string,"set_at"?: string,"set_by_person_id"?: string | null
                   }
                   Update: {
-                    "created_at"?: string,"household_id"?: string,"org_id"?: string,"person_id"?: string,"relationship"?: string
+                    "cleared_at"?: string | null,"cleared_by_person_id"?: string | null,"flag"?: string,"household_id"?: string,"id"?: string,"note"?: string | null,"org_id"?: string,"set_at"?: string,"set_by_person_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "household_flags_cleared_by_person_id_fkey"
+      columns: ["cleared_by_person_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "household_flags_household_id_org_id_fkey"
+      columns: ["household_id","org_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "household_flags_set_by_person_id_fkey"
+      columns: ["set_by_person_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"household_members": {
+                  Row: {
+                    "can_check_in": boolean,"created_at": string,"ended_at": string | null,"household_id": string,"is_guardian": boolean,"org_id": string,"person_id": string,"relationship": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "can_check_in"?: boolean,"created_at"?: string,"ended_at"?: string | null,"household_id": string,"is_guardian"?: boolean,"org_id": string,"person_id": string,"relationship"?: string
+                  }
+                  Update: {
+                    "can_check_in"?: boolean,"created_at"?: string,"ended_at"?: string | null,"household_id"?: string,"is_guardian"?: boolean,"org_id"?: string,"person_id"?: string,"relationship"?: string
                   }
                   Relationships: [
                     {
@@ -251,14 +461,14 @@ isOneToOne: false
                   ]
                 },"households": {
                   Row: {
-                    "address_line1": string | null,"address_line2": string | null,"archived_at": string | null,"city": string | null,"created_at": string,"id": string,"name": string,"org_id": string,"postal_code": string | null,"state": string | null,"updated_at": string
+                    "address_line1": string | null,"address_line2": string | null,"archived_at": string | null,"city": string | null,"created_at": string,"custom": NonNullable<Json>,"id": string,"name": string,"org_id": string,"postal_code": string | null,"state": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address_line1"?: string | null,"address_line2"?: string | null,"archived_at"?: string | null,"city"?: string | null,"created_at"?: string,"id"?: string,"name": string,"org_id": string,"postal_code"?: string | null,"state"?: string | null,"updated_at"?: string
+                    "address_line1"?: string | null,"address_line2"?: string | null,"archived_at"?: string | null,"city"?: string | null,"created_at"?: string,"custom"?: NonNullable<Json>,"id"?: string,"name": string,"org_id": string,"postal_code"?: string | null,"state"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "address_line1"?: string | null,"address_line2"?: string | null,"archived_at"?: string | null,"city"?: string | null,"created_at"?: string,"id"?: string,"name"?: string,"org_id"?: string,"postal_code"?: string | null,"state"?: string | null,"updated_at"?: string
+                    "address_line1"?: string | null,"address_line2"?: string | null,"archived_at"?: string | null,"city"?: string | null,"created_at"?: string,"custom"?: NonNullable<Json>,"id"?: string,"name"?: string,"org_id"?: string,"postal_code"?: string | null,"state"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -282,6 +492,26 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"org_checkin_settings": {
+                  Row: {
+                    "created_at": string,"grade_cutoff_day": number,"grade_cutoff_month": number,"label_defaults": NonNullable<Json>,"org_id": string,"promotion_date": string | null,"punctuality_grace_minutes": number,"time_zone": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"grade_cutoff_day"?: number,"grade_cutoff_month"?: number,"label_defaults"?: NonNullable<Json>,"org_id": string,"promotion_date"?: string | null,"punctuality_grace_minutes"?: number,"time_zone": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"grade_cutoff_day"?: number,"grade_cutoff_month"?: number,"label_defaults"?: NonNullable<Json>,"org_id"?: string,"promotion_date"?: string | null,"punctuality_grace_minutes"?: number,"time_zone"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "org_checkin_settings_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: true
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"org_invitations": {
                   Row: {
@@ -403,14 +633,14 @@ isOneToOne: false
                   ]
                 },"people": {
                   Row: {
-                    "address_line1": string | null,"address_line2": string | null,"archived_at": string | null,"birthdate": string | null,"city": string | null,"created_at": string,"email": string | null,"external_id": string | null,"external_source": string | null,"first_name": string,"first_visit_date": string | null,"gender": string | null,"id": string,"joined_date": string | null,"last_name": string,"membership_status": string,"org_id": string,"phone": string | null,"photo_url": string | null,"postal_code": string | null,"preferred_name": string | null,"search_text": string | null,"state": string | null,"tags": (string)[],"title": string | null,"updated_at": string
+                    "address_line1": string | null,"address_line2": string | null,"archived_at": string | null,"birthdate": string | null,"city": string | null,"created_at": string,"custom": NonNullable<Json>,"email": string | null,"external_id": string | null,"external_source": string | null,"first_name": string,"first_visit_date": string | null,"gender": string | null,"grade_override": number | null,"grade_override_year": number | null,"id": string,"joined_date": string | null,"last_name": string,"membership_status": string,"org_id": string,"phone": string | null,"phone_e164": string | null,"photo_path": string | null,"photo_url": string | null,"postal_code": string | null,"preferred_name": string | null,"search_text": string | null,"state": string | null,"tags": (string)[],"title": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address_line1"?: string | null,"address_line2"?: string | null,"archived_at"?: string | null,"birthdate"?: string | null,"city"?: string | null,"created_at"?: string,"email"?: string | null,"external_id"?: string | null,"external_source"?: string | null,"first_name": string,"first_visit_date"?: string | null,"gender"?: string | null,"id"?: string,"joined_date"?: string | null,"last_name"?: string,"membership_status"?: string,"org_id": string,"phone"?: string | null,"photo_url"?: string | null,"postal_code"?: string | null,"preferred_name"?: string | null,"search_text"?: never,"state"?: string | null,"tags"?: (string)[],"title"?: string | null,"updated_at"?: string
+                    "address_line1"?: string | null,"address_line2"?: string | null,"archived_at"?: string | null,"birthdate"?: string | null,"city"?: string | null,"created_at"?: string,"custom"?: NonNullable<Json>,"email"?: string | null,"external_id"?: string | null,"external_source"?: string | null,"first_name": string,"first_visit_date"?: string | null,"gender"?: string | null,"grade_override"?: number | null,"grade_override_year"?: number | null,"id"?: string,"joined_date"?: string | null,"last_name"?: string,"membership_status"?: string,"org_id": string,"phone"?: string | null,"phone_e164"?: never,"photo_path"?: string | null,"photo_url"?: string | null,"postal_code"?: string | null,"preferred_name"?: string | null,"search_text"?: never,"state"?: string | null,"tags"?: (string)[],"title"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "address_line1"?: string | null,"address_line2"?: string | null,"archived_at"?: string | null,"birthdate"?: string | null,"city"?: string | null,"created_at"?: string,"email"?: string | null,"external_id"?: string | null,"external_source"?: string | null,"first_name"?: string,"first_visit_date"?: string | null,"gender"?: string | null,"id"?: string,"joined_date"?: string | null,"last_name"?: string,"membership_status"?: string,"org_id"?: string,"phone"?: string | null,"photo_url"?: string | null,"postal_code"?: string | null,"preferred_name"?: string | null,"search_text"?: never,"state"?: string | null,"tags"?: (string)[],"title"?: string | null,"updated_at"?: string
+                    "address_line1"?: string | null,"address_line2"?: string | null,"archived_at"?: string | null,"birthdate"?: string | null,"city"?: string | null,"created_at"?: string,"custom"?: NonNullable<Json>,"email"?: string | null,"external_id"?: string | null,"external_source"?: string | null,"first_name"?: string,"first_visit_date"?: string | null,"gender"?: string | null,"grade_override"?: number | null,"grade_override_year"?: number | null,"id"?: string,"joined_date"?: string | null,"last_name"?: string,"membership_status"?: string,"org_id"?: string,"phone"?: string | null,"phone_e164"?: never,"photo_path"?: string | null,"photo_url"?: string | null,"postal_code"?: string | null,"preferred_name"?: string | null,"search_text"?: never,"state"?: string | null,"tags"?: (string)[],"title"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -423,14 +653,14 @@ isOneToOne: false
                   ]
                 },"people_audit": {
                   Row: {
-                    "action": string,"actor_kind": string,"actor_person_id": string | null,"at": string,"changes": NonNullable<Json>,"id": number,"org_id": string,"person_id": string
+                    "action": string,"actor_kind": string,"actor_person_id": string | null,"at": string,"changes": NonNullable<Json>,"id": number,"org_id": string,"person_id": string,"station_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "action": string,"actor_kind": string,"actor_person_id"?: string | null,"at"?: string,"changes"?: NonNullable<Json>,"id"?: never,"org_id": string,"person_id": string
+                    "action": string,"actor_kind": string,"actor_person_id"?: string | null,"at"?: string,"changes"?: NonNullable<Json>,"id"?: never,"org_id": string,"person_id": string,"station_id"?: string | null
                   }
                   Update: {
-                    "action"?: string,"actor_kind"?: string,"actor_person_id"?: string | null,"at"?: string,"changes"?: NonNullable<Json>,"id"?: never,"org_id"?: string,"person_id"?: string
+                    "action"?: string,"actor_kind"?: string,"actor_person_id"?: string | null,"at"?: string,"changes"?: NonNullable<Json>,"id"?: never,"org_id"?: string,"person_id"?: string,"station_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -438,6 +668,58 @@ isOneToOne: false
       columns: ["org_id"]
 isOneToOne: false
       referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"person_credentials": {
+                  Row: {
+                    "archived_at": string | null,"completed_on": string,"created_at": string,"expires_on": string | null,"id": string,"kind": string,"note": string | null,"org_id": string,"person_id": string,"provider": string | null,"reference": string | null,"verified_by_person_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"completed_on": string,"created_at"?: string,"expires_on"?: string | null,"id"?: string,"kind": string,"note"?: string | null,"org_id": string,"person_id": string,"provider"?: string | null,"reference"?: string | null,"verified_by_person_id"?: string | null
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"completed_on"?: string,"created_at"?: string,"expires_on"?: string | null,"id"?: string,"kind"?: string,"note"?: string | null,"org_id"?: string,"person_id"?: string,"provider"?: string | null,"reference"?: string | null,"verified_by_person_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "person_credentials_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "person_credentials_verified_by_person_id_fkey"
+      columns: ["verified_by_person_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"person_documents": {
+                  Row: {
+                    "archived_at": string | null,"created_at": string,"id": string,"kind": string,"note": string | null,"org_id": string,"person_id": string,"storage_path": string,"title": string,"uploaded_by_person_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"kind": string,"note"?: string | null,"org_id": string,"person_id": string,"storage_path": string,"title": string,"uploaded_by_person_id"?: string | null
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"kind"?: string,"note"?: string | null,"org_id"?: string,"person_id"?: string,"storage_path"?: string,"title"?: string,"uploaded_by_person_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "person_documents_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "person_documents_uploaded_by_person_id_fkey"
+      columns: ["uploaded_by_person_id"]
+isOneToOne: false
+      referencedRelation: "people"
       referencedColumns: ["id"]
     }
                   ]
@@ -542,6 +824,38 @@ isOneToOne: false
       columns: ["role_id","org_id"]
 isOneToOne: false
       referencedRelation: "org_roles"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"pickup_people": {
+                  Row: {
+                    "archived_at": string | null,"child_person_id": string,"created_at": string,"created_by_person_id": string | null,"id": string,"kind": string,"name": string | null,"note": string | null,"org_id": string,"person_id": string | null,"phone": string | null,"relationship": string | null,"valid_from": string | null,"valid_to": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"child_person_id": string,"created_at"?: string,"created_by_person_id"?: string | null,"id"?: string,"kind": string,"name"?: string | null,"note"?: string | null,"org_id": string,"person_id"?: string | null,"phone"?: string | null,"relationship"?: string | null,"valid_from"?: string | null,"valid_to"?: string | null
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"child_person_id"?: string,"created_at"?: string,"created_by_person_id"?: string | null,"id"?: string,"kind"?: string,"name"?: string | null,"note"?: string | null,"org_id"?: string,"person_id"?: string | null,"phone"?: string | null,"relationship"?: string | null,"valid_from"?: string | null,"valid_to"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "pickup_people_child_person_id_org_id_fkey"
+      columns: ["child_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "pickup_people_created_by_person_id_fkey"
+      columns: ["created_by_person_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "pickup_people_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
       referencedColumns: ["id","org_id"]
     }
                   ]
@@ -806,6 +1120,11 @@ isOneToOne: true
             "accept_org_invitation":
 { Args: { "p_token": string }; Returns: Json
                            },
+"child_care_summary":
+{ Args: { "p_org_id": string }; Returns: {
+              "allergy_short": string,"has_allergy": boolean,"has_medical": boolean,"has_special_needs": boolean,"person_id": string
+            }[]
+                           },
 "church_reviewer_demographics":
 { Args: { "p_church_id": string }; Returns: Json
                            },
@@ -827,6 +1146,9 @@ isOneToOne: true
               "church_count": number,"lat": number,"lng": number
             }[]
                            },
+"get_child_care":
+{ Args: { "p_person_id": string }; Returns: Json
+                           },
 "has_active_subscription":
 { Args: { "p_org_id": string }; Returns: boolean
                            },
@@ -845,6 +1167,9 @@ isOneToOne: true
 "is_privileged":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"is_station":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
 "my_org_permissions":
 { Args: { "p_org_id": string }; Returns: (string)[]
                            },
@@ -855,6 +1180,9 @@ isOneToOne: true
 { Args: { "p_org_id": string }; Returns: {
               "member_role": string,"person_id": string
             }[]
+                           },
+"pickup_status":
+{ Args: { "p_child_id": string,"p_person_id": string }; Returns: string
                            },
 "recalculate_church_scores":
 { Args: Record<PropertyKey, never>; Returns: undefined
@@ -867,6 +1195,9 @@ isOneToOne: true
                            },
 "revoke_org_invitation":
 { Args: { "p_invitation_id": string }; Returns: undefined
+                           },
+"set_child_care":
+{ Args: { "p_allergies": string,"p_allergy_short": string,"p_medical": string,"p_person_id": string,"p_special_needs": string }; Returns: undefined
                            },
 "site_stats":
 { Args: Record<PropertyKey, never>; Returns: {

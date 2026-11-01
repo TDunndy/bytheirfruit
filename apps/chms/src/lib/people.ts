@@ -171,6 +171,7 @@ export async function householdsOf(personId: string): Promise<Membership[]> {
     .from('household_members')
     .select('relationship, households(*)')
     .eq('person_id', personId)
+    .is('ended_at', null)
   if (error) throw error
   return (data ?? []).flatMap((m) => (m.households ? [{ relationship: m.relationship, household: m.households }] : []))
 }
@@ -183,6 +184,7 @@ export async function getHousehold(id: string): Promise<{ household: Household; 
     .from('household_members')
     .select('relationship, people(*)')
     .eq('household_id', id)
+    .is('ended_at', null)
   if (mErr) throw mErr
   const order: Record<string, number> = { head: 0, spouse: 1, child: 2, other: 3 }
   const list = (members ?? [])
@@ -206,15 +208,31 @@ export async function createHousehold(orgId: string, name: string, from?: Pick<P
   return data
 }
 
+/** Adds someone to a family, or brings back a membership that had ended (keeping its check-in flags). */
 export async function addToHousehold(orgId: string, householdId: string, personId: string, relationship: Relationship) {
+  const revived = await supabase
+    .from('household_members')
+    .update({ ended_at: null, relationship })
+    .eq('household_id', householdId)
+    .eq('person_id', personId)
+    .not('ended_at', 'is', null)
+    .select('person_id')
+  if (revived.error) throw revived.error
+  if (revived.data.length > 0) return
+  const guardian = relationship === 'head' || relationship === 'spouse'
   const { error } = await supabase
     .from('household_members')
-    .insert({ org_id: orgId, household_id: householdId, person_id: personId, relationship })
+    .insert({ org_id: orgId, household_id: householdId, person_id: personId, relationship, is_guardian: guardian, can_check_in: guardian })
   if (error) throw error
 }
 
+/** Memberships end; they are never deleted (custody history matters). */
 export async function removeFromHousehold(householdId: string, personId: string) {
-  const { error } = await supabase.from('household_members').delete().eq('household_id', householdId).eq('person_id', personId)
+  const { error } = await supabase
+    .from('household_members')
+    .update({ ended_at: new Date().toISOString() })
+    .eq('household_id', householdId)
+    .eq('person_id', personId)
   if (error) throw error
 }
 

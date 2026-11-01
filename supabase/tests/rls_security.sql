@@ -482,8 +482,8 @@ insert into public.household_members (household_id, person_id, org_id, relations
   ('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'head'),
   ('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000001', 'child');
 
-select pg_temp.ok((select count(*) from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001') = 6, 'new church gets the six default roles');
-select pg_temp.ok((select cardinality(permissions) from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Pastor') = 6, 'Pastor holds every permission');
+select pg_temp.ok((select count(*) from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001') = 9, 'new church gets the nine default roles');
+select pg_temp.ok((select cardinality(permissions) from public.org_roles where org_id = '20000000-0000-0000-0000-000000000001' and name = 'Pastor') = cardinality(chms_private.all_permissions()), 'Pastor holds every permission');
 select pg_temp.ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                               where n.nspname = 'public' and p.proname = 'seed_default_org_roles'),
   'role seeding is not callable through the API');
@@ -504,14 +504,16 @@ select pg_temp.as_postgres();
 select pg_temp.ok(not exists (
   select 1 from information_schema.columns
   where table_schema = 'public'
-    and table_name in ('people', 'people_audit', 'person_notes', 'org_invitations', 'households', 'person_roles', 'person_overseers', 'org_roles')
+    and table_name in ('people', 'people_audit', 'person_notes', 'org_invitations', 'households', 'person_roles', 'person_overseers', 'org_roles',
+                       'org_checkin_settings', 'custom_field_defs', 'custom_field_values_sensitive', 'household_flags', 'access_log', 'chms_audit',
+                       'child_care', 'pickup_people', 'person_documents', 'person_credentials', 'contact_consents', 'checkin_keys', 'domain_events')
     and (column_name in ('user_id', 'created_by', 'accepted_by', 'actor') or column_name like '%user%')),
   'no church table a leader can read carries an account id');
 
 -- church owner
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
 select pg_temp.ok((select count(*) from public.people) = 5, 'owner sees their church''s people only');
-select pg_temp.ok(cardinality(public.my_org_permissions('20000000-0000-0000-0000-000000000001')) = 6, 'owner holds every permission');
+select pg_temp.ok(cardinality(public.my_org_permissions('20000000-0000-0000-0000-000000000001')) = cardinality(chms_private.all_permissions()), 'owner holds every permission');
 select pg_temp.ok((select count(*) from public.people where search_text like '%pilot%') = 2, 'search text finds people by name');
 select pg_temp.ok((select array_agg(person_id) from public.people_with_logins('20000000-0000-0000-0000-000000000001')) = array['30000000-0000-0000-0000-000000000004']::uuid[],
   'leaders with a login are listed by person id');
@@ -997,6 +999,352 @@ select pg_temp.ok(not exists (
     and coalesce(qual, '') || coalesce(with_check, '') ~ '\m(people|person_\w+)\M'
     and coalesce(qual, '') || coalesce(with_check, '') ~* '\m(reviews|profiles)\M'),
   'no policy mixes church people with reviews or profiles');
+
+
+\echo
+\echo '== chms: check-in A (people changes) =============================='
+
+-- Runs a statement as the current (postgres) role and returns the SQLSTATE.
+create or replace function pg_temp.try_sql(p_sql text) returns text language plpgsql as $$
+declare v_state text := '';
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    v_state := sqlstate;
+  end;
+  return v_state;
+end $$;
+-- A paired station: authenticated, with app_metadata.kind = 'station'.
+create or replace function pg_temp.as_station(p_uid uuid, p_station uuid) returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', p_uid, 'role', 'authenticated',
+    'app_metadata', json_build_object('kind', 'station', 'station_id', p_station))::text, true);
+  perform set_config('request.jwt.claim.sub', p_uid::text, true);
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
+  execute 'set local role authenticated';
+end $$;
+
+select pg_temp.as_postgres();
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-000000000021', 'owner@checkin.org'),
+  ('00000000-0000-0000-0000-000000000022', 'sam@checkin.org'),
+  ('00000000-0000-0000-0000-000000000023', 'gail@checkin.org'),
+  ('00000000-0000-0000-0000-000000000024', 'dee@checkin.org'),
+  ('00000000-0000-0000-0000-000000000025', 'eli@checkin.org'),
+  ('00000000-0000-0000-0000-000000000026', 'kiosk@stations.invalid');
+insert into public.organizations (id, name, slug) values ('20000000-0000-0000-0000-000000000003', 'Checkin Church', 'checkin-church');
+insert into public.org_members (org_id, user_id, role) values
+  ('20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000021', 'owner'),
+  ('20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000022', 'staff'),
+  ('20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000023', 'volunteer'),
+  ('20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000024', 'volunteer'),
+  ('20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000025', 'volunteer');
+insert into public.people (id, org_id, first_name, last_name, birthdate, phone) values
+  ('32000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'Sam', 'Staff', null, null),
+  ('32000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', 'Gail', 'Greeter', null, null),
+  ('32000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000003', 'Dee', 'Deacon', null, null),
+  ('32000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000003', 'Eli', 'Elder', null, null),
+  ('32000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000003', 'Pat', 'Parent', '1988-05-05', '(941) 555-0100'),
+  ('32000000-0000-0000-0000-000000000006', '20000000-0000-0000-0000-000000000003', 'Kid', 'Parent', '2020-01-01', null),
+  ('32000000-0000-0000-0000-000000000007', '20000000-0000-0000-0000-000000000003', 'Tess', 'Teen', (current_date - interval '17 years')::date, null),
+  ('32000000-0000-0000-0000-000000000008', '20000000-0000-0000-0000-000000000003', 'Uri', 'Uncle', '1985-01-01', null),
+  ('32000000-0000-0000-0000-000000000009', '20000000-0000-0000-0000-000000000003', 'Ann', 'Aunt', '1986-01-01', null);
+insert into public.person_logins (person_id, org_id, user_id) values
+  ('32000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000022'),
+  ('32000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000023'),
+  ('32000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000024'),
+  ('32000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000025');
+insert into public.org_roles (org_id, name, permissions) values ('20000000-0000-0000-0000-000000000003', 'Greeter', '{people.view}');
+insert into public.person_roles (person_id, role_id, org_id)
+  select x.pid::uuid, r.id, r.org_id
+  from (values ('32000000-0000-0000-0000-000000000001', 'Staff'), ('32000000-0000-0000-0000-000000000002', 'Greeter'),
+               ('32000000-0000-0000-0000-000000000003', 'Deacon'), ('32000000-0000-0000-0000-000000000004', 'Elder')) x(pid, role)
+  join public.org_roles r on r.org_id = '20000000-0000-0000-0000-000000000003' and r.name = x.role;
+insert into public.households (id, org_id, name) values ('42000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'The Parents');
+insert into public.household_members (household_id, person_id, org_id, relationship, is_guardian, can_check_in) values
+  ('42000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000003', 'head', true, true),
+  ('42000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000006', '20000000-0000-0000-0000-000000000003', 'child', false, false),
+  ('42000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000008', '20000000-0000-0000-0000-000000000003', 'other', true, true);
+
+-- permissions
+select pg_temp.ok((select count(*) from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003') = 10, 'a church gets nine default roles (plus one custom here)');
+select pg_temp.ok(array['kids.view', 'kids.care', 'custody.manage', 'checkin.manage', 'rules.manage']::text[] <@ chms_private.all_permissions(), 'the permission list carries the check-in permissions');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.org_roles (org_id, name, permissions) values ('20000000-0000-0000-0000-000000000003', 'Bad', '{people.fly}')$$) = '23514',
+  'unknown permissions are refused');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok(public.my_org_permissions('20000000-0000-0000-0000-000000000003') <@ chms_private.all_permissions()
+  and chms_private.all_permissions() <@ public.my_org_permissions('20000000-0000-0000-0000-000000000003'), 'the owner holds every new permission too');
+select pg_temp.ok(public.has_org_permission('20000000-0000-0000-0000-000000000003', 'custody.manage'), 'has_org_permission knows the new permissions');
+select pg_temp.ok((select permissions @> '{kids.view,kids.care}' from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Staff'), 'the Staff role carries kids.view and kids.care');
+select pg_temp.ok((select permissions @> '{custody.manage}' from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Elder'), 'elders hold custody.manage');
+select pg_temp.ok((select not (permissions @> '{kids.care}') from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Deacon'), 'deacons do not hold kids.care');
+
+-- children need kids.view
+select pg_temp.as_user('00000000-0000-0000-0000-000000000023');
+select pg_temp.ok((select count(*) from public.people where id = '32000000-0000-0000-0000-000000000005') = 1, 'people.view reads an adult');
+select pg_temp.ok((select count(*) from public.people where id in ('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000007')) = 0, 'people.view alone hides children (by household and by birthdate)');
+select pg_temp.ok((select count(*) from public.household_members where person_id = '32000000-0000-0000-0000-000000000006') = 0, 'people.view alone hides a child''s household row');
+select pg_temp.ok((select count(*) from public.people_audit where person_id = '32000000-0000-0000-0000-000000000006') = 0, 'people.view alone hides a child''s history');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select count(*) from public.people where id in ('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000007')) = 2, 'kids.view reads children');
+select pg_temp.ok((select count(*) from public.people_audit where person_id = '32000000-0000-0000-0000-000000000006') = 1, 'kids.view reads a child''s history');
+select pg_temp.as_postgres();
+
+-- phones
+select pg_temp.ok((select phone_e164 from public.people where id = '32000000-0000-0000-0000-000000000005') = '+19415550100', 'phones are normalized to E.164');
+
+-- care notes: no direct reads, logged RPC reads
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$select public.set_child_care('32000000-0000-0000-0000-000000000006', 'Peanuts', 'Peanut', 'Inhaler in bag', null)$$) = '',
+  'a care holder writes care notes through the RPC');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select count(*) from public.child_care) = 0, 'care notes are never readable directly, even by a care holder');
+select pg_temp.ok((public.get_child_care('32000000-0000-0000-0000-000000000006') ->> 'allergies') = 'Peanuts', 'a care holder reads care notes through the RPC');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000024');
+select pg_temp.ok(pg_temp.try_sql($$select public.get_child_care('32000000-0000-0000-0000-000000000006')$$) = '42501', 'kids.view alone cannot read care notes');
+select pg_temp.ok((select has_allergy and allergy_short = 'Peanut' from public.child_care_summary('20000000-0000-0000-0000-000000000003') where person_id = '32000000-0000-0000-0000-000000000006'),
+  'kids.view reads the alert flags and label text');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+  $$select public.get_child_care('32000000-0000-0000-0000-000000000006')$$) = '42501', 'another church''s owner cannot read care notes');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$select public.set_child_care('32000000-0000-0000-0000-000000000006', 'x', null, null, null)$$) = '42501', 'kids.view alone cannot write care notes');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.access_log where subject_person_id = '32000000-0000-0000-0000-000000000006' and action in ('child_care.write', 'child_care.read')
+                   and actor_person_id = '32000000-0000-0000-0000-000000000001' and actor_kind = 'leader') = 2,
+  'care reads and writes are logged with the actor''s person record');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'child_care' and row_id = '32000000-0000-0000-0000-000000000006' and action = 'insert') = 1,
+  'care notes are audited with before and after');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select count(*) from public.access_log) = 0, 'only church admins read the access log');
+select pg_temp.as_postgres();
+
+-- pickups and custody: restricted wins
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$insert into public.pickup_people (org_id, child_person_id, person_id, kind, note) values
+      ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000008', 'restricted', 'court order on file'),
+      ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000009', 'authorized', null)$$) = '',
+  'a custody manager records pickups');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$insert into public.pickup_people (org_id, child_person_id, person_id, kind) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000009', 'restricted')$$) = '42501',
+  'kids.view alone cannot record pickups');
+select pg_temp.ok(chms_private.pickup_status('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000005') = 'guardian', 'a guardian may pick up');
+select pg_temp.ok(chms_private.pickup_status('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000009') = 'authorized', 'an authorized person may pick up');
+select pg_temp.ok(chms_private.pickup_status('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000008') = 'restricted', 'a restricted person is refused even as a household guardian');
+select pg_temp.ok(chms_private.pickup_status('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000002') = 'unknown', 'anyone else is unknown');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000024');
+select pg_temp.ok((select string_agg(kind, ',') from public.pickup_people where child_person_id = '32000000-0000-0000-0000-000000000006') = 'authorized', 'kids.view reads authorized pickups but not restricted ones');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'pickup_people') = 0, 'custody audit rows need custody.manage');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000025');
+select pg_temp.ok((select count(*) from public.pickup_people where child_person_id = '32000000-0000-0000-0000-000000000006') = 2, 'a custody manager reads every pickup');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'pickup_people' and actor_person_id = '32000000-0000-0000-0000-000000000004') = 2, 'pickup changes are audited with the actor');
+select pg_temp.ok((select created_by_person_id = '32000000-0000-0000-0000-000000000004' from public.pickup_people where person_id = '32000000-0000-0000-0000-000000000008'), 'the creator is stamped from the login');
+select pg_temp.as_postgres();
+
+-- households: memberships end, never delete
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$delete from public.household_members where person_id = '32000000-0000-0000-0000-000000000008'$$) = ''
+  and (select count(*) from public.household_members where person_id = '32000000-0000-0000-0000-000000000008') = 1,
+  'household memberships cannot be deleted');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$update public.household_members set ended_at = now() where person_id = '32000000-0000-0000-0000-000000000008'$$) = ''
+  and chms_private.pickup_status('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000008') = 'restricted',
+  'an editor ends a membership; the ended guardian no longer counts');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$update public.household_members set is_guardian = true where person_id = '32000000-0000-0000-0000-000000000006'$$) = '23514',
+  'a child cannot be a guardian');
+
+-- household flags
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$insert into public.household_flags (org_id, household_id, flag, note) values ('20000000-0000-0000-0000-000000000003', '42000000-0000-0000-0000-000000000001', 'pastoral_hold', 'see notes')$$) = '',
+  'a note keeper sets a pastoral hold');
+select pg_temp.ok((select set_by_person_id = '32000000-0000-0000-0000-000000000003' from public.household_flags where flag = 'pastoral_hold'), 'the flag records who set it');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$insert into public.household_flags (org_id, household_id, flag) values ('20000000-0000-0000-0000-000000000003', '42000000-0000-0000-0000-000000000001', 'pastoral_hold')$$) = '23505',
+  'one active flag of a kind per household');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023',
+  $$insert into public.household_flags (org_id, household_id, flag) values ('20000000-0000-0000-0000-000000000003', '42000000-0000-0000-0000-000000000001', 'exempt')$$) = '42501',
+  'people.view alone cannot set flags');
+
+-- settings
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$insert into public.org_checkin_settings (org_id, time_zone) values ('20000000-0000-0000-0000-000000000003', 'America/New_York')$$) = '42501',
+  'check-in settings need checkin.manage');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.org_checkin_settings (org_id, time_zone) values ('20000000-0000-0000-0000-000000000003', 'Mars/Phobos')$$) = '22023',
+  'an unknown time zone is refused');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.org_checkin_settings (org_id, time_zone) values ('20000000-0000-0000-0000-000000000003', 'America/New_York')$$) = '',
+  'an admin sets the church time zone');
+
+-- credentials
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.person_credentials (org_id, person_id, kind, completed_on, expires_on) values
+      ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000001', 'background_check', current_date - 30, current_date + 300),
+      ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000002', 'background_check', current_date - 800, current_date - 70)$$) = '',
+  'a check-in manager records credentials');
+select pg_temp.ok(chms_private.credential_status('32000000-0000-0000-0000-000000000001') = 'cleared'
+  and chms_private.credential_status('32000000-0000-0000-0000-000000000002') = 'expired'
+  and chms_private.credential_status('32000000-0000-0000-0000-000000000005') = 'none', 'credential status: cleared, expired, none');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$select count(*) from public.person_credentials$$) = '' and (select count(*) from (select 1 from public.person_credentials) s) = 2
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$insert into public.person_credentials (org_id, person_id, kind, completed_on) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000003', 'training', current_date)$$) = '42501',
+  'only check-in managers record credentials');
+
+-- consents
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$insert into public.contact_consents (org_id, phone_e164, scope, person_id, source, text_version) values ('20000000-0000-0000-0000-000000000003', '+19415550100', 'safety', '32000000-0000-0000-0000-000000000005', 'admin', 'v1')$$) = '',
+  'an editor records consent');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$insert into public.contact_consents (org_id, phone_e164, scope, source, text_version) values ('20000000-0000-0000-0000-000000000003', '+19415550100', 'safety', 'admin', 'v1')$$) = '23505',
+  'one active consent per number and scope');
+
+-- sensitive custom fields
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+insert into public.custom_field_defs (id, org_id, applies_to, key, label, field_type, sensitive)
+  values ('52000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'person', 'iep', 'IEP on file', 'boolean', true);
+select pg_temp.as_postgres();
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$insert into public.custom_field_values_sensitive (field_id, org_id, subject_id, value) values ('52000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', 'true')$$) = '42501',
+  'sensitive custom values need kids.care');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$insert into public.custom_field_values_sensitive (field_id, org_id, subject_id, value) values ('52000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', 'true')$$) = '',
+  'a care holder sets a sensitive custom value');
+
+-- domain events and append-only logs
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$insert into public.people (org_id, first_name, last_name, tags) values ('20000000-0000-0000-0000-000000000003', 'New', 'Guest', '{guest}')$$) = '', 'staff add a person');
+select pg_temp.ok((select payload ->> 'guest' = 'true' and actor_kind = 'leader' and actor_person_id = '32000000-0000-0000-0000-000000000001'
+                   from public.domain_events where type = 'person.created' order by seq desc limit 1),
+  'adding a person emits person.created with the actor''s person id');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$update public.people set phone = '941-555-0199' where id = '32000000-0000-0000-0000-000000000005'$$) = ''
+  and (select payload -> 'changed' = '["phone"]' from public.domain_events where type = 'person.updated' order by seq desc limit 1),
+  'updating a person emits the changed field names, not values');
+select pg_temp.ok(not exists (select 1 from public.domain_events where payload::text like '%555-0199%'), 'event payloads carry no personal data');
+select pg_temp.ok((select count(*) from public.domain_events where type = 'household.member_ended') = 1, 'ending a membership emits an event');
+select pg_temp.ok(pg_temp.try_sql($$update public.domain_events set payload = '{}' where seq = (select max(seq) from public.domain_events)$$) = '42501'
+  and pg_temp.try_sql($$delete from public.access_log$$) = '42501'
+  and pg_temp.try_sql($$delete from public.chms_audit$$) = '42501'
+  and pg_temp.try_sql($$delete from public.people_audit where person_id = '32000000-0000-0000-0000-000000000005'$$) = '42501',
+  'event, access, audit and history logs are append-only, even for postgres');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$update public.domain_events set payload = '{}'$$) in ('', '42501')
+  and (select payload <> '{}' from public.domain_events where type = 'person.updated' order by seq desc limit 1),
+  'owners cannot change events');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select count(*) from public.domain_events) = 0, 'only church admins read events');
+select pg_temp.as_postgres();
+
+-- audit rows never exceed their table's permission
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'child_care') = 0, 'care holders cannot read care-note history through the audit');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'person_credentials') = 0, 'credential history needs checkin.manage, kids.care is not enough');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'child_care') = 1
+  and not exists (select 1 from public.chms_audit where table_name = 'child_care' and (new_row ? 'medical' or new_row ? 'allergies')),
+  'the care-note audit keeps flags and label text, never the notes');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'person_credentials') = 2, 'church admins read credential history');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'household_members' and action = 'update') >= 1, 'guardian and membership changes are audited');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000024');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'household_members') = 0, 'membership history needs custody.manage');
+select pg_temp.as_postgres();
+
+-- a STOP is final
+update public.contact_consents set revoked_at = now(), revoked_source = 'stop' where phone_e164 = '+19415550100';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$update public.contact_consents set revoked_at = null, revoked_source = null where phone_e164 = '+19415550100'$$) = '42501',
+  'a STOP cannot be undone by an editor');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$insert into public.contact_consents (org_id, phone_e164, scope, source, text_version) values ('20000000-0000-0000-0000-000000000003', '+19415550100', 'safety', 'admin', 'v2')$$) = '',
+  'consenting again after a STOP is a new row');
+
+-- attribution is pinned
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$update public.household_flags set set_by_person_id = '32000000-0000-0000-0000-000000000004', set_at = '2020-01-01' where flag = 'pastoral_hold'$$) = ''
+  and (select set_by_person_id = '32000000-0000-0000-0000-000000000003' and set_at > '2020-01-02' from public.household_flags where flag = 'pastoral_hold'),
+  'a note keeper cannot rewrite who set a flag');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$update public.household_flags set cleared_at = now() where flag = 'pastoral_hold'$$) = '', 'a note keeper clears a flag');
+select pg_temp.ok((select cleared_by_person_id = '32000000-0000-0000-0000-000000000003' from public.household_flags where flag = 'pastoral_hold'),
+  'clearing a flag records who cleared it');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$update public.household_flags set cleared_at = null where flag = 'pastoral_hold'$$) = '42501',
+  'a cleared flag cannot be re-opened');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$update public.pickup_people set created_by_person_id = '32000000-0000-0000-0000-000000000003', created_at = '2020-01-01' where kind = 'restricted'$$) = '',
+  'a custody manager edits a pickup');
+select pg_temp.ok((select created_by_person_id = '32000000-0000-0000-0000-000000000004' and created_at > '2020-01-02' from public.pickup_people where kind = 'restricted'),
+  'pickup attribution cannot be rewritten');
+
+-- admins without a person record are still identified, privately
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$select public.get_child_care('32000000-0000-0000-0000-000000000006')$$) = '', 'an owner reads care notes');
+select pg_temp.ok((select l.actor_person_id is null and l.actor_kind = 'admin' and a.user_id = '00000000-0000-0000-0000-000000000021'
+                   from public.access_log l join chms_private.access_log_actors a on a.access_log_id = l.id
+                   where l.action = 'child_care.read' order by l.id desc limit 1),
+  'an unlinked owner''s read is attributed in chms_private, never in a church-readable table');
+select pg_temp.ok((select count(*) from public.access_log where action = 'child_care.summary' and subject_count = 1) = 1, 'a care summary read is logged once');
+
+-- documents live under their own org, kind and person
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$insert into public.person_documents (org_id, person_id, kind, storage_path, title) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', 'custody', '20000000-0000-0000-0000-000000000003/custody/32000000-0000-0000-0000-000000000006/order.pdf', 'Custody order')$$) = '',
+  'a custody manager files a custody document');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$insert into public.person_documents (org_id, person_id, kind, storage_path, title) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', 'medical', '20000000-0000-0000-0000-000000000003/custody/32000000-0000-0000-0000-000000000006/order.pdf', 'x')$$) = '23514',
+  'a document row cannot point at another kind''s folder');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select count(*) from public.person_documents) = 0, 'care holders do not see custody documents');
+select pg_temp.as_postgres();
+
+-- guards that hold for everyone
+select pg_temp.ok(pg_temp.try_sql($$truncate public.domain_events$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$truncate public.access_log$$) = '42501',
+  'append-only tables cannot be truncated');
+select pg_temp.ok(not has_function_privilege('authenticated', 'chms_private.emit_event(uuid,text,text,uuid,jsonb,timestamptz)', 'execute')
+  and not has_function_privilege('authenticated', 'chms_private.pickup_status(uuid,uuid)', 'execute')
+  and not has_function_privilege('anon', 'chms_private.log_access(uuid,text,uuid,int,jsonb)', 'execute'),
+  'internal helpers are not callable by API roles');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$insert into public.pickup_people (org_id, child_person_id, name, kind) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', 'Someone', 'restricted')$$) = '23514',
+  'a restriction must name a directory record');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$insert into public.pickup_people (org_id, child_person_id, person_id, kind) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '30000000-0000-0000-0000-000000000001', 'authorized')$$) = '23503',
+  'a pickup cannot name another church''s person');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$update public.household_members set can_check_in = true where person_id = '32000000-0000-0000-0000-000000000006'$$) = '23514',
+  'a child cannot be allowed to check in siblings');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$insert into public.custom_field_values_sensitive (field_id, org_id, subject_id, value) values ('52000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000001', 'true')$$) = '23503',
+  'a sensitive value cannot point at another church''s person');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
+  $$insert into public.pickup_people (org_id, child_person_id, person_id, kind, valid_to) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000009', 'restricted', current_date - 1)$$) = '',
+  'a custody manager records a dated restriction');
+select pg_temp.ok(chms_private.pickup_status('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000009') = 'authorized',
+  'a restriction with a past end date no longer applies');
+
+-- people.edit without kids.view cannot touch children, even blind
+update public.org_roles set permissions = '{people.view,people.edit}' where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Greeter';
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023',
+  $$update public.people set membership_status = 'inactive'$$) = '', 'an editor runs an unfiltered update');
+select pg_temp.ok((select count(*) from public.people where id in ('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000007') and membership_status = 'inactive') = 0
+  and (select membership_status from public.people where id = '32000000-0000-0000-0000-000000000005') = 'inactive',
+  'an editor without kids.view cannot change children, even with an unfiltered update');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023',
+  $$insert into public.people (org_id, first_name, last_name, birthdate) values ('20000000-0000-0000-0000-000000000003', 'Baby', 'New', current_date - 100)$$) = '42501',
+  'an editor without kids.view cannot add a child');
+update public.people set membership_status = 'member' where org_id = '20000000-0000-0000-0000-000000000003';
+update public.org_roles set permissions = '{people.view}' where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Greeter';
+
+-- a paired station is a different kind of actor
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '62000000-0000-0000-0000-000000000001');
+select pg_temp.ok(public.is_station(), 'a station token is recognised');
+select pg_temp.ok((select count(*) from public.people) = 0, 'a station reads no people through the directory');
+select pg_temp.ok(pg_temp.try_sql($$select public.get_child_care('32000000-0000-0000-0000-000000000006')$$) = '42501', 'a station cannot read care notes');
+select pg_temp.as_postgres();
 
 \echo
 \echo 'All tests passed.'

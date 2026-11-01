@@ -7,7 +7,11 @@ import { fetchMyOrgs, rememberOrgId, rememberedOrgId, type MyOrg } from '@/lib/o
 
 type Status = 'loading' | 'signed-out' | 'ready' | 'error'
 
-export type Permission = 'people.view' | 'people.edit' | 'people.notes' | 'people.export' | 'roles.manage' | 'org.manage'
+export type Permission =
+  | 'people.view' | 'people.edit' | 'people.notes' | 'people.export' | 'roles.manage' | 'org.manage'
+  | 'kids.view' | 'kids.care' | 'custody.manage'
+  | 'checkin.station' | 'checkin.manage' | 'attendance.reports'
+  | 'notify.page' | 'notify.broadcast' | 'rules.manage'
 
 interface SessionValue {
   status: Status
