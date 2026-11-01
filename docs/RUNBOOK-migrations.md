@@ -16,6 +16,7 @@ frontend. The order below keeps the live site working at every step.
 | 4c. Church app: People | **applied to production on 2026-10-31** (20261031041359); `send-verification-email` redeployed (v12, free-mail website domains no longer auto-verify). Pilot data for Lakewood Ranch Baptist Church (owner, 6 staff, chart, 100 fictional people) loaded with a seed script kept outside the repo; the public listing stays unclaimed |
 | 4. Privacy lockdown | pending: its policy and column drops need the owner to approve Supabase's confirmation prompt within 60 s; profiles are already private via 4a. Apply together with `revoke execute ... from anon` on `is_org_member`, `has_active_subscription` and `org_role_rank` (anon can execute them through default privileges; they return false without a login) |
 | 5. Dashboard settings | pending |
+| Church app hosting | **live on 2026-11-01**: Cloudflare Worker `bytheirfruit-chms` (Workers Builds from `main`, root `apps/chms`, build `npm run build`, deploy `npx wrangler deploy`, config `apps/chms/wrangler.jsonc`), custom domain app.bytheirfruit.church; Supabase Auth redirect URL `https://app.bytheirfruit.church/**` |
 
 ## 0. One-time CLI setup
 

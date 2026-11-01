@@ -47,3 +47,6 @@ npm run db:types         # same, plus regenerate database.types.ts
 - Every ChMS table carries `org_id` and RLS through `has_org_permission` /
   `is_org_member`. No ChMS table, view or function may join `people` to
   `reviews` or `profiles` (reviewer anonymity; ADR-0004).
+- Hosted at app.bytheirfruit.church by the Cloudflare Worker `bytheirfruit-chms`
+  (static assets). Workers Builds deploys every push to `main` using
+  `apps/chms/wrangler.jsonc`; its `name` must match the Worker's name.
