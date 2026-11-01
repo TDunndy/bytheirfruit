@@ -5,6 +5,16 @@ Church reviews site (Next.js static export on Cloudflare Pages) backed by
 Supabase, with a paid church dashboard. A church-management product will be
 built on the same database. Read `README.md`, then `docs/ROADMAP.md`.
 
+## Platform principles
+From `docs/specs/checkin-and-rules.md` §1; they apply to every vertical.
+
+1. **Multi-church, config-driven.** Every row is scoped to a church and protected by RLS. No church-specific logic in code — LWR's setup is data, not code.
+2. **Log everything, delete nothing.** Every action writes an immutable event: who, what, when (device time + server time), which device/station. Current state is derived from the log or kept in sync with it. Soft-delete only. Store UTC; each church has a time zone.
+3. **One attendance core.** Kids check-in, volunteer check-in, events (Parents Night Out, VBS) and groups all share one schedule → occurrence → location → check-in model. No kids-only tables.
+4. **Rules are platform-level.** Every vertical emits domain events (`checkin.created`, `person.created`, …). Emit them from day one, before the engine exists.
+5. **Offline-tolerant clients.** Client-generated UUIDs (v7) + idempotent writes, so a station can queue during a Wi-Fi drop and sync with no duplicates.
+6. **Least privilege for kids' data.** Role-scoped access (a room volunteer sees their room, not the database). Log who views or edits child records.
+
 ## Rules that matter
 - Schema changes go in `supabase/migrations/` only. Never edit production through
   the dashboard without a matching migration.
