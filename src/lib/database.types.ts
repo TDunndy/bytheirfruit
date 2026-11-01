@@ -97,6 +97,200 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"attendance": {
+                  Row: {
+                    "anomalies": (string)[],"check_in_event_id": string | null,"check_out_event_id": string | null,"checked_in_at": string | null,"checked_out_at": string | null,"code_matched": boolean | null,"codes": (string)[],"event_count": number,"first_room_id": string | null,"household_id": string | null,"id": string,"minutes_vs_expected": number | null,"occurrence_id": string,"org_id": string,"person_id": string,"picked_up_by_person_id": string | null,"pickup_status": string | null,"punctuality": string | null,"rev": number,"role": string,"room_id": string | null,"session_id": string | null,"station_id": string | null,"status": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "anomalies"?: (string)[],"check_in_event_id"?: string | null,"check_out_event_id"?: string | null,"checked_in_at"?: string | null,"checked_out_at"?: string | null,"code_matched"?: boolean | null,"codes"?: (string)[],"event_count"?: number,"first_room_id"?: string | null,"household_id"?: string | null,"id"?: string,"minutes_vs_expected"?: number | null,"occurrence_id": string,"org_id": string,"person_id": string,"picked_up_by_person_id"?: string | null,"pickup_status"?: string | null,"punctuality"?: string | null,"rev": number,"role"?: string,"room_id"?: string | null,"session_id"?: string | null,"station_id"?: string | null,"status": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "anomalies"?: (string)[],"check_in_event_id"?: string | null,"check_out_event_id"?: string | null,"checked_in_at"?: string | null,"checked_out_at"?: string | null,"code_matched"?: boolean | null,"codes"?: (string)[],"event_count"?: number,"first_room_id"?: string | null,"household_id"?: string | null,"id"?: string,"minutes_vs_expected"?: number | null,"occurrence_id"?: string,"org_id"?: string,"person_id"?: string,"picked_up_by_person_id"?: string | null,"pickup_status"?: string | null,"punctuality"?: string | null,"rev"?: number,"role"?: string,"room_id"?: string | null,"session_id"?: string | null,"station_id"?: string | null,"status"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "attendance_occurrence_id_org_id_fkey"
+      columns: ["occurrence_id","org_id"]
+isOneToOne: false
+      referencedRelation: "occurrences"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "attendance_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"attendance_baselines": {
+                  Row: {
+                    "count": number,"created_at": string,"household_id": string,"id": string,"note": string | null,"org_id": string,"set_by_person_id": string | null,"updated_at": string,"year": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "count": number,"created_at"?: string,"household_id": string,"id"?: string,"note"?: string | null,"org_id": string,"set_by_person_id"?: string | null,"updated_at"?: string,"year": number
+                  }
+                  Update: {
+                    "count"?: number,"created_at"?: string,"household_id"?: string,"id"?: string,"note"?: string | null,"org_id"?: string,"set_by_person_id"?: string | null,"updated_at"?: string,"year"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "attendance_baselines_household_id_org_id_fkey"
+      columns: ["household_id","org_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_baselines_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "attendance_baselines_set_by_person_id_org_id_fkey"
+      columns: ["set_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"attendance_events": {
+                  Row: {
+                    "actor_person_id": string | null,"clock_offset_ms": number,"code": string | null,"code_matched": boolean | null,"device_at": string,"external_id": string | null,"from_room_id": string | null,"id": string,"label_kind": string | null,"occurrence_id": string,"org_id": string,"person_id": string,"picked_up_by_person_id": string | null,"picked_up_by_pickup_id": string | null,"pickup_status": string | null,"printer_id": string | null,"recorded_at": string,"role": string,"room_id": string | null,"session_id": string | null,"source": string,"station_id": string | null,"target_event_id": string | null,"type": string,"verified_by_person_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actor_person_id"?: string | null,"clock_offset_ms"?: number,"code"?: string | null,"code_matched"?: boolean | null,"device_at": string,"external_id"?: string | null,"from_room_id"?: string | null,"id"?: string,"label_kind"?: string | null,"occurrence_id": string,"org_id": string,"person_id": string,"picked_up_by_person_id"?: string | null,"picked_up_by_pickup_id"?: string | null,"pickup_status"?: string | null,"printer_id"?: string | null,"recorded_at"?: string,"role"?: string,"room_id"?: string | null,"session_id"?: string | null,"source"?: string,"station_id"?: string | null,"target_event_id"?: string | null,"type": string,"verified_by_person_id"?: string | null
+                  }
+                  Update: {
+                    "actor_person_id"?: string | null,"clock_offset_ms"?: number,"code"?: string | null,"code_matched"?: boolean | null,"device_at"?: string,"external_id"?: string | null,"from_room_id"?: string | null,"id"?: string,"label_kind"?: string | null,"occurrence_id"?: string,"org_id"?: string,"person_id"?: string,"picked_up_by_person_id"?: string | null,"picked_up_by_pickup_id"?: string | null,"pickup_status"?: string | null,"printer_id"?: string | null,"recorded_at"?: string,"role"?: string,"room_id"?: string | null,"session_id"?: string | null,"source"?: string,"station_id"?: string | null,"target_event_id"?: string | null,"type"?: string,"verified_by_person_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "attendance_events_actor_person_id_org_id_fkey"
+      columns: ["actor_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_from_room_id_org_id_fkey"
+      columns: ["from_room_id","org_id"]
+isOneToOne: false
+      referencedRelation: "rooms"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_occurrence_id_org_id_fkey"
+      columns: ["occurrence_id","org_id"]
+isOneToOne: false
+      referencedRelation: "occurrences"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "attendance_events_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_picked_up_by_person_id_org_id_fkey"
+      columns: ["picked_up_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_picked_up_by_pickup_id_org_id_fkey"
+      columns: ["picked_up_by_pickup_id","org_id"]
+isOneToOne: false
+      referencedRelation: "pickup_people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_printer_id_org_id_fkey"
+      columns: ["printer_id","org_id"]
+isOneToOne: false
+      referencedRelation: "printers"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_room_id_org_id_fkey"
+      columns: ["room_id","org_id"]
+isOneToOne: false
+      referencedRelation: "rooms"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_session_id_org_id_fkey"
+      columns: ["session_id","org_id"]
+isOneToOne: false
+      referencedRelation: "checkin_sessions"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_station_id_org_id_fkey"
+      columns: ["station_id","org_id"]
+isOneToOne: false
+      referencedRelation: "stations"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_target_event_id_org_id_fkey"
+      columns: ["target_event_id","org_id"]
+isOneToOne: false
+      referencedRelation: "attendance_events"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_target_event_id_org_id_fkey"
+      columns: ["target_event_id","org_id"]
+isOneToOne: false
+      referencedRelation: "room_stays"
+      referencedColumns: ["event_id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_verified_by_person_id_org_id_fkey"
+      columns: ["verified_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"attendance_pickup_names": {
+                  Row: {
+                    "event_id": string,"name": string,"org_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "event_id": string,"name": string,"org_id": string
+                  }
+                  Update: {
+                    "event_id"?: string,"name"?: string,"org_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "attendance_pickup_names_event_id_org_id_fkey"
+      columns: ["event_id","org_id"]
+isOneToOne: false
+      referencedRelation: "attendance_events"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_pickup_names_event_id_org_id_fkey"
+      columns: ["event_id","org_id"]
+isOneToOne: false
+      referencedRelation: "room_stays"
+      referencedColumns: ["event_id","org_id"]
+    },{
+      foreignKeyName: "attendance_pickup_names_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"checkin_keys": {
                   Row: {
                     "household_id": string | null,"id": string,"issued_at": string,"kind": string,"org_id": string,"person_id": string | null,"revoked_at": string | null,"value": string
@@ -164,6 +358,44 @@ isOneToOne: false
       columns: ["set_by_person_id","org_id"]
 isOneToOne: false
       referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"checkin_sessions": {
+                  Row: {
+                    "clock_offset_ms": number,"completed_at": string | null,"device_at": string | null,"guardian_person_id": string | null,"household_id": string | null,"id": string,"local_date": string,"lookup_last4": string | null,"lookup_method": string | null,"org_id": string,"queued_offline": boolean,"recorded_at": string,"started_at": string,"station_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "clock_offset_ms"?: number,"completed_at"?: string | null,"device_at"?: string | null,"guardian_person_id"?: string | null,"household_id"?: string | null,"id"?: string,"local_date": string,"lookup_last4"?: string | null,"lookup_method"?: string | null,"org_id": string,"queued_offline"?: boolean,"recorded_at"?: string,"started_at"?: string,"station_id"?: string | null
+                  }
+                  Update: {
+                    "clock_offset_ms"?: number,"completed_at"?: string | null,"device_at"?: string | null,"guardian_person_id"?: string | null,"household_id"?: string | null,"id"?: string,"local_date"?: string,"lookup_last4"?: string | null,"lookup_method"?: string | null,"org_id"?: string,"queued_offline"?: boolean,"recorded_at"?: string,"started_at"?: string,"station_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "checkin_sessions_guardian_person_id_org_id_fkey"
+      columns: ["guardian_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "checkin_sessions_household_id_org_id_fkey"
+      columns: ["household_id","org_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "checkin_sessions_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "checkin_sessions_station_id_org_id_fkey"
+      columns: ["station_id","org_id"]
+isOneToOne: false
+      referencedRelation: "stations"
       referencedColumns: ["id","org_id"]
     }
                   ]
@@ -1371,6 +1603,82 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"security_codes": {
+                  Row: {
+                    "allocated_at": string,"code": string,"id": string,"issued_at": string | null,"local_date": string,"org_id": string,"session_id": string | null,"station_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "allocated_at"?: string,"code": string,"id"?: string,"issued_at"?: string | null,"local_date": string,"org_id": string,"session_id"?: string | null,"station_id"?: string | null
+                  }
+                  Update: {
+                    "allocated_at"?: string,"code"?: string,"id"?: string,"issued_at"?: string | null,"local_date"?: string,"org_id"?: string,"session_id"?: string | null,"station_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "security_codes_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "security_codes_session_id_org_id_fkey"
+      columns: ["session_id","org_id"]
+isOneToOne: false
+      referencedRelation: "checkin_sessions"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "security_codes_station_id_org_id_fkey"
+      columns: ["station_id","org_id"]
+isOneToOne: false
+      referencedRelation: "stations"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"station_alerts": {
+                  Row: {
+                    "acknowledged_at": string | null,"acknowledged_by_person_id": string | null,"detail": NonNullable<Json>,"device_at": string | null,"id": string,"kind": string,"occurrence_id": string | null,"org_id": string,"person_id": string | null,"raised_at": string,"station_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "acknowledged_at"?: string | null,"acknowledged_by_person_id"?: string | null,"detail"?: NonNullable<Json>,"device_at"?: string | null,"id"?: string,"kind": string,"occurrence_id"?: string | null,"org_id": string,"person_id"?: string | null,"raised_at"?: string,"station_id"?: string | null
+                  }
+                  Update: {
+                    "acknowledged_at"?: string | null,"acknowledged_by_person_id"?: string | null,"detail"?: NonNullable<Json>,"device_at"?: string | null,"id"?: string,"kind"?: string,"occurrence_id"?: string | null,"org_id"?: string,"person_id"?: string | null,"raised_at"?: string,"station_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "station_alerts_acknowledged_by_person_id_org_id_fkey"
+      columns: ["acknowledged_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "station_alerts_occurrence_id_org_id_fkey"
+      columns: ["occurrence_id","org_id"]
+isOneToOne: false
+      referencedRelation: "occurrences"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "station_alerts_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "station_alerts_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "station_alerts_station_id_org_id_fkey"
+      columns: ["station_id","org_id"]
+isOneToOne: false
+      referencedRelation: "stations"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
                 },"station_scopes": {
                   Row: {
                     "area_id": string | null,"created_at": string,"id": string,"org_id": string,"room_id": string | null,"station_id": string
@@ -1580,6 +1888,38 @@ isOneToOne: false
                         Relationships: [
                     
                   ]
+                },"room_stays": {
+                  Row: {
+                    "event_id": string | null,"from_at": string | null,"occurrence_id": string | null,"org_id": string | null,"person_id": string | null,"role": string | null,"room_id": string | null,"to_at": string | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "attendance_events_occurrence_id_org_id_fkey"
+      columns: ["occurrence_id","org_id"]
+isOneToOne: false
+      referencedRelation: "occurrences"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "attendance_events_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "attendance_events_room_id_org_id_fkey"
+      columns: ["room_id","org_id"]
+isOneToOne: false
+      referencedRelation: "rooms"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
                 },"zip_centroids": {
                   Row: {
                     "church_count": number | null,"lat": number | null,"lng": number | null,"zip": string | null
@@ -1594,6 +1934,9 @@ isOneToOne: false
             "accept_org_invitation":
 { Args: { "p_token": string }; Returns: Json
                            },
+"allocate_codes":
+{ Args: { "p_local_date": string,"p_n": number,"p_station_id"?: string }; Returns: (string)[]
+                           },
 "child_care_summary":
 { Args: { "p_org_id": string }; Returns: {
               "allergy_short": string,"has_allergy": boolean,"has_medical": boolean,"has_special_needs": boolean,"person_id": string
@@ -1606,6 +1949,9 @@ isOneToOne: false
 { Args: { "p_denomination"?: string,"p_lat": number,"p_limit"?: number,"p_lng": number,"p_query"?: string,"p_radius_miles"?: number,"p_state"?: string }; Returns: {
               "address": string,"city": string,"claimed_at": string,"claimed_by": string,"denomination": string,"distance_miles": number,"email": string,"id": string,"latitude": number,"longitude": number,"name": string,"phone": string,"score_community": number,"score_finances": number,"score_kids": number,"score_leadership": number,"score_overall": number,"score_prayer": number,"score_service": number,"score_teaching": number,"score_welcome": number,"score_worship": number,"score_youth": number,"service_style": string,"service_times": string,"size": string,"state": string,"status": string,"subscription_status": string,"total_reviews": number,"website": string,"zip": string
             }[]
+                           },
+"close_occurrence":
+{ Args: { "p_occurrence_id": string }; Returns: undefined
                            },
 "compute_regional_benchmarks":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -1631,6 +1977,9 @@ isOneToOne: false
                            },
 "has_org_permission":
 { Args: { "p_org_id": string,"p_permission": string }; Returns: boolean
+                           },
+"ingest":
+{ Args: { "p_commands": Json }; Returns: Json
                            },
 "is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -1672,6 +2021,11 @@ isOneToOne: false
                            },
 "revoke_org_invitation":
 { Args: { "p_invitation_id": string }; Returns: undefined
+                           },
+"roster":
+{ Args: { "p_occurrence_id": string,"p_room_id": string }; Returns: {
+              "allergy_short": string,"anomalies": (string)[],"checked_in_at": string,"checked_out_at": string,"codes": (string)[],"display_name": string,"guardian_first_name": string,"has_allergy": boolean,"has_medical": boolean,"has_special_needs": boolean,"person_id": string,"photo_path": string,"punctuality": string,"restriction": string,"role": string,"room_id": string,"status": string
+            }[]
                            },
 "set_child_care":
 { Args: { "p_allergies": string,"p_allergy_short": string,"p_medical": string,"p_person_id": string,"p_special_needs": string }; Returns: undefined
