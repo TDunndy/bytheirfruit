@@ -231,7 +231,7 @@ create table public.label_templates (
   stock text not null default 'DK-2205' check (length(stock) between 1 and 40),
   width_mm smallint not null default 62 check (width_mm between 10 and 300),
   height_mm smallint not null default 29 check (height_mm between 10 and 300),
-  layout jsonb not null default '{}' check (jsonb_typeof(layout) = 'object'),
+  layout jsonb not null default '{}' check (jsonb_typeof(layout) = 'object' and pg_column_size(layout) <= 65536),
   version integer not null default 1 check (version >= 1),
   is_default boolean not null default false,
   created_at timestamptz not null default now(),
@@ -280,7 +280,8 @@ alter table public.station_scopes enable row level security;
 -- The device's auth user. Lives in chms_private: no church user reads account
 -- ids. A station is known only through this row, never through the token.
 create table chms_private.station_principals (
-  station_id uuid primary key,
+  id bigint generated always as identity primary key,
+  station_id uuid not null,
   org_id uuid not null,
   user_id uuid not null unique,
   platform text check (platform is null or length(platform) <= 40),
@@ -290,6 +291,8 @@ create table chms_private.station_principals (
   revoked_at timestamptz,
   foreign key (station_id, org_id) references public.stations (id, org_id) on delete cascade
 );
+-- One live pairing per station; a re-pair revokes the old row and keeps it.
+create unique index idx_station_principals_live on chms_private.station_principals (station_id) where revoked_at is null;
 alter table chms_private.station_principals enable row level security;
 revoke all on table chms_private.station_principals from anon, authenticated;
 
