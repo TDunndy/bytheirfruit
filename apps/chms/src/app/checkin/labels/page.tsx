@@ -124,7 +124,7 @@ function Preview({ template, name, large = false }: { template: { kind: string; 
 
 function PrinterForm({ initial, areas, onSave, onCancel }: { initial: Partial<PrinterInput>; areas: Area[]; onSave: (p: PrinterInput) => Promise<void>; onCancel: () => void }) {
   const [v, setV] = useState<PrinterInput>({
-    id: initial.id, name: initial.name ?? '', model: initial.model ?? 'QL-820NWB', connection: initial.connection ?? 'wifi', address: initial.address ?? null,
+    id: initial.id, name: initial.name ?? '', model: initial.model ?? 'QL-820NWBc', connection: initial.connection ?? 'wifi', address: initial.address ?? null,
     stock: initial.stock ?? 'DK-2205', area_id: initial.area_id ?? null, active: initial.active ?? true,
   })
   const [busy, setBusy] = useState(false)

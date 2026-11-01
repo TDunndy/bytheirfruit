@@ -294,7 +294,7 @@ Groups and Events can start after 1b with no new core tables.
 
 ## 10. Still open
 None of these block Phase 1a; each is needed by the phase named.
-- Q2: Brother models at LWR; Wi-Fi or Bluetooth today (1b dry run).
+- Q2: LWR's printers are Brother **QL-820NWBc** on DK-2205 62 mm rolls (photo, 2026-11-01); each is paired with a numbered station, e.g. "#5: printer and mobile iPad". Still to confirm at the 1b dry run: whether they print over Wi-Fi or Bluetooth today, and their addresses.
 - Q3: K/5 rooms and grades per room; Move-Up Sunday date (1a seed data; the Barn can be configured first).
 - Q4: current label sizes (1b; content is settled by decision J).
 - Q5: SMS budget; who may send emergency broadcasts (Phase 3).
