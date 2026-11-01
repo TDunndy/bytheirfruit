@@ -208,18 +208,18 @@ export async function createHousehold(orgId: string, name: string, from?: Pick<P
   return data
 }
 
-/** Adds someone to a family, or brings back a membership that had ended (keeping its check-in flags). */
+/** Adds someone to a family, or brings back a membership that had ended; the flags follow the relationship. */
 export async function addToHousehold(orgId: string, householdId: string, personId: string, relationship: Relationship) {
+  const guardian = relationship === 'head' || relationship === 'spouse'
   const revived = await supabase
     .from('household_members')
-    .update({ ended_at: null, relationship })
+    .update({ ended_at: null, relationship, is_guardian: guardian, can_check_in: guardian })
     .eq('household_id', householdId)
     .eq('person_id', personId)
     .not('ended_at', 'is', null)
     .select('person_id')
   if (revived.error) throw revived.error
   if (revived.data.length > 0) return
-  const guardian = relationship === 'head' || relationship === 'spouse'
   const { error } = await supabase
     .from('household_members')
     .insert({ org_id: orgId, household_id: householdId, person_id: personId, relationship, is_guardian: guardian, can_check_in: guardian })

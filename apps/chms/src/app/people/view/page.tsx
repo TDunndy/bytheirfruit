@@ -165,7 +165,7 @@ function PersonView() {
                   <li>
                     <button className="cell-link cell-action" onClick={() => act(async () => {
                       const h = await createHousehold(org.id, `The ${person.last_name || person.first_name} Family`, person)
-                      await addToHousehold(org.id, h.id, person.id, 'head')
+                      await addToHousehold(org.id, h.id, person.id, a !== null && a < 18 ? 'child' : 'head')
                     })}>Start a family</button>
                   </li>
                 )}
