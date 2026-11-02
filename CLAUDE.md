@@ -100,3 +100,13 @@ npm run db:types         # same, plus regenerate database.types.ts
 - Writes go through the outbox (`src/lib/outbox.ts`) to `ingest()`: UUIDv7
   ids, replay-safe, rejections in the staff queue. Room suggestions and
   labels come from `@btf/core`; the browser only logs `label_print_requested`.
+
+## Groups (`groups`, `group_members`)
+- `groups.manage` creates groups and edits any group's members; an active
+  leader or co-leader edits their own group and its members without it
+  (`chms_private.leads_group`). `people.view` reads members, children need
+  `kids.view`, a person always reads their own rows. Memberships end
+  (`ended_at`), never delete; an ended row is history. Events
+  `group.created|updated|archived`, `group.member_added|updated|ended` carry ids
+  only. Queries live in `apps/chms/src/lib/groups.ts`; the person page's
+  Involvement section is `involvementFor()` there.

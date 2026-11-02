@@ -717,6 +717,58 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"group_members": {
+                  Row: {
+                    "created_at": string,"ended_at": string | null,"group_id": string,"id": string,"joined_on": string,"org_id": string,"person_id": string,"role": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"ended_at"?: string | null,"group_id": string,"id"?: string,"joined_on"?: string,"org_id": string,"person_id": string,"role"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"ended_at"?: string | null,"group_id"?: string,"id"?: string,"joined_on"?: string,"org_id"?: string,"person_id"?: string,"role"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "group_members_group_id_org_id_fkey"
+      columns: ["group_id","org_id"]
+isOneToOne: false
+      referencedRelation: "groups"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "group_members_person_id_org_id_fkey"
+      columns: ["person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
+                },"groups": {
+                  Row: {
+                    "active": boolean,"archived_at": string | null,"area_id": string | null,"created_at": string,"description": string | null,"id": string,"kind": string,"meets": string | null,"name": string,"org_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"archived_at"?: string | null,"area_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind"?: string,"meets"?: string | null,"name": string,"org_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "active"?: boolean,"archived_at"?: string | null,"area_id"?: string | null,"created_at"?: string,"description"?: string | null,"id"?: string,"kind"?: string,"meets"?: string | null,"name"?: string,"org_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "groups_area_id_org_id_fkey"
+      columns: ["area_id","org_id"]
+isOneToOne: false
+      referencedRelation: "areas"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "groups_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"household_flags": {
                   Row: {
                     "cleared_at": string | null,"cleared_by_person_id": string | null,"flag": string,"household_id": string,"id": string,"note": string | null,"org_id": string,"set_at": string,"set_by_person_id": string | null

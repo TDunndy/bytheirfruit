@@ -12,6 +12,7 @@ export type Permission =
   | 'kids.view' | 'kids.care' | 'custody.manage'
   | 'checkin.station' | 'checkin.manage' | 'attendance.reports'
   | 'notify.page' | 'notify.broadcast' | 'rules.manage'
+  | 'groups.manage'
 
 interface SessionValue {
   status: Status

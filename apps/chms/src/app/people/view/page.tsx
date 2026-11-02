@@ -12,9 +12,10 @@ import { KidsSections, KidsSideSections } from '@/components/kids/KidsSections'
 import {
   addChartLine, addNote, addRole, addToHousehold, age, chartFor, createHousehold, deleteNote, displayName,
   errorMessage, getPerson, historyFor, householdsOf, listRoles, notesFor, peopleNames, personRoleIds,
-  removeChartLine, removeRole, setArchived, teamLogins, updatePerson,
+  removeChartLine, removeRole, setArchived, teamLogins, todayLocal, updatePerson,
   type AuditEntry, type ChartLine, type Membership, type Note, type NoteVisibility, type OrgRole, type Person,
 } from '@/lib/people'
+import { involvementFor, kindLabel, roleLabel, type Involvement } from '@/lib/groups'
 
 export default function PersonPage() {
   return (
@@ -44,6 +45,7 @@ function PersonView() {
   const [history, setHistory] = useState<AuditEntry[]>([])
   const [names, setNames] = useState<Map<string, string>>(new Map())
   const [loginRole, setLoginRole] = useState<string | null>(null)
+  const [involvement, setInvolvement] = useState<Involvement | null>(null)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
@@ -58,6 +60,8 @@ function PersonView() {
       const ns = can('people.notes') ? await notesFor(id) : []
       setRoles(allRoles); setRoleIds(mine); setFamilies(fams); setChart(ch); setHistory(hist); setNotes(ns)
       setLoginRole(logins.get(id) ?? null)
+      // groups, serving and the next four weeks of volunteer slots; a role without the directory sees none
+      try { setInvolvement(await involvementFor(org.id, id, mine, todayLocal())) } catch { setInvolvement(null) }
       const ids = [
         ...ch.answersTo.map((l) => l.overseer_person_id ?? ''), ...ch.reports.map((l) => l.person_id),
         ...ns.map((n) => n.author_person_id ?? ''), ...hist.map((h) => h.actor_person_id ?? ''),
@@ -174,6 +178,52 @@ function PersonView() {
                   </li>
                 )}
               </ul>
+            </section>
+
+            <section className="section">
+              <h2 className="group-head">Involvement</h2>
+              <ul className="group lines">
+                {involvement && involvement.groups.length + involvement.serving.length + involvement.upcoming.length === 0 && (
+                  <li className="cell muted">Not in a group or on a team yet.</li>
+                )}
+                {involvement?.groups.map((g) => (
+                  <li key={g.membership.id}>
+                    <Link href={`/groups/view?id=${g.group.id}`} className="cell-link">
+                      <IconTile name="groups" />
+                      <span className="cell-text">
+                        <span className="cell-title">{g.group.name}</span>
+                        <span className="cell-sub">{kindLabel(g.group.kind)} · {roleLabel(g.membership.role)} since {fmtDate(g.membership.joined_on)}</span>
+                      </span>
+                      <Chevron />
+                    </Link>
+                  </li>
+                ))}
+                {involvement?.serving.map((s) => (
+                  <li key={s.id} className="cell">
+                    <IconTile name="room" />
+                    <span className="cell-text">
+                      <span className="cell-title">{s.where}</span>
+                      <span className="cell-sub">{s.kind === 'director' ? 'Director' : 'Room leader'}{s.via === 'role' ? ' · through a role' : ''}</span>
+                    </span>
+                  </li>
+                ))}
+                {involvement?.upcoming.slice(0, 6).map((u) => (
+                  <li key={u.assignment.id} className="cell">
+                    <IconTile name="clock" />
+                    <span className="cell-text">
+                      <span className="cell-title">{u.label}</span>
+                      <span className="cell-sub">{fmtDate(u.date)}{u.assignment.status === 'confirmed' ? ' · confirmed' : ''}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {involvement && (involvement.groups.length > 0 || involvement.upcoming.length > 0) && (
+                <p className="group-foot">
+                  This week: {involvement.slotsThisWeek} serving {involvement.slotsThisWeek === 1 ? 'slot' : 'slots'}
+                  {involvement.leads > 0 ? ` · leads ${involvement.leads} ${involvement.leads === 1 ? 'group' : 'groups'}` : ''}
+                  {involvement.groups.length > 0 ? ` · ${involvement.groups.length} ${involvement.groups.length === 1 ? 'group' : 'groups'}` : ''}
+                </p>
+              )}
             </section>
 
             <KidsSections person={person} isChild={isChild} onChange={load} />

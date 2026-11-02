@@ -1,19 +1,8 @@
-import { ComingNext } from '@/components/AppShell'
 import type { Metadata } from 'next'
+import { GroupsList } from '@/components/groups/GroupsList'
 
 export const metadata: Metadata = { title: 'Groups' }
 
 export default function GroupsPage() {
-  return (
-    <ComingNext
-      title="Groups"
-      lead="Every ministry, team and group your church runs, and who belongs to each."
-      items={[
-        'Ministries and serving teams: welcome, parking, worship, kids rooms',
-        'Small groups on-site and off-site, community groups, classes',
-        'Leaders and members, drawn from People',
-        'Group lists for notifications, later a channel per group',
-      ]}
-    />
-  )
+  return <GroupsList />
 }

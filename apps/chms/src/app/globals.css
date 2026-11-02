@@ -787,6 +787,7 @@ select { cursor: pointer; }
 .add-member { gap: 10px; flex-wrap: wrap; }
 .add-member .popup { flex: none; }
 .add-member .picker { flex: 1 1 220px; }
+.member .role-popup { flex: none; margin: 0 16px 0 4px; }
 
 /* --------------------------------------------------------------- forms -- */
 .card.form { background: none; padding: 0; border-radius: 0; max-width: 720px; }

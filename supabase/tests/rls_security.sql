@@ -2595,5 +2595,135 @@ select pg_temp.ok(not has_function_privilege('anon', 'public.station_lookup(text
   'station RPCs are closed to anon; claiming and revocation to everyone but the service role');
 
 \echo
+\echo '== chms: groups ===================================================='
+select pg_temp.as_postgres();
+select pg_temp.ok('groups.manage' = any (chms_private.all_permissions())
+  and (select 'groups.manage' = any (permissions) from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Staff')
+  and (select 'groups.manage' = any (permissions) from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Kids Director')
+  and (select permissions = chms_private.all_permissions() from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Pastor')
+  and not (select 'groups.manage' = any (permissions) from public.org_roles where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Deacon'),
+  'groups.manage exists and the untouched default roles took it');
+
+-- the owner builds two groups
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$
+  insert into public.groups (id, org_id, name, kind, area_id, meets) values
+    ('83000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'Welcome team', 'team', '72000000-0000-0000-0000-000000000003', 'Sundays, both services'),
+    ('83000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', 'Tuesday group', 'small_group', null, 'Tuesdays 7pm')$$) = '',
+  'a manager creates groups');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.groups (org_id, name, kind) values ('20000000-0000-0000-0000-000000000003', ' welcome TEAM ', 'ministry')$$) = '23505',
+  'one active group per name');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a',
+  $$insert into public.groups (org_id, name) values ('20000000-0000-0000-0000-000000000003', 'Intruders')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000023',
+  $$insert into public.groups (org_id, name) values ('20000000-0000-0000-0000-000000000003', 'Greeters only')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$insert into public.groups (org_id, name) values ('20000000-0000-0000-0000-000000000003', 'Deacon club')$$) = '42501',
+  'another church''s owner, a greeter and a deacon cannot create groups');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000023');
+select pg_temp.ok((select count(*) from public.groups) = 2, 'every member reads the church''s groups');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+select pg_temp.ok((select count(*) from public.groups) = 0, 'and nothing of another church''s');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000027', '76000000-0000-0000-0000-000000000002');
+select pg_temp.ok((select count(*) from public.groups) + (select count(*) from public.group_members) = 0, 'a station reads no groups');
+
+-- members and leaders
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$
+  insert into public.group_members (group_id, person_id, org_id, role) values
+    ('83000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000003', 'leader'),
+    ('83000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', 'member'),
+    ('83000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000006', '20000000-0000-0000-0000-000000000003', 'member'),
+    ('83000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'leader')$$) = '',
+  'the manager adds a leader, members and a child');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$
+  insert into public.group_members (group_id, person_id, org_id) values
+    ('83000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003')$$) = '23505',
+  'one active membership per person per group');
+-- Dee (a deacon: people.view, kids.view, no groups.manage) leads the Tuesday group
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024', $$
+  insert into public.group_members (group_id, person_id, org_id) values
+    ('83000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000009', '20000000-0000-0000-0000-000000000003')$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$update public.groups set description = 'Bring a friend.' where id = '83000000-0000-0000-0000-000000000002'$$) = '',
+  'a group''s leader adds members and edits the group without groups.manage');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024', $$
+  insert into public.group_members (group_id, person_id, org_id) values
+    ('83000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000003')$$) = '42501',
+  'but not to a group they do not lead');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024',
+  $$update public.groups set description = 'Mine now' where id = '83000000-0000-0000-0000-000000000001'$$) = '', 'an update to another group''s row is silent');
+select pg_temp.ok((select description is null from public.groups where id = '83000000-0000-0000-0000-000000000001'), 'and changes nothing');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025', $$
+  insert into public.group_members (group_id, person_id, org_id) values
+    ('83000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000003')$$) = '42501',
+  'an elder who leads nothing adds nobody');
+-- Gail leads nothing and has no kids.view: she sees the adults of a group, not the child
+select pg_temp.as_user('00000000-0000-0000-0000-000000000023');
+select pg_temp.ok((select count(*) from public.group_members where group_id = '83000000-0000-0000-0000-000000000002') = 3
+  and (select count(*) from public.group_members where person_id = '32000000-0000-0000-0000-000000000006') = 0,
+  'people.view reads the adult members; a child needs kids.view');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000024');
+select pg_temp.ok((select count(*) from public.group_members where group_id = '83000000-0000-0000-0000-000000000002') = 4, 'kids.view reads the child too');
+-- a group leader without kids.view cannot add a child
+select pg_temp.as_postgres();
+insert into public.group_members (group_id, person_id, org_id, role) values
+  ('83000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', 'co_leader');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$
+  insert into public.group_members (group_id, person_id, org_id) values
+    ('83000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000007', '20000000-0000-0000-0000-000000000003')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$
+  insert into public.group_members (group_id, person_id, org_id) values
+    ('83000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000009', '20000000-0000-0000-0000-000000000003')$$) = '',
+  'a co-leader without kids.view adds adults, not children');
+
+-- memberships end, never delete; an ended row is history
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$update public.group_members set ended_at = now() where group_id = '83000000-0000-0000-0000-000000000002' and person_id = '32000000-0000-0000-0000-000000000002'$$) = '',
+  'the manager ends a membership');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$delete from public.group_members where person_id = '32000000-0000-0000-0000-000000000002'$$) = ''
+  and (select count(*) from public.group_members where person_id = '32000000-0000-0000-0000-000000000002') = 2
+  and pg_temp.try_sql($$delete from public.group_members where person_id = '32000000-0000-0000-0000-000000000002'$$) = '42501',
+  'nobody deletes a membership, the owner included');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$update public.group_members set role = 'leader' where group_id = '83000000-0000-0000-0000-000000000002' and person_id = '32000000-0000-0000-0000-000000000002'$$) = '42501',
+  'an ended membership cannot change');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000024', $$
+  insert into public.group_members (group_id, person_id, org_id) values
+    ('83000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003')$$) = '',
+  'the person can join again as a new row');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$update public.group_members set person_id = '32000000-0000-0000-0000-000000000005', role = 'co_leader' where group_id = '83000000-0000-0000-0000-000000000002' and person_id = '32000000-0000-0000-0000-000000000009'$$) = '',
+  'the manager changes a role');
+select pg_temp.ok((select role = 'co_leader' from public.group_members where group_id = '83000000-0000-0000-0000-000000000002' and person_id = '32000000-0000-0000-0000-000000000009' and ended_at is null)
+  and not exists (select 1 from public.group_members where person_id = '32000000-0000-0000-0000-000000000005'),
+  'the role changed; who and where are pinned');
+
+-- archive, events and audit
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$update public.groups set archived_at = now(), active = false where id = '83000000-0000-0000-0000-000000000001'$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.groups (org_id, name, kind) values ('20000000-0000-0000-0000-000000000003', 'Welcome team', 'team')$$) = '',
+  'an archived group frees its name');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.domain_events where type = 'group.created') = 3
+  and (select count(*) from public.domain_events where type = 'group.archived') = 1
+  and (select count(*) from public.domain_events where type = 'group.updated') = 1
+  and (select count(*) from public.domain_events where type = 'group.member_added') = 8
+  and (select count(*) from public.domain_events where type = 'group.member_ended') = 1
+  and (select count(*) from public.domain_events where type = 'group.member_updated') = 1
+  and not exists (select 1 from public.domain_events where type like 'group.%' and payload::text ~* 'tuesday|welcome|gail'),
+  'groups and memberships are on the event bus, by id only');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name in ('groups', 'group_members')) >= 12, 'staff with groups.manage read the group audit');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000023');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name in ('groups', 'group_members')) = 0, 'a greeter reads none of it');
+select pg_temp.as_postgres();
+select pg_temp.ok(not has_function_privilege('anon', 'chms_private.leads_group(uuid)', 'execute')
+  and not has_function_privilege('anon', 'chms_private.pin_group_member()', 'execute')
+  and not has_function_privilege('authenticated', 'chms_private.group_member_events()', 'execute'),
+  'the group helpers are closed to anon');
+
+\echo
 \echo 'All tests passed.'
 rollback;
