@@ -3257,5 +3257,196 @@ select pg_temp.ok((select count(*) from public.access_log where action = 'report
   'and is logged against the kept child');
 
 \echo
+\echo '== chms: duplicates and merge ====================================='
+select pg_temp.as_postgres();
+-- Cal edits people but sees no children
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-000000000042', 'cal@checkin.org');
+insert into public.org_members (org_id, user_id, role) values ('20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000042', 'volunteer');
+insert into public.people (id, org_id, first_name, last_name) values ('32000000-0000-0000-0000-000000000035', '20000000-0000-0000-0000-000000000003', 'Cal', 'Clerk');
+insert into public.person_logins (person_id, org_id, user_id) values ('32000000-0000-0000-0000-000000000035', '20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000042');
+insert into public.org_roles (id, org_id, name, permissions) values ('44000000-0000-0000-0000-000000000032', '20000000-0000-0000-0000-000000000003', 'Clerk', '{people.view,people.edit}');
+insert into public.person_roles (person_id, role_id, org_id) values ('32000000-0000-0000-0000-000000000035', '44000000-0000-0000-0000-000000000032', '20000000-0000-0000-0000-000000000003');
+-- a second "Kid Parent", quick-added as a guest into The Guests, with care notes, a restricted pickup, a restriction and two groups
+insert into public.people (id, org_id, first_name, last_name, birthdate, membership_status, tags) values
+  ('32000000-0000-0000-0000-000000000040', '20000000-0000-0000-0000-000000000003', 'Kid', 'Parent', '2020-01-01', 'visitor', '{guest}');
+insert into public.household_members (household_id, person_id, org_id, relationship) values
+  ('42000000-0000-0000-0000-000000000010', '32000000-0000-0000-0000-000000000040', '20000000-0000-0000-0000-000000000003', 'child');
+insert into public.child_care (person_id, org_id, allergies, allergy_short, medical, has_allergy, has_medical) values
+  ('32000000-0000-0000-0000-000000000040', '20000000-0000-0000-0000-000000000003', 'Peanuts', 'Peanut', 'Inhaler in the bag', true, true);
+insert into public.pickup_people (org_id, child_person_id, person_id, kind, note) values
+  ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000040', '32000000-0000-0000-0000-000000000008', 'restricted', 'court order');
+insert into public.group_members (group_id, person_id, org_id, role) values
+  ('83000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000040', '20000000-0000-0000-0000-000000000003', 'member'),
+  ('83000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000040', '20000000-0000-0000-0000-000000000003', 'leader');
+-- The Doubles: a guest family that is really The Parents again
+insert into public.households (id, org_id, name) values ('42000000-0000-0000-0000-000000000032', '20000000-0000-0000-0000-000000000003', 'The Doubles');
+insert into public.people (id, org_id, first_name, last_name, birthdate, phone, email, title, membership_status, tags) values
+  ('32000000-0000-0000-0000-000000000043', '20000000-0000-0000-0000-000000000003', 'Dub', 'Double', '1991-02-02', '(941) 555-0100', 'dub@example.com', 'Mr', 'visitor', '{guest}'),
+  ('32000000-0000-0000-0000-000000000044', '20000000-0000-0000-0000-000000000003', 'Dot', 'Double', '2020-01-01', null, null, null, 'visitor', '{guest}');
+insert into public.household_members (household_id, person_id, org_id, relationship, is_guardian, can_check_in) values
+  ('42000000-0000-0000-0000-000000000032', '32000000-0000-0000-0000-000000000043', '20000000-0000-0000-0000-000000000003', 'head', true, true),
+  ('42000000-0000-0000-0000-000000000032', '32000000-0000-0000-0000-000000000044', '20000000-0000-0000-0000-000000000003', 'child', false, false);
+insert into public.attendance_baselines (org_id, household_id, year, count, last_attended_on) values ('20000000-0000-0000-0000-000000000003', '42000000-0000-0000-0000-000000000032', 2026, 3, '2026-09-20');
+insert into public.person_credentials (org_id, person_id, kind, completed_on, expires_on) values
+  ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000043', 'background_check', '2026-01-10', '2028-01-10');
+insert into public.volunteer_assignments (org_id, slot_id, person_id, local_date) values
+  ('20000000-0000-0000-0000-000000000003', '77000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000043', '2027-03-07');
+-- Ann has a custody document on file
+insert into public.person_documents (org_id, person_id, kind, storage_path, title) values
+  ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000009', 'custody',
+   '20000000-0000-0000-0000-000000000003/custody/32000000-0000-0000-0000-000000000009/order.pdf', 'Court order');
+-- the guest child checked in today with the Guests' pass (then a restriction is put on the record); the Doubles are marked first-time
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'session.start', 'id', '80000000-0000-0000-0000-000000000140', 'org_id', '20000000-0000-0000-0000-000000000003', 'household_id', '42000000-0000-0000-0000-000000000010',
+      'guardian_person_id', '32000000-0000-0000-0000-000000000010', 'lookup_method', 'phone', 'device_at', now()),
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000140', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000011',
+      'person_id', '32000000-0000-0000-0000-000000000040', 'room_id', '73000000-0000-0000-0000-000000000001', 'session_id', '80000000-0000-0000-0000-000000000140', 'device_at', now())
+  ))) = array['accepted', 'accepted'], 'the duplicate guest child is checked in under the guest record');
+select public.mark_first_visit('42000000-0000-0000-0000-000000000032');
+select pg_temp.as_postgres();
+insert into public.checkin_restrictions (org_id, person_id, kind, note) values
+  ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000040', 'see_staff', 'ask for the director');
+
+-- the queue
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok(pg_temp.try_sql($$select * from public.possible_duplicates('20000000-0000-0000-0000-000000000003')$$) = '42501'
+  and pg_temp.try_sql($$select public.merge_people('32000000-0000-0000-0000-000000000005', '32000000-0000-0000-0000-000000000043')$$) = '42501'
+  and pg_temp.try_sql($$select public.keep_separate('32000000-0000-0000-0000-000000000005', '32000000-0000-0000-0000-000000000043')$$) = '42501',
+  'a station sees no duplicates and merges nothing');
+select pg_temp.as_postgres();
+select pg_temp.ok(not has_function_privilege('anon', 'public.possible_duplicates(uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.merge_people(uuid, uuid, jsonb, jsonb)', 'execute')
+  and not has_function_privilege('anon', 'public.keep_separate(uuid, uuid)', 'execute'),
+  'the merge tool is closed to anon');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select * from public.possible_duplicates('20000000-0000-0000-0000-000000000003')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-00000000000a', $$select * from public.possible_duplicates('20000000-0000-0000-0000-000000000003')$$) = '42501',
+  'people.view alone and another church''s owner see no queue');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000042');
+create temp table dup_cal as select * from public.possible_duplicates('20000000-0000-0000-0000-000000000003');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+create temp table dup_sam as select * from public.possible_duplicates('20000000-0000-0000-0000-000000000003');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from dup_cal) = 1
+  and (select reasons = '{phone}' and a_name = 'Pat Parent' and b_name = 'Gus Guest' and not a_guest and b_guest and a_household = 'The Parents' and b_household = 'The Guests' and not a_minor and not b_minor
+       from dup_cal where person_a_id = '32000000-0000-0000-0000-000000000005' and person_b_id = '32000000-0000-0000-0000-000000000010'),
+  'an editor without kids.view sees the adults who share a phone, not the children');
+select pg_temp.ok((select count(*) from dup_sam) = 2
+  and (select reasons = '{name_birthdate}' and b_guest and a_household = 'The Parents' and b_household = 'The Guests' and a_minor and b_minor
+       from dup_sam where person_a_id = '32000000-0000-0000-0000-000000000006' and person_b_id = '32000000-0000-0000-0000-000000000040')
+  and not exists (select 1 from dup_sam where person_a_id = '32000000-0000-0000-0000-000000000006' and person_b_id = '32000000-0000-0000-0000-000000000044'),
+  'staff with kids.view also see the two Kid Parents with one birthdate; a different name is not a pair');
+select pg_temp.ok((select count(*) from public.access_log where action = 'duplicates.read' and actor_person_id = '32000000-0000-0000-0000-000000000035' and subject_count = 1) = 1
+  and (select count(*) from public.access_log where action = 'duplicates.read' and actor_person_id = '32000000-0000-0000-0000-000000000001' and subject_count = 2) = 1,
+  'each look at the queue is logged');
+
+-- refusals
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000042', $$select public.merge_people('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000040')$$) = '42501', 'merging children needs kids.view');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.merge_people('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000006')$$) = '22023', 'a record cannot be merged into itself');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$select public.merge_people('32000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000004')$$) = 'P0001', 'two records that both sign in are not merged');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000042', $$select public.merge_people('32000000-0000-0000-0000-000000000010', '32000000-0000-0000-0000-000000000003')$$) = '42501', 'only a church admin merges a record that signs in or holds a role');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.merge_people('32000000-0000-0000-0000-000000000007', '32000000-0000-0000-0000-000000000008')$$) = '22023', 'a child and an adult are never the same person');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.merge_people('32000000-0000-0000-0000-000000000008', '32000000-0000-0000-0000-000000000009')$$) = 'P0001', 'a record with custody documents is the one to keep');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a', $$select public.merge_people('32000000-0000-0000-0000-000000000005', '32000000-0000-0000-0000-000000000043')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select public.merge_people('32000000-0000-0000-0000-000000000005', '32000000-0000-0000-0000-000000000043')$$) = '42501',
+  'another church''s owner and a viewer merge nothing');
+
+-- Cal merges Dub into Pat, taking Dub's phone; Sam merges Dot into Kid; The Doubles close
+select pg_temp.as_user('00000000-0000-0000-0000-000000000042');
+select set_config('test.merge1', public.merge_people('32000000-0000-0000-0000-000000000005', '32000000-0000-0000-0000-000000000043', '{"phone": "drop"}')::text, true);
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select set_config('test.merge2', public.merge_people('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000044')::text, true);
+select pg_temp.as_postgres();
+select pg_temp.ok((select phone_e164 = '+19415550100' and email = 'pat@example.com' and title = 'Mr' and membership_status = 'regular' and tags = '{}' and archived_at is null
+                   from public.people where id = '32000000-0000-0000-0000-000000000005')
+  and (select archived_at is not null and tags = '{guest,merged}' from public.people where id = '32000000-0000-0000-0000-000000000043')
+  and (select count(*) from public.people where phone_e164 = '+19415550100' and archived_at is null) = 1
+  and (select kept_person_id = '32000000-0000-0000-0000-000000000005' and merged_by_person_id = '32000000-0000-0000-0000-000000000035'
+         and (detail -> 'households' ->> 'ended')::int = 1 and (detail -> 'households' ->> 'joined')::int = 0 and (detail ->> 'credentials')::int = 1 and (detail ->> 'assignments')::int = 1
+       from public.person_merges where merged_person_id = '32000000-0000-0000-0000-000000000043'),
+  'the kept record takes the chosen phone, fills its blanks, keeps the higher status and loses the guest tag; the other is archived as merged');
+select pg_temp.ok((select ended_at is not null from public.household_members where household_id = '42000000-0000-0000-0000-000000000032' and person_id = '32000000-0000-0000-0000-000000000043')
+  and not exists (select 1 from public.household_members where household_id = '42000000-0000-0000-0000-000000000032' and person_id = '32000000-0000-0000-0000-000000000005')
+  and (select archived_at is not null and note like '(merged from %' from public.person_credentials where person_id = '32000000-0000-0000-0000-000000000043') is null
+  and (select count(*) from public.person_credentials where person_id = '32000000-0000-0000-0000-000000000005' and kind = 'background_check' and archived_at is null and completed_on = '2026-01-10') = 1
+  and (select archived_at is not null from public.person_credentials where person_id = '32000000-0000-0000-0000-000000000043')
+  and (select status = 'scheduled' from public.volunteer_assignments where person_id = '32000000-0000-0000-0000-000000000005' and slot_id = '77000000-0000-0000-0000-000000000003' and local_date = '2027-03-07')
+  and (select status = 'declined' and note = '(merged)' from public.volunteer_assignments where person_id = '32000000-0000-0000-0000-000000000043'),
+  'Dub leaves the Doubles without Pat joining; his background check and his Sunday are carried over to Pat');
+select pg_temp.ok((select archived_at is not null from public.households where id = '42000000-0000-0000-0000-000000000032')
+  and (select count = 7 and last_attended_on = '2026-09-20' and note = 'merged from The Doubles: 3' from public.attendance_baselines where household_id = '42000000-0000-0000-0000-000000000001' and year = 2026)
+  and (select status = 'dismissed' and close_note = 'Merged into another record' and closed_by_person_id = '32000000-0000-0000-0000-000000000001'
+       from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000032')
+  and (select (detail ->> 'tasks_dismissed')::int = 1 and detail -> 'households_archived' ? '42000000-0000-0000-0000-000000000032' and detail -> 'baselines_left' = '[]'::jsonb
+       from public.person_merges where merged_person_id = '32000000-0000-0000-0000-000000000044'),
+  'an emptied family is archived; its carried-over count joins the kept family''s (the greater wins) and its open follow-up is dismissed');
+
+-- the guest child becomes Kid, who also joins The Guests (decision C)
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select set_config('test.merge3', public.merge_people('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000040', '{"birthdate": "keep"}', '{"join_households": true}')::text, true);
+select pg_temp.as_postgres();
+select pg_temp.ok((select archived_at is not null and tags = '{guest,merged}' from public.people where id = '32000000-0000-0000-0000-000000000040')
+  and (select archived_at is null and birthdate = '2020-01-01' and membership_status = 'member' from public.people where id = '32000000-0000-0000-0000-000000000006')
+  and chms_private.resolve_person('32000000-0000-0000-0000-000000000040') = '32000000-0000-0000-0000-000000000006'
+  and (select ended_at is not null from public.household_members where household_id = '42000000-0000-0000-0000-000000000010' and person_id = '32000000-0000-0000-0000-000000000040')
+  and (select relationship = 'child' and ended_at is null from public.household_members where household_id = '42000000-0000-0000-0000-000000000010' and person_id = '32000000-0000-0000-0000-000000000006')
+  and (select ended_at is null from public.household_members where household_id = '42000000-0000-0000-0000-000000000001' and person_id = '32000000-0000-0000-0000-000000000006'),
+  'the guest record is archived and resolves to Kid, who now belongs to both families');
+select pg_temp.ok((select count(*) from public.group_members where group_id = '83000000-0000-0000-0000-000000000002' and person_id = '32000000-0000-0000-0000-000000000006' and ended_at is null) = 1
+  and (select ended_at is not null from public.group_members where group_id = '83000000-0000-0000-0000-000000000002' and person_id = '32000000-0000-0000-0000-000000000040')
+  and (select role = 'leader' and ended_at is null from public.group_members where group_id = '83000000-0000-0000-0000-000000000003' and person_id = '32000000-0000-0000-0000-000000000006')
+  and (select count(*) from public.domain_events where type = 'group.member_added' and subject_id = '83000000-0000-0000-0000-000000000003' and payload ->> 'person_id' = '32000000-0000-0000-0000-000000000006') = 1
+  and (select count(*) from public.domain_events where type = 'group.member_ended' and payload ->> 'person_id' = '32000000-0000-0000-0000-000000000040') = 2,
+  'group memberships end on the old record and continue on the kept one, once');
+select pg_temp.ok((select archived_at is not null from public.pickup_people where child_person_id = '32000000-0000-0000-0000-000000000040')
+  and (select count(*) from public.pickup_people where child_person_id = '32000000-0000-0000-0000-000000000006' and person_id = '32000000-0000-0000-0000-000000000008' and kind = 'restricted' and note = 'court order' and archived_at is null) >= 1
+  and (select cleared_at is not null and cleared_by_person_id = '32000000-0000-0000-0000-000000000001' from public.checkin_restrictions where person_id = '32000000-0000-0000-0000-000000000040')
+  and (select count(*) from public.checkin_restrictions where person_id = '32000000-0000-0000-0000-000000000006' and kind = 'see_staff' and note = 'ask for the director' and cleared_at is null) = 1,
+  'a restricted pickup and a check-in restriction follow the child');
+select pg_temp.ok((select has_allergy and has_medical and allergies = 'Peanuts' and medical = E'Inhaler in bag\nInhaler in the bag' from public.child_care where person_id = '32000000-0000-0000-0000-000000000006')
+  and (select count(*) from public.access_log where action = 'child_care.write' and subject_person_id = '32000000-0000-0000-0000-000000000006' and detail ->> 'via' = 'merge') = 1
+  and (select detail ->> 'child_care' = 'merged' from public.person_merges where merged_person_id = '32000000-0000-0000-0000-000000000040'),
+  'care notes are merged into the kept record and the write is logged');
+select pg_temp.ok((select count(*) from public.domain_events where type = 'person.merged' and subject_id = '32000000-0000-0000-0000-000000000006' and payload ->> 'merged_person_id' = '32000000-0000-0000-0000-000000000040') = 1
+  and (select count(*) from public.domain_events where type = 'person.archived' and subject_id = '32000000-0000-0000-0000-000000000040') = 1
+  and (select count(*) from public.people_audit where person_id = '32000000-0000-0000-0000-000000000040' and action = 'archive') = 1
+  and (select count(*) from public.chms_audit where table_name = 'child_care' and row_id = '32000000-0000-0000-0000-000000000006' and action = 'update') >= 1,
+  'the merge is on the event bus and in the audit trails');
+-- the reports fold the merged record into Kid
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+create temp table rep_after_hist as select * from public.report_child_history('32000000-0000-0000-0000-000000000040');
+create temp table rep_after_kids as select * from public.report_children('20000000-0000-0000-0000-000000000003', (now() at time zone 'America/New_York')::date, (now() at time zone 'America/New_York')::date);
+create temp table rep_after_occ as select * from public.report_occurrences('20000000-0000-0000-0000-000000000003', (now() at time zone 'America/New_York')::date, (now() at time zone 'America/New_York')::date);
+create temp table rep_after_fam as select * from public.report_families('20000000-0000-0000-0000-000000000003', 2026);
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from rep_after_hist) = 7
+  and (select count(*) from rep_after_hist where local_date = (now() at time zone 'America/New_York')::date) = 2
+  and (select attended = 1 from rep_after_kids where person_id = '32000000-0000-0000-0000-000000000006')
+  and not exists (select 1 from rep_after_kids where person_id = '32000000-0000-0000-0000-000000000040')
+  and (select children = 1 from rep_after_occ where room_name = 'Ducklings')
+  and (select checkins = 1 and total = 8 from rep_after_fam where household_id = '42000000-0000-0000-0000-000000000001')
+  and (select count(*) from public.access_log where action = 'report.child_history' and subject_person_id = '32000000-0000-0000-0000-000000000006' and subject_count = 7) = 1,
+  'the merged record''s check-ins read as Kid''s: one child at one service, counted once');
+
+-- not the same person
+select pg_temp.as_user('00000000-0000-0000-0000-000000000042');
+select public.keep_separate('32000000-0000-0000-0000-000000000010', '32000000-0000-0000-0000-000000000005');
+select public.keep_separate('32000000-0000-0000-0000-000000000010', '32000000-0000-0000-0000-000000000005');
+select pg_temp.ok((select count(*) from public.possible_duplicates('20000000-0000-0000-0000-000000000003')) = 0, 'a pair marked as separate leaves the queue');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.duplicate_decisions) = 1
+  and (select person_a_id = '32000000-0000-0000-0000-000000000005' and person_b_id = '32000000-0000-0000-0000-000000000010' and decision = 'separate' and decided_by_person_id = '32000000-0000-0000-0000-000000000035'
+       from public.duplicate_decisions)
+  and (select count(*) from public.domain_events where type = 'person.kept_separate' and subject_id = '32000000-0000-0000-0000-000000000005') = 1
+  and pg_temp.try_sql($$update public.duplicate_decisions set note = 'x'$$) = '42501'
+  and pg_temp.try_sql($$delete from public.duplicate_decisions$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select public.keep_separate('32000000-0000-0000-0000-000000000010', '32000000-0000-0000-0000-000000000005')$$) = '42501',
+  'the decision is stored once, in order, by whom, and never changes');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.merge_people('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000040')$$) = '22023'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000022', $$select public.merge_people('32000000-0000-0000-0000-000000000040', '32000000-0000-0000-0000-000000000006')$$) = '22023',
+  'a merged record is never merged again, in either direction');
+select pg_temp.ok(not exists (select 1 from public.access_log where action like 'person.merge%'), 'the merge itself writes no access_log row: the audit, the merge log and the event record it');
+
+\echo
 \echo 'All tests passed.'
 rollback;

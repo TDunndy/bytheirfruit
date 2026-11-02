@@ -697,6 +697,44 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"duplicate_decisions": {
+                  Row: {
+                    "decided_at": string,"decided_by_person_id": string | null,"decision": string,"id": string,"note": string | null,"org_id": string,"person_a_id": string,"person_b_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "decided_at"?: string,"decided_by_person_id"?: string | null,"decision": string,"id"?: string,"note"?: string | null,"org_id": string,"person_a_id": string,"person_b_id": string
+                  }
+                  Update: {
+                    "decided_at"?: string,"decided_by_person_id"?: string | null,"decision"?: string,"id"?: string,"note"?: string | null,"org_id"?: string,"person_a_id"?: string,"person_b_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "duplicate_decisions_decided_by_person_id_org_id_fkey"
+      columns: ["decided_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "duplicate_decisions_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "duplicate_decisions_person_a_id_org_id_fkey"
+      columns: ["person_a_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "duplicate_decisions_person_b_id_org_id_fkey"
+      columns: ["person_b_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
                 },"favorites": {
                   Row: {
                     "church_id": string,"created_at": string | null,"id": string,"user_id": string
@@ -2150,11 +2188,17 @@ isOneToOne: false
 "is_station":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"keep_separate":
+{ Args: { "p_a": string,"p_b": string }; Returns: undefined
+                           },
 "log_document_access":
 { Args: { "p_document_id": string }; Returns: string
                            },
 "mark_first_visit":
 { Args: { "p_household_id"?: string,"p_person_id"?: string }; Returns: string
+                           },
+"merge_people":
+{ Args: { "p_drop": string,"p_fields"?: Json,"p_keep": string,"p_options"?: Json }; Returns: Json
                            },
 "my_org_permissions":
 { Args: { "p_org_id": string }; Returns: (string)[]
@@ -2169,6 +2213,11 @@ isOneToOne: false
                            },
 "pickup_status":
 { Args: { "p_child_id": string,"p_person_id": string }; Returns: string
+                           },
+"possible_duplicates":
+{ Args: { "p_org_id": string }; Returns: {
+              "a_created": string,"a_guest": boolean,"a_household": string,"a_minor": boolean,"a_name": string,"b_created": string,"b_guest": boolean,"b_household": string,"b_minor": boolean,"b_name": string,"person_a_id": string,"person_b_id": string,"reasons": (string)[]
+            }[]
                            },
 "recalculate_church_scores":
 { Args: Record<PropertyKey, never>; Returns: undefined

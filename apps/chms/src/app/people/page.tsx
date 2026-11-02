@@ -79,7 +79,10 @@ export default function PeoplePage() {
           <p className="page-sub">{loading ? 'Loading…' : count}</p>
         </div>
         {can('people.edit') && (
-          <Link href="/people/new" className="btn btn-filled btn-add"><Icon name="plus" size={18} /><span className="btn-label">Add person</span></Link>
+          <div className="actions">
+            <Link href="/people/duplicates" className="btn btn-tinted btn-small">Possible duplicates</Link>
+            <Link href="/people/new" className="btn btn-filled btn-add"><Icon name="plus" size={18} /><span className="btn-label">Add person</span></Link>
+          </div>
         )}
       </header>
       {/* Announces the new count after a search or filter change (the visible count is above). */}

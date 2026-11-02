@@ -161,3 +161,25 @@ npm run db:types         # same, plus regenerate database.types.ts
 - `chms_private.occurrence_stays(occurrence)` is the per-occurrence twin of
   `room_stays_visible()`; change the two together. Move-Up is computed in the
   browser with `nextRoom` from `@btf/core` over `report_children` rows.
+
+## Duplicates and merge (migration `chms_merge`)
+- `possible_duplicates(org)` (people.edit; pairs with a child need kids.view;
+  one `access_log` row `duplicates.read`) lists active records sharing a
+  phone (outside one household), an email, or a name with the same or no
+  birthdate, minus `duplicate_decisions` (`keep_separate(a, b)`, append-only).
+- `merge_people(keep, drop, fields, options)` keeps one record, archives the
+  other (tag `merged`), writes `person_merges` and `person.merged`. Needs
+  people.edit; kids.view when either is a child; a church admin when either
+  signs in, holds a role or is over the caller. Refused when both sign in,
+  when the dropped record has unarchived documents, or across the child /
+  adult line. Rows that pin their person (groups, pickups, credentials,
+  restrictions, overrides, future assignments, leaders) are ended or archived
+  and re-created for the kept record; rows that do not (notes, keys,
+  consents, roles, logins, PINs) are repointed; the dropped record's
+  memberships end and the kept one joins only when
+  `options.join_households` or it has no family; an emptied family is
+  archived, its baseline folded into the kept family's (greater count) and
+  its open tasks dismissed. History (attendance, sessions, codes, alerts,
+  audit, events) keeps the dropped id and is resolved at read time; `ingest`
+  is not alias-aware (a check-in for a merged id is rejected as
+  `unknown_person`).

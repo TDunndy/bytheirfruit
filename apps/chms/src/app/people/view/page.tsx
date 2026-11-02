@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from '@/components/Session'
 import { PersonForm, StatusBadge } from '@/components/PersonParts'
 import { PersonPicker } from '@/components/PersonPicker'
 import { Avatar, BackLink, Chevron, IconTile, RemoveGlyph, Spinner } from '@/components/ui'
 import { useDocumentTitle } from '@/components/useDocumentTitle'
 import { KidsSections, KidsSideSections } from '@/components/kids/KidsSections'
+import { MergeSheet } from '@/components/people/MergeSheet'
+import { mergeOf, type PersonMerge } from '@/lib/merge'
 import {
   addChartLine, addNote, addRole, addToHousehold, age, chartFor, createHousehold, deleteNote, displayName,
   errorMessage, getPerson, historyFor, householdsOf, listRoles, notesFor, peopleNames, personRoleIds,
@@ -34,7 +36,11 @@ const VISIBILITY: { value: NoteVisibility; label: string; help: string }[] = [
 function PersonView() {
   const id = useSearchParams().get('id') ?? ''
   const { org, can, isChurchAdmin } = useSession()
+  const router = useRouter()
   const [person, setPerson] = useState<Person | null>(null)
+  const [merging, setMerging] = useState(false)
+  const [mergeWith, setMergeWith] = useState<Person | null>(null)
+  const [mergedInto, setMergedInto] = useState<PersonMerge | null>(null)
   const [missing, setMissing] = useState(false)
   const [editing, setEditing] = useState(false)
   const [roles, setRoles] = useState<OrgRole[]>([])
@@ -62,9 +68,14 @@ function PersonView() {
       setLoginRole(logins.get(id) ?? null)
       // groups, serving and the next four weeks of volunteer slots; a role without the directory sees none
       try { setInvolvement(await involvementFor(org.id, id, mine, todayLocal())) } catch { setInvolvement(null) }
+      // an archived record may have been merged into another
+      let merged: PersonMerge | null = null
+      if (p.archived_at) { try { merged = await mergeOf(id) } catch { merged = null } }
+      setMergedInto(merged)
       const ids = [
         ...ch.answersTo.map((l) => l.overseer_person_id ?? ''), ...ch.reports.map((l) => l.person_id),
         ...ns.map((n) => n.author_person_id ?? ''), ...hist.map((h) => h.actor_person_id ?? ''),
+        ...(merged ? [merged.kept_person_id] : []),
       ]
       setNames(await peopleNames(ids))
       setError('')
@@ -104,9 +115,12 @@ function PersonView() {
         {can('people.edit') && !editing && (
           <div className="actions">
             <button className="btn btn-tinted btn-small" onClick={() => setEditing(true)}>Edit</button>
-            <button className="btn btn-tinted btn-small" onClick={() => act(() => setArchived(person.id, !person.archived_at))}>
-              {person.archived_at ? 'Restore' : 'Archive'}
-            </button>
+            {!person.archived_at && !merging && <button className="btn btn-tinted btn-small" onClick={() => { setMerging(true); setMergeWith(null) }}>Merge…</button>}
+            {!mergedInto && (
+              <button className="btn btn-tinted btn-small" onClick={() => act(() => setArchived(person.id, !person.archived_at))}>
+                {person.archived_at ? 'Restore' : 'Archive'}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -119,11 +133,30 @@ function PersonView() {
             <StatusBadge status={person.membership_status} />
             {person.archived_at && <span className="status status-inactive">Archived</span>}
             {loginRole && <span className="chip">Signs in · {loginRole}</span>}
+            {mergedInto && <span className="chip chip-warn">Merged into <Link href={`/people/view?id=${mergedInto.kept_person_id}`}>{names.get(mergedInto.kept_person_id) ?? 'another record'}</Link></span>}
           </div>
         </div>
       </header>
 
       {error && <p className="error" role="alert">{error}</p>}
+      {merging && !editing && (
+        <section className="section narrow">
+          <h2 className="group-head">Merge with another record</h2>
+          {mergeWith ? (
+            <MergeSheet a={person} b={mergeWith} onCancel={() => { setMerging(false); setMergeWith(null) }}
+              onDone={(kept) => { setMerging(false); setMergeWith(null); if (kept !== person.id) router.push(`/people/view?id=${kept}`); else load() }} />
+          ) : (
+            <ul className="group">
+              <li className="cell add-member">
+                <PersonPicker orgId={org.id} exclude={[person.id]} placeholder="Find the duplicate record"
+                  onPick={async (p) => { try { const full = await getPerson(p.id); if (full) setMergeWith(full) } catch (e) { setError(errorMessage(e)) } }} />
+              </li>
+              <li><button className="cell-link cell-action" onClick={() => setMerging(false)}>Cancel</button></li>
+            </ul>
+          )}
+          <p className="group-foot">Pick the record that is really the same person. You choose which one to keep on the next step.</p>
+        </section>
+      )}
 
       {editing ? (
         <PersonForm
