@@ -13,6 +13,7 @@ import {
   RELATIONSHIPS, addToHousehold, age, displayName, errorMessage, getHousehold, removeFromHousehold,
   type Household, type Person, type Relationship,
 } from '@/lib/people'
+import { arrivedText, assigneeText, fmtDate, markFirstVisit, taskContext, tasksForHousehold, type Task, type TaskContext } from '@/lib/followups'
 
 export default function HouseholdPage() {
   return (
@@ -29,18 +30,22 @@ function HouseholdView() {
   const [members, setMembers] = useState<{ relationship: string; person: Person }[]>([])
   const [relationship, setRelationship] = useState<Relationship>('child')
   const [missing, setMissing] = useState(false)
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [taskCtx, setTaskCtx] = useState<TaskContext | null>(null)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
-    if (!id) return
+    if (!id || !org) return
     try {
       const h = await getHousehold(id)
       if (!h) { setMissing(true); return }
       setHousehold(h.household)
       setMembers(h.members)
+      // follow-ups the signed-in leader may see for this family
+      try { const t = await tasksForHousehold(id); setTasks(t); setTaskCtx(await taskContext(org.id, t)) } catch { setTasks([]) }
       setError('')
     } catch (e) { setError(errorMessage(e)) }
-  }, [id])
+  }, [id, org])
   useEffect(() => { load() }, [load])
 
   const act = async (fn: () => Promise<unknown>) => {
@@ -99,6 +104,25 @@ function HouseholdView() {
             </li>
           )}
         </ul>
+      </section>
+      <section className="section narrow">
+        <h2 className="group-head">Follow-ups</h2>
+        <ul className="group">
+          {tasks.length === 0 && <li className="cell muted">No follow-ups for this family.</li>}
+          {tasks.map((t) => (
+            <li key={t.id} className="cell">
+              <span className="cell-text">
+                <span className="cell-title">{t.kind === 'manual' ? t.title : 'First visit'}{t.status !== 'open' && <span className="chip" style={{ marginLeft: 8 }}>{t.status === 'done' ? 'Done' : 'Dismissed'}</span>}</span>
+                <span className="cell-sub">{taskCtx ? `${arrivedText(t, taskCtx)} · ${assigneeText(t, taskCtx)}` : fmtDate(t.opened_at.slice(0, 10))}{t.close_note ? ` · ${t.close_note}` : ''}</span>
+              </span>
+              {t.status === 'open' && <Link href="/followups" className="btn btn-plain btn-small">Open</Link>}
+            </li>
+          ))}
+          {(can('checkin.manage') || can('people.edit')) && !tasks.some((t) => t.kind === 'first_visit') && (
+            <li><button className="cell-link cell-action" onClick={() => act(() => markFirstVisit({ householdId: household.id }))}>Mark as a first-time family</button></li>
+          )}
+        </ul>
+        <p className="group-foot">A first-time family&apos;s follow-up goes to the kids director for the youngest child&apos;s age, or to the church&apos;s default assignee.</p>
       </section>
       <HouseholdExtras key={members.map((m) => m.person.id).join(',')} householdId={household.id} memberNames={new Map(members.map((m) => [m.person.id, displayName(m.person)]))} />
     </section>

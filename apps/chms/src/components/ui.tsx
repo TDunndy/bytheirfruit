@@ -28,6 +28,7 @@ const ICONS = {
   photo: 'M4 7h3l2-2h6l2 2h3v12H4zM12 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
   doc: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h5M10 17h5',
   warn: 'M12 3l10 18H2zM12 10v4M12 17.5v.5',
+  tasks: 'M9 12l2 2 4-4M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9',
 } as const
 
 // Filled variants for the tab bar's selected tab (closed shapes, drawn with the same stroke).
@@ -37,6 +38,7 @@ const FILLED: Partial<Record<keyof typeof ICONS, string>> = {
   groups: 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1zm15-6h1a5 5 0 0 1 5 5v1h-5v-1a6 6 0 0 0-1-5z',
   events: 'M8 3v3m8-3v3M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',
   health: 'M20.8 5.6a5 5 0 0 0-7.6.6L12 7.4l-1.2-1.2a5 5 0 1 0-7.1 7.1L12 21.6l8.3-8.3a5 5 0 0 0 .5-7.7z',
+  tasks: 'M6 4h9l5 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM9 12l2 2 4-4',
 }
 
 export type IconName = keyof typeof ICONS

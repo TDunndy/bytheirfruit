@@ -11,6 +11,7 @@ import type { MyOrg } from '@/lib/orgs'
 const NAV: { href: string; label: string; icon: IconName; needs?: Permission[] }[] = [
   { href: '/people', label: 'People', icon: 'people' },
   { href: '/checkin', label: 'Check-in', icon: 'checkin', needs: ['checkin.manage', 'checkin.station', 'attendance.reports', 'kids.view'] },
+  { href: '/followups', label: 'Follow-ups', icon: 'tasks' },
   { href: '/groups', label: 'Groups', icon: 'groups' },
   { href: '/events', label: 'Events', icon: 'events' },
   { href: '/health', label: 'Health', icon: 'health' },

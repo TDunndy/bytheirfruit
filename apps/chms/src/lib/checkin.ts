@@ -78,10 +78,12 @@ export async function listAreas(orgId: string, includeArchived = false): Promise
 }
 
 export async function saveArea(orgId: string, area: Partial<Area> & { name: string; kind: Area['kind'] }): Promise<Area> {
+  // age_band is an int4range ('[0,72)' in months); the generated type calls it unknown
+  const row = { name: area.name, kind: area.kind, sort_order: area.sort_order ?? 0, age_band: (area.age_band ?? null) as never }
   if (area.id) {
-    return one(await supabase.from('areas').update({ name: area.name, kind: area.kind, sort_order: area.sort_order ?? 0 }).eq('id', area.id).select('*').single())
+    return one(await supabase.from('areas').update(row).eq('id', area.id).select('*').single())
   }
-  return one(await supabase.from('areas').insert({ org_id: orgId, name: area.name, kind: area.kind, sort_order: area.sort_order ?? 0 }).select('*').single())
+  return one(await supabase.from('areas').insert({ org_id: orgId, ...row }).select('*').single())
 }
 
 export async function archiveArea(id: string, archived: boolean) {

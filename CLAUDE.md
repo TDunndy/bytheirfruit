@@ -110,3 +110,17 @@ npm run db:types         # same, plus regenerate database.types.ts
   `group.created|updated|archived`, `group.member_added|updated|ended` carry ids
   only. Queries live in `apps/chms/src/lib/groups.ts`; the person page's
   Involvement section is `involvementFor()` there.
+
+## Follow-ups (`tasks`)
+- One built-in rule runs as a trigger until the rules engine exists: a new
+  household's first child check-in (`chms_private.first_visit_on_check_in`:
+  no baseline, no earlier check-in, made in the last thirty days or all
+  visitors) opens a `first_visit` task, routed by the room's area, else by the
+  youngest child's age through `areas.age_band` (months), to that area's
+  director (`area_leaders`, person before role), else to
+  `org_checkin_settings.followup_person_id` / `followup_role_id`. One task per
+  household (`dedupe_key`). Staff use `mark_first_visit()`; the intake form
+  (G3) will use the same opener with source `form`.
+- Tasks are read and worked by `checkin.manage`, the assignee (person or
+  role) and the leaders of the task's area; closed tasks are history; nobody
+  deletes. Events `task.created|closed|reassigned` carry ids only.

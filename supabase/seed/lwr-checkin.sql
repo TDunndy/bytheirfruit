@@ -149,3 +149,8 @@ begin
   -- The next eight weeks of services.
   perform public.generate_occurrences(v_org, chms_private.local_today(v_org) + 56);
 end $$;
+
+-- Follow-ups (G2): the age bands that route a first-time family without a
+-- room to the right director. The directors themselves are set in the UI.
+update public.areas set age_band = '[0,72)' where org_id = '0de21bb0-63ae-5fdb-a2d9-fd78d8dda3e7' and name = 'The Barn';
+update public.areas set age_band = '[60,144)' where org_id = '0de21bb0-63ae-5fdb-a2d9-fd78d8dda3e7' and name ilike 'K%5%';

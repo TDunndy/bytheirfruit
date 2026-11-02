@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from '@/components/Session'
 import { NoAccess } from '@/components/checkin/CheckinNav'
+import { PersonPicker } from '@/components/PersonPicker'
 import { RemoveGlyph, Spinner, Switch } from '@/components/ui'
-import { errorMessage } from '@/lib/people'
+import { errorMessage, listRoles, peopleNames, type OrgRole } from '@/lib/people'
 import { getSettings, guessTimeZone, saveSettings, setMyStaffPin, type CheckinSettings } from '@/lib/checkin'
 import { FIELD_TYPES, archiveFieldDef, listFieldDefs, saveFieldDef, type CustomFieldDef } from '@/lib/kids'
 
@@ -21,14 +22,17 @@ export default function SettingsPage() {
   const { org, can } = useSession()
   const [settings, setSettings] = useState<CheckinSettings | null | undefined>(undefined)
   const [defs, setDefs] = useState<CustomFieldDef[]>([])
+  const [roles, setRoles] = useState<OrgRole[]>([])
+  const [names, setNames] = useState<Map<string, string>>(new Map())
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
 
   const load = useCallback(async () => {
     if (!org) return
     try {
-      const [s, d] = await Promise.all([getSettings(org.id), listFieldDefs(org.id)])
-      setSettings(s); setDefs(d); setError('')
+      const [s, d, r] = await Promise.all([getSettings(org.id), listFieldDefs(org.id), listRoles(org.id)])
+      setSettings(s); setDefs(d); setRoles(r); setError('')
+      if (s?.followup_person_id) setNames(await peopleNames([s.followup_person_id]))
     } catch (e) { setError(errorMessage(e)) }
   }, [org])
   useEffect(() => { load() }, [load])
@@ -45,6 +49,12 @@ export default function SettingsPage() {
         <SettingsForm initial={settings ?? null} onSave={async (v) => {
           setSaved('')
           try { setSettings(await saveSettings(org.id, v)); setSaved('Settings saved.'); setError('') } catch (e) { setError(errorMessage(e)) }
+        }} />
+      )}
+      {can('checkin.manage') && settings && (
+        <FollowupDefault settings={settings} roles={roles} names={names} orgId={org.id} onSave={async (v) => {
+          setSaved('')
+          try { setSettings(await saveSettings(org.id, { time_zone: settings.time_zone, ...v })); await load(); setSaved('Follow-up default saved.') } catch (e) { setError(errorMessage(e)) }
         }} />
       )}
       {(can('checkin.station') || can('checkin.manage')) && <PinForm onSave={async (pin) => { await setMyStaffPin(org.id, pin) }} />}
@@ -100,6 +110,30 @@ function SettingsForm({ initial, onSave }: { initial: CheckinSettings | null; on
       </fieldset>
       <div className="actions"><button type="submit" className="btn btn-filled" disabled={busy}>{busy ? 'Saving…' : 'Save settings'}</button></div>
     </form>
+  )
+}
+
+function FollowupDefault({ settings, roles, names, orgId, onSave }: {
+  settings: CheckinSettings; roles: OrgRole[]; names: Map<string, string>; orgId: string
+  onSave: (v: { followup_role_id: string | null; followup_person_id: string | null }) => Promise<void>
+}) {
+  const who = settings.followup_person_id ? names.get(settings.followup_person_id) ?? 'A person' : settings.followup_role_id ? `${roles.find((r) => r.id === settings.followup_role_id)?.name ?? 'A role'} (any holder)` : 'Nobody yet'
+  return (
+    <section className="card form">
+      <fieldset>
+        <legend className="group-head">First-time follow-ups</legend>
+        <div className="group">
+          <div className="field"><span>Default assignee</span><span>{who}</span></div>
+          <label className="field"><span>A role</span>
+            <select value={settings.followup_role_id ?? ''} onChange={(e) => onSave({ followup_role_id: e.target.value || null, followup_person_id: null })}>
+              <option value="">None</option>{roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          </label>
+          <div className="field"><span>Or a person</span><PersonPicker orgId={orgId} placeholder="Search people" onPick={(p) => onSave({ followup_person_id: p.id, followup_role_id: null })} /></div>
+        </div>
+        <p className="group-foot">A first-time family goes to the director of the kids area for the child&apos;s room or age (set directors and age bands under Rooms). Families outside every area, or without children, go here.</p>
+      </fieldset>
+    </section>
   )
 }
 

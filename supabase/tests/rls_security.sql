@@ -2725,5 +2725,190 @@ select pg_temp.ok(not has_function_privilege('anon', 'chms_private.leads_group(u
   'the group helpers are closed to anon');
 
 \echo
+\echo '== chms: follow-ups ================================================'
+select pg_temp.as_postgres();
+-- the built-in rule has run since the check-in sections: each new family's first check-in opened one task
+select pg_temp.ok((select count(*) from public.tasks where kind = 'first_visit' and source = 'checkin') >= 3
+  and (select count(*) from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000001') = 1
+  and (select area_id = '72000000-0000-0000-0000-000000000001' and assignee_person_id = '32000000-0000-0000-0000-000000000001' and assignee_role_id is null and status = 'open' and dedupe_key = 'first_visit:42000000-0000-0000-0000-000000000001'
+       from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000001')
+  and (select assignee_person_id is null and assignee_role_id is null from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000010'),
+  'each new family''s first check-in opened one task, placed by the room''s area and that area''s director when it had one');
+
+-- routing: age bands, the Barn's director, the church's default
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$
+  update public.areas set age_band = '[0,72)' where id = '72000000-0000-0000-0000-000000000001';
+  update public.areas set age_band = '[60,144)' where id = '72000000-0000-0000-0000-000000000002';
+  insert into public.area_leaders (org_id, area_id, person_id, kind) values ('20000000-0000-0000-0000-000000000003', '72000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000003', 'director');
+  update public.org_checkin_settings set followup_person_id = '32000000-0000-0000-0000-000000000004' where org_id = '20000000-0000-0000-0000-000000000003'$$) = '',
+  'a manager sets the age bands, K/5''s director and the church''s default assignee');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$update public.areas set age_band = '[72,60)' where id = '72000000-0000-0000-0000-000000000002'$$) <> ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$update public.areas set age_band = '[60,60)' where id = '72000000-0000-0000-0000-000000000002'$$) = '23514',
+  'an empty band is refused');
+
+-- a new family at the desk: sign up, check in
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'guest.create', 'id', '42000000-0000-0000-0000-000000000020', 'org_id', '20000000-0000-0000-0000-000000000003',
+      'household', jsonb_build_object('id', '42000000-0000-0000-0000-000000000020', 'name', 'The Newcomers'),
+      'people', jsonb_build_array(
+        jsonb_build_object('id', '32000000-0000-0000-0000-000000000020', 'first_name', 'Nia', 'last_name', 'New', 'phone', '941-555-0300', 'relationship', 'head'),
+        jsonb_build_object('id', '32000000-0000-0000-0000-000000000021', 'first_name', 'Nate', 'last_name', 'New', 'birthdate', (current_date - interval '3 years')::date, 'relationship', 'child'))),
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000120', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000011',
+      'person_id', '32000000-0000-0000-0000-000000000021', 'room_id', '73000000-0000-0000-0000-000000000001', 'device_at', now())
+  ))) = array['accepted', 'accepted'], 'a new family signs up and checks in');
+select pg_temp.as_postgres();
+select pg_temp.ok((select area_id = '72000000-0000-0000-0000-000000000001' and assignee_person_id = '32000000-0000-0000-0000-000000000001' and assignee_role_id is null
+                     and source = 'checkin' and status = 'open' and subject_person_id = '32000000-0000-0000-0000-000000000021'
+                     and due_on = chms_private.local_today('20000000-0000-0000-0000-000000000003') + 3
+                     and detail ->> 'room_id' = '73000000-0000-0000-0000-000000000001' and detail ->> 'occurrence_id' = '78000000-0000-0000-0000-000000000011'
+                   from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000020'),
+  'their task goes to the Barn''s director, with the room and the service');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000121', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000011',
+      'person_id', '32000000-0000-0000-0000-000000000021', 'room_id', '73000000-0000-0000-0000-000000000002', 'device_at', now())
+  ))) = array['accepted'], 'the child is checked in again');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000020') = 1, 'one task per family');
+
+-- a family that is not new, and a family with past check-ins on record, open nothing
+insert into public.households (id, org_id, name, created_at) values ('42000000-0000-0000-0000-000000000022', '20000000-0000-0000-0000-000000000003', 'The Regulars', now() - interval '400 days');
+insert into public.people (id, org_id, first_name, last_name, membership_status, joined_date, birthdate) values
+  ('32000000-0000-0000-0000-000000000024', '20000000-0000-0000-0000-000000000003', 'Rae', 'Regular', 'member', '2021-01-01', null),
+  ('32000000-0000-0000-0000-000000000025', '20000000-0000-0000-0000-000000000003', 'Ro', 'Regular', 'regular', null, (current_date - interval '4 years')::date);
+insert into public.household_members (household_id, person_id, org_id, relationship, is_guardian, can_check_in) values
+  ('42000000-0000-0000-0000-000000000022', '32000000-0000-0000-0000-000000000024', '20000000-0000-0000-0000-000000000003', 'head', true, true),
+  ('42000000-0000-0000-0000-000000000022', '32000000-0000-0000-0000-000000000025', '20000000-0000-0000-0000-000000000003', 'child', false, false);
+insert into public.households (id, org_id, name) values ('42000000-0000-0000-0000-000000000023', '20000000-0000-0000-0000-000000000003', 'The Imported');
+insert into public.people (id, org_id, first_name, last_name, birthdate) values ('32000000-0000-0000-0000-000000000026', '20000000-0000-0000-0000-000000000003', 'Ira', 'Imported', (current_date - interval '6 years')::date);
+insert into public.household_members (household_id, person_id, org_id, relationship) values ('42000000-0000-0000-0000-000000000023', '32000000-0000-0000-0000-000000000026', '20000000-0000-0000-0000-000000000003', 'child');
+insert into public.attendance_baselines (org_id, household_id, year, count) values ('20000000-0000-0000-0000-000000000003', '42000000-0000-0000-0000-000000000023', 2026, 12);
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000122', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000011',
+      'person_id', '32000000-0000-0000-0000-000000000025', 'room_id', '73000000-0000-0000-0000-000000000002', 'device_at', now()),
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000123', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000011',
+      'person_id', '32000000-0000-0000-0000-000000000026', 'room_id', '73000000-0000-0000-0000-000000000004', 'device_at', now())
+  ))) = array['accepted', 'accepted'], 'a member family''s child and an imported family''s child check in');
+select pg_temp.as_postgres();
+select pg_temp.ok(not exists (select 1 from public.tasks where subject_household_id in ('42000000-0000-0000-0000-000000000022', '42000000-0000-0000-0000-000000000023')),
+  'neither opens a task');
+
+-- staff mark a family by hand: the youngest child's age picks the area
+insert into public.households (id, org_id, name) values
+  ('42000000-0000-0000-0000-000000000024', '20000000-0000-0000-0000-000000000003', 'The Walk-ins'),
+  ('42000000-0000-0000-0000-000000000025', '20000000-0000-0000-0000-000000000003', 'The Olders'),
+  ('42000000-0000-0000-0000-000000000026', '20000000-0000-0000-0000-000000000003', 'The Teens');
+insert into public.people (id, org_id, first_name, last_name, birthdate) values
+  ('32000000-0000-0000-0000-000000000027', '20000000-0000-0000-0000-000000000003', 'Wes', 'Walkin', '1990-01-01'),
+  ('32000000-0000-0000-0000-000000000028', '20000000-0000-0000-0000-000000000003', 'Wil', 'Walkin', (current_date - interval '7 years')::date),
+  ('32000000-0000-0000-0000-000000000029', '20000000-0000-0000-0000-000000000003', 'Win', 'Walkin', (current_date - interval '2 years')::date),
+  ('32000000-0000-0000-0000-000000000030', '20000000-0000-0000-0000-000000000003', 'Ola', 'Older', '1985-01-01'),
+  ('32000000-0000-0000-0000-000000000031', '20000000-0000-0000-0000-000000000003', 'Oli', 'Older', (current_date - interval '8 years')::date),
+  ('32000000-0000-0000-0000-000000000032', '20000000-0000-0000-0000-000000000003', 'Tia', 'Teen', '1980-01-01'),
+  ('32000000-0000-0000-0000-000000000033', '20000000-0000-0000-0000-000000000003', 'Tim', 'Teen', (current_date - interval '15 years')::date);
+insert into public.household_members (household_id, person_id, org_id, relationship, is_guardian, can_check_in) values
+  ('42000000-0000-0000-0000-000000000024', '32000000-0000-0000-0000-000000000027', '20000000-0000-0000-0000-000000000003', 'head', true, true),
+  ('42000000-0000-0000-0000-000000000024', '32000000-0000-0000-0000-000000000028', '20000000-0000-0000-0000-000000000003', 'child', false, false),
+  ('42000000-0000-0000-0000-000000000024', '32000000-0000-0000-0000-000000000029', '20000000-0000-0000-0000-000000000003', 'child', false, false),
+  ('42000000-0000-0000-0000-000000000025', '32000000-0000-0000-0000-000000000030', '20000000-0000-0000-0000-000000000003', 'head', true, true),
+  ('42000000-0000-0000-0000-000000000025', '32000000-0000-0000-0000-000000000031', '20000000-0000-0000-0000-000000000003', 'child', false, false),
+  ('42000000-0000-0000-0000-000000000026', '32000000-0000-0000-0000-000000000032', '20000000-0000-0000-0000-000000000003', 'head', true, true),
+  ('42000000-0000-0000-0000-000000000026', '32000000-0000-0000-0000-000000000033', '20000000-0000-0000-0000-000000000003', 'child', false, false);
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select public.mark_first_visit('42000000-0000-0000-0000-000000000024')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-00000000000a', $$select public.mark_first_visit('42000000-0000-0000-0000-000000000024')$$) = '42501',
+  'a greeter and another church''s owner cannot mark a family as first-time');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select set_config('test.task', public.mark_first_visit('42000000-0000-0000-0000-000000000024')::text, true);
+select pg_temp.ok(current_setting('test.task') <> '', 'staff mark a family as first-time');
+select pg_temp.ok(public.mark_first_visit('42000000-0000-0000-0000-000000000024')::text = current_setting('test.task'), 'marking it again returns the same task');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select public.mark_first_visit('42000000-0000-0000-0000-000000000025');
+select public.mark_first_visit('42000000-0000-0000-0000-000000000026');
+select pg_temp.as_postgres();
+select pg_temp.ok((select area_id = '72000000-0000-0000-0000-000000000001' and assignee_person_id = '32000000-0000-0000-0000-000000000001' and source = 'staff' and opened_by_person_id = '32000000-0000-0000-0000-000000000001'
+                   from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000024'),
+  'without a room, the youngest child''s age picks the Barn and its director; the opener is recorded');
+select pg_temp.ok((select area_id = '72000000-0000-0000-0000-000000000002' and assignee_person_id = '32000000-0000-0000-0000-000000000003'
+                   from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000025'),
+  'an eight-year-old''s family goes to K/5 and its director');
+select pg_temp.ok((select area_id is null and assignee_person_id = '32000000-0000-0000-0000-000000000004' and assignee_role_id is null
+                   from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000026'),
+  'a family outside every band goes to the church''s default assignee');
+
+-- who sees what
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok(not exists (select 1 from public.tasks where area_id is distinct from '72000000-0000-0000-0000-000000000001')
+  and exists (select 1 from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000020')
+  and exists (select 1 from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000001'),
+  'the Barn''s director sees the Barn''s tasks and no others');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000024');
+select pg_temp.ok(not exists (select 1 from public.tasks where area_id is distinct from '72000000-0000-0000-0000-000000000002')
+  and exists (select 1 from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000025')
+  and exists (select 1 from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000010'),
+  'K/5''s director sees K/5''s tasks, assigned to her or not, and no Barn task');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000025');
+select pg_temp.ok((select count(*) from public.tasks) = 1 and exists (select 1 from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000026'),
+  'the default assignee sees only what is assigned to them');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000023');
+select pg_temp.ok((select count(*) from public.tasks) = 0, 'a greeter sees no tasks');
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+select pg_temp.ok((select count(*) from public.tasks) = 0, 'another church''s owner sees none');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((select count(*) from public.tasks) = 0 and pg_temp.try_sql($$select public.mark_first_visit('42000000-0000-0000-0000-000000000024')$$) = '42501', 'a station sees and marks nothing');
+
+-- working a task: close with a note, pinned columns, no deletes, reassign
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$update public.tasks set status = 'done', close_note = 'Called; coming to the Tuesday group.', closed_by_person_id = '32000000-0000-0000-0000-000000000003' where subject_household_id = '42000000-0000-0000-0000-000000000020'$$) = '',
+  'the director closes a task with a note');
+select pg_temp.as_postgres();
+select pg_temp.ok((select closed_at is not null and closed_by_person_id = '32000000-0000-0000-0000-000000000001' and status = 'done'
+                   from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000020'),
+  'the close is stamped with who did it, from the login');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$update public.tasks set close_note = 'edited' where subject_household_id = '42000000-0000-0000-0000-000000000020'$$) = '42501',
+  'a closed task is history');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$update public.tasks set kind = 'manual', title = 'x', source = 'rule', subject_household_id = '42000000-0000-0000-0000-000000000001' where subject_household_id = '42000000-0000-0000-0000-000000000024'$$) = ''
+  and (select kind = 'first_visit' and source = 'staff' and title is null from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000024'),
+  'kind, source and subject are pinned');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023',
+  $$update public.tasks set status = 'dismissed' where subject_household_id = '42000000-0000-0000-0000-000000000024'$$) = ''
+  and (select status = 'open' from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000024'),
+  'a greeter''s update changes nothing');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$delete from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000024'$$) = ''
+  and (select count(*) from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000024') = 1
+  and pg_temp.try_sql($$delete from public.tasks where subject_household_id = '42000000-0000-0000-0000-000000000024'$$) = '42501',
+  'nobody deletes a task');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$update public.tasks set assignee_person_id = '32000000-0000-0000-0000-000000000004' where subject_household_id = '42000000-0000-0000-0000-000000000024'$$) = '',
+  'a manager reassigns a task');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.tasks (org_id, kind, title, source, assignee_person_id) values ('20000000-0000-0000-0000-000000000003', 'manual', 'Call the Walk-ins about Tuesday', 'staff', '32000000-0000-0000-0000-000000000003')$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.tasks (org_id, kind, source) values ('20000000-0000-0000-0000-000000000003', 'first_visit', 'staff')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000023',
+  $$insert into public.tasks (org_id, kind, title, source) values ('20000000-0000-0000-0000-000000000003', 'manual', 'Mine', 'staff')$$) = '42501',
+  'managers add manual tasks by hand; first-visit tasks come only from the rule');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.domain_events where type = 'task.created') = (select count(*) from public.tasks)
+  and (select count(*) from public.domain_events where type = 'task.closed') = 1
+  and (select count(*) from public.domain_events where type = 'task.reassigned') = 1
+  and not exists (select 1 from public.domain_events where type like 'task.%' and payload::text ~* 'newcomer|walk|tuesday'),
+  'tasks are on the event bus, by id only');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok((select count(*) from public.chms_audit where table_name = 'tasks') >= 8, 'managers read the task audit');
+select pg_temp.as_postgres();
+select pg_temp.ok(not has_function_privilege('anon', 'public.mark_first_visit(uuid, uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'chms_private.open_first_visit(uuid, uuid, uuid, uuid, text, jsonb)', 'execute')
+  and not has_function_privilege('authenticated', 'chms_private.route_first_visit(uuid, uuid, uuid, uuid)', 'execute')
+  and not has_function_privilege('anon', 'chms_private.my_led_area_ids()', 'execute'),
+  'follow-up internals are closed');
+
+\echo
 \echo 'All tests passed.'
 rollback;

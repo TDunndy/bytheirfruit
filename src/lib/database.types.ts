@@ -79,14 +79,14 @@ isOneToOne: false
                   ]
                 },"areas": {
                   Row: {
-                    "archived_at": string | null,"created_at": string,"id": string,"kind": string,"name": string,"org_id": string,"sort_order": number,"updated_at": string
+                    "age_band": unknown,"archived_at": string | null,"created_at": string,"id": string,"kind": string,"name": string,"org_id": string,"sort_order": number,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"kind": string,"name": string,"org_id": string,"sort_order"?: number,"updated_at"?: string
+                    "age_band"?: unknown,"archived_at"?: string | null,"created_at"?: string,"id"?: string,"kind": string,"name": string,"org_id": string,"sort_order"?: number,"updated_at"?: string
                   }
                   Update: {
-                    "archived_at"?: string | null,"created_at"?: string,"id"?: string,"kind"?: string,"name"?: string,"org_id"?: string,"sort_order"?: number,"updated_at"?: string
+                    "age_band"?: unknown,"archived_at"?: string | null,"created_at"?: string,"id"?: string,"kind"?: string,"name"?: string,"org_id"?: string,"sort_order"?: number,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -909,17 +909,29 @@ isOneToOne: false
                   ]
                 },"org_checkin_settings": {
                   Row: {
-                    "created_at": string,"grade_cutoff_day": number,"grade_cutoff_month": number,"label_defaults": NonNullable<Json>,"org_id": string,"promotion_date": string | null,"punctuality_grace_minutes": number,"time_zone": string,"updated_at": string
+                    "created_at": string,"followup_person_id": string | null,"followup_role_id": string | null,"grade_cutoff_day": number,"grade_cutoff_month": number,"label_defaults": NonNullable<Json>,"org_id": string,"promotion_date": string | null,"punctuality_grace_minutes": number,"time_zone": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"grade_cutoff_day"?: number,"grade_cutoff_month"?: number,"label_defaults"?: NonNullable<Json>,"org_id": string,"promotion_date"?: string | null,"punctuality_grace_minutes"?: number,"time_zone": string,"updated_at"?: string
+                    "created_at"?: string,"followup_person_id"?: string | null,"followup_role_id"?: string | null,"grade_cutoff_day"?: number,"grade_cutoff_month"?: number,"label_defaults"?: NonNullable<Json>,"org_id": string,"promotion_date"?: string | null,"punctuality_grace_minutes"?: number,"time_zone": string,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"grade_cutoff_day"?: number,"grade_cutoff_month"?: number,"label_defaults"?: NonNullable<Json>,"org_id"?: string,"promotion_date"?: string | null,"punctuality_grace_minutes"?: number,"time_zone"?: string,"updated_at"?: string
+                    "created_at"?: string,"followup_person_id"?: string | null,"followup_role_id"?: string | null,"grade_cutoff_day"?: number,"grade_cutoff_month"?: number,"label_defaults"?: NonNullable<Json>,"org_id"?: string,"promotion_date"?: string | null,"punctuality_grace_minutes"?: number,"time_zone"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "org_checkin_settings_followup_person_fkey"
+      columns: ["followup_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "org_checkin_settings_followup_role_fkey"
+      columns: ["followup_role_id","org_id"]
+isOneToOne: false
+      referencedRelation: "org_roles"
+      referencedColumns: ["id","org_id"]
+    },{
       foreignKeyName: "org_checkin_settings_org_id_fkey"
       columns: ["org_id"]
 isOneToOne: true
@@ -1835,6 +1847,68 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"tasks": {
+                  Row: {
+                    "area_id": string | null,"assignee_person_id": string | null,"assignee_role_id": string | null,"close_note": string | null,"closed_at": string | null,"closed_by_person_id": string | null,"created_at": string,"dedupe_key": string | null,"detail": NonNullable<Json>,"due_on": string | null,"id": string,"kind": string,"opened_at": string,"opened_by_person_id": string | null,"org_id": string,"source": string,"status": string,"subject_household_id": string | null,"subject_person_id": string | null,"title": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "area_id"?: string | null,"assignee_person_id"?: string | null,"assignee_role_id"?: string | null,"close_note"?: string | null,"closed_at"?: string | null,"closed_by_person_id"?: string | null,"created_at"?: string,"dedupe_key"?: string | null,"detail"?: NonNullable<Json>,"due_on"?: string | null,"id"?: string,"kind": string,"opened_at"?: string,"opened_by_person_id"?: string | null,"org_id": string,"source": string,"status"?: string,"subject_household_id"?: string | null,"subject_person_id"?: string | null,"title"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "area_id"?: string | null,"assignee_person_id"?: string | null,"assignee_role_id"?: string | null,"close_note"?: string | null,"closed_at"?: string | null,"closed_by_person_id"?: string | null,"created_at"?: string,"dedupe_key"?: string | null,"detail"?: NonNullable<Json>,"due_on"?: string | null,"id"?: string,"kind"?: string,"opened_at"?: string,"opened_by_person_id"?: string | null,"org_id"?: string,"source"?: string,"status"?: string,"subject_household_id"?: string | null,"subject_person_id"?: string | null,"title"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tasks_area_id_org_id_fkey"
+      columns: ["area_id","org_id"]
+isOneToOne: false
+      referencedRelation: "areas"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "tasks_assignee_person_id_org_id_fkey"
+      columns: ["assignee_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "tasks_assignee_role_id_org_id_fkey"
+      columns: ["assignee_role_id","org_id"]
+isOneToOne: false
+      referencedRelation: "org_roles"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "tasks_closed_by_person_id_org_id_fkey"
+      columns: ["closed_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "tasks_opened_by_person_id_org_id_fkey"
+      columns: ["opened_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "tasks_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "tasks_subject_household_id_org_id_fkey"
+      columns: ["subject_household_id","org_id"]
+isOneToOne: false
+      referencedRelation: "households"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "tasks_subject_person_id_org_id_fkey"
+      columns: ["subject_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    }
+                  ]
                 },"volunteer_assignments": {
                   Row: {
                     "created_at": string,"id": string,"local_date": string,"note": string | null,"org_id": string,"person_id": string,"set_by_person_id": string | null,"slot_id": string,"status": string,"updated_at": string
@@ -2029,6 +2103,9 @@ isOneToOne: false
                            },
 "log_document_access":
 { Args: { "p_document_id": string }; Returns: string
+                           },
+"mark_first_visit":
+{ Args: { "p_household_id"?: string,"p_person_id"?: string }; Returns: string
                            },
 "my_org_permissions":
 { Args: { "p_org_id": string }; Returns: (string)[]

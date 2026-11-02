@@ -8,6 +8,7 @@ import { CriteriaEditor, describeCriteria } from '@/components/checkin/CriteriaE
 import { PersonPicker } from '@/components/PersonPicker'
 import { Avatar, IconTile, RemoveGlyph, Spinner, Switch } from '@/components/ui'
 import { errorMessage, listRoles, peopleNames, todayLocal, type OrgRole } from '@/lib/people'
+import { bandText, parseBand } from '@/lib/followups'
 import {
   AREA_KINDS, addAreaLeader, addRoomLeader, archiveArea, archiveRoom, getSettings, label, listAreaLeaders, listAreas, listRoomLeaders, listRooms,
   previewPeople, removeAreaLeader, removeRoomLeader, saveArea, saveRoom,
@@ -110,6 +111,7 @@ export default function RoomsPage() {
             <h2 className="area-title">
               {a.name}
               {a.kind !== 'kids' && <span className="chip">{label(AREA_KINDS, a.kind)}</span>}
+              {bandText(a.age_band) && <span className="chip">{bandText(a.age_band)}</span>}
               {a.archived_at && <span className="chip">Archived</span>}
             </h2>
             {manage && (
@@ -170,12 +172,16 @@ function toInput(r: Room): RoomInput {
   }
 }
 
-function AreaForm({ initial, onSave, onCancel }: { initial: Partial<Area>; onSave: (a: { name: string; kind: Area['kind']; sort_order: number }) => Promise<void>; onCancel: () => void }) {
+function AreaForm({ initial, onSave, onCancel }: { initial: Partial<Area>; onSave: (a: { name: string; kind: Area['kind']; sort_order: number; age_band: string | null }) => Promise<void>; onCancel: () => void }) {
   const [name, setName] = useState(initial.name ?? '')
   const [kind, setKind] = useState<Area['kind']>(initial.kind ?? 'kids')
+  const band = parseBand(initial.age_band)
+  const [from, setFrom] = useState(band ? String(band.from) : '')
+  const [to, setTo] = useState(band ? String(band.to) : '')
   const [busy, setBusy] = useState(false)
+  const ageBand = kind === 'kids' && from !== '' && to !== '' && Number(to) > Number(from) ? `[${Number(from)},${Number(to)})` : null
   return (
-    <form className="card form" onSubmit={async (e) => { e.preventDefault(); if (!name.trim()) return; setBusy(true); await onSave({ name: name.trim(), kind, sort_order: initial.sort_order ?? 0 }); setBusy(false) }}>
+    <form className="card form" onSubmit={async (e) => { e.preventDefault(); if (!name.trim()) return; setBusy(true); await onSave({ name: name.trim(), kind, sort_order: initial.sort_order ?? 0, age_band: ageBand }); setBusy(false) }}>
       <fieldset>
         <legend className="group-head">{initial.id ? 'Edit area' : 'New area'}</legend>
         <div className="group">
@@ -183,7 +189,14 @@ function AreaForm({ initial, onSave, onCancel }: { initial: Partial<Area>; onSav
           <label className="field"><span>Kind</span>
             <select value={kind} onChange={(e) => setKind(e.target.value as Area['kind'])}>{AREA_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select>
           </label>
+          {kind === 'kids' && (
+            <>
+              <label className="field"><span>Ages from (months)</span><input type="number" min={0} max={299} value={from} onChange={(e) => setFrom(e.target.value)} placeholder="0" /></label>
+              <label className="field"><span>Up to (months)</span><input type="number" min={1} max={300} value={to} onChange={(e) => setTo(e.target.value)} placeholder="72" /></label>
+            </>
+          )}
         </div>
+        {kind === 'kids' && <p className="group-foot">Routes a first-time family to this area&apos;s director by the youngest child&apos;s age when no room is known: 0 to 72 months for a preschool area, 60 to 144 for elementary.</p>}
       </fieldset>
       <div className="actions"><button type="button" className="btn btn-tinted" onClick={onCancel}>Cancel</button><button type="submit" className="btn btn-filled" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button></div>
     </form>
