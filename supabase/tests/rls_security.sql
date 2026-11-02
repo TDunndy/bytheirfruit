@@ -2910,5 +2910,60 @@ select pg_temp.ok(not has_function_privilege('anon', 'public.mark_first_visit(uu
   'follow-up internals are closed');
 
 \echo
+\echo '== chms: intake ===================================================='
+select pg_temp.as_postgres();
+select set_config('test.slug', (select slug from public.organizations where id = '20000000-0000-0000-0000-000000000003'), true);
+select pg_temp.ok(pg_temp.try_as(null, $$select public.intake_first_visit('x', '{}'::jsonb)$$, 'anon') = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$select public.intake_first_visit('x', '{}'::jsonb)$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$select public.intake_church('x')$$) = '42501',
+  'the intake runs for the service role only');
+select pg_temp.as_service();
+select pg_temp.ok((public.intake_church(current_setting('test.slug')) ->> 'name') is not null and public.intake_church('no-such-church') is null,
+  'the form learns the church''s name from its slug');
+select pg_temp.ok((public.intake_first_visit('no-such-church', '{"adult": {"first_name": "A", "last_name": "B", "phone": "941-555-0400"}}') ->> 'error') = 'unknown_church'
+  and (public.intake_first_visit(current_setting('test.slug'), '{"adult": {"first_name": "", "last_name": "B", "phone": "941-555-0400"}}') ->> 'error') = 'invalid'
+  and (public.intake_first_visit(current_setting('test.slug'), '{"adult": {"first_name": "A", "last_name": "B"}}') ->> 'error') = 'contact_required'
+  and (public.intake_first_visit(current_setting('test.slug'), '{"adult": {"first_name": "A", "last_name": "B", "email": "not-an-email"}}') ->> 'error') = 'invalid_email'
+  and (public.intake_first_visit(current_setting('test.slug'), '{"adult": {"first_name": "A", "last_name": "B", "phone": "941-555-0400"}, "children": [{"first_name": "C"}]}') ->> 'error') = 'invalid_child',
+  'bad submissions are refused without a trace');
+select pg_temp.ok((select count(*) from public.households where name = 'B family') = 0, 'and nothing was created');
+select set_config('test.intake', public.intake_first_visit(current_setting('test.slug'), jsonb_build_object(
+  'adult', jsonb_build_object('first_name', ' Wren ', 'last_name', 'Webb', 'phone', '(941) 555-0400', 'email', 'Wren@Example.com'),
+  'children', jsonb_build_array(
+    jsonb_build_object('first_name', 'Wade', 'birthdate', (current_date - interval '4 years')::date, 'gender', 'male', 'allergies', 'Tree nuts'),
+    jsonb_build_object('first_name', 'Willa', 'last_name', 'Webb-Lee', 'birthdate', (current_date - interval '9 years')::date)),
+  'sms_consent', true, 'consent_version', 'v1'))::text, true);
+select pg_temp.ok((current_setting('test.intake')::jsonb ->> 'ok') = 'true' and (current_setting('test.intake')::jsonb ->> 'repeat') = 'false', 'a family signs up online');
+select pg_temp.as_postgres();
+select pg_temp.ok((select h.name = 'Webb family' from public.households h where h.id = (current_setting('test.intake')::jsonb ->> 'household_id')::uuid)
+  and (select count(*) from public.household_members m where m.household_id = (current_setting('test.intake')::jsonb ->> 'household_id')::uuid) = 3
+  and (select p.first_name = 'Wren' and p.email = 'wren@example.com' and p.tags = '{guest}' and p.membership_status = 'visitor' and p.first_visit_date = chms_private.local_today('20000000-0000-0000-0000-000000000003')
+       from public.people p join public.household_members m on m.person_id = p.id
+       where m.household_id = (current_setting('test.intake')::jsonb ->> 'household_id')::uuid and m.relationship = 'head' and m.is_guardian and m.can_check_in)
+  and (select p.last_name = 'Webb' and p.gender = 'male' from public.people p where p.first_name = 'Wade' and p.org_id = '20000000-0000-0000-0000-000000000003')
+  and (select p.last_name = 'Webb-Lee' from public.people p where p.first_name = 'Willa' and p.org_id = '20000000-0000-0000-0000-000000000003')
+  and (select cc.has_allergy and cc.allergy_short = 'Tree nuts' from public.child_care cc join public.people p on p.id = cc.person_id where p.first_name = 'Wade'),
+  'the family, its children, the guest tags and the allergy flag are on file');
+select pg_temp.ok((select count(*) from public.contact_consents where org_id = '20000000-0000-0000-0000-000000000003' and phone_e164 = '+19415550400' and scope = 'safety' and source = 'web' and revoked_at is null) = 1,
+  'the safety-text consent is recorded as given on the web');
+select pg_temp.ok((select t.source = 'form' and t.status = 'open' and t.area_id = '72000000-0000-0000-0000-000000000001' and t.assignee_person_id = '32000000-0000-0000-0000-000000000001'
+                   from public.tasks t where t.id = (current_setting('test.intake')::jsonb ->> 'task_id')::uuid),
+  'the follow-up goes to the Barn''s director by the youngest child''s age');
+select pg_temp.ok((select count(*) from public.access_log where org_id = '20000000-0000-0000-0000-000000000003' and action = 'intake.web' and actor_kind = 'system' and subject_count = 3) = 1,
+  'the intake is logged once');
+select pg_temp.as_service();
+select pg_temp.ok((public.intake_first_visit(current_setting('test.slug'), jsonb_build_object(
+    'adult', jsonb_build_object('first_name', 'Wren', 'last_name', 'Webb', 'phone', '9415550400'))) ->> 'household_id') = (current_setting('test.intake')::jsonb ->> 'household_id')
+  and (public.intake_first_visit(current_setting('test.slug'), jsonb_build_object(
+    'adult', jsonb_build_object('first_name', 'Wren', 'last_name', 'Webb', 'phone', '9415550400'))) ->> 'repeat') = 'true',
+  'the same number again today comes back to the same family');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.households where org_id = '20000000-0000-0000-0000-000000000003' and name = 'Webb family') = 1, 'and no second family was made');
+select pg_temp.ok(not has_function_privilege('anon', 'public.intake_first_visit(text, jsonb)', 'execute')
+  and not has_function_privilege('authenticated', 'public.intake_first_visit(text, jsonb)', 'execute')
+  and not has_function_privilege('authenticated', 'public.intake_church(text)', 'execute'),
+  'the intake functions are closed to the API roles');
+
+\echo
 \echo 'All tests passed.'
 rollback;

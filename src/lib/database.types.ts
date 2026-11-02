@@ -2086,6 +2086,12 @@ isOneToOne: false
 "ingest":
 { Args: { "p_commands": Json }; Returns: Json
                            },
+"intake_church":
+{ Args: { "p_org_slug": string }; Returns: Json
+                           },
+"intake_first_visit":
+{ Args: { "p": Json,"p_org_slug": string }; Returns: Json
+                           },
 "is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },

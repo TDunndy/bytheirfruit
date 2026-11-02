@@ -124,3 +124,8 @@ npm run db:types         # same, plus regenerate database.types.ts
 - Tasks are read and worked by `checkin.manage`, the assignee (person or
   role) and the leaders of the task's area; closed tasks are history; nobody
   deletes. Events `task.created|closed|reassigned` carry ids only.
+- The public "I'm new" form (`/new?church=<slug>` in `apps/chms`, outside the
+  signed-in shell) posts to the `intake` edge function, which calls
+  `intake_first_visit()` with the service role: a guest family, consent
+  (source `web`), the first-visit task (source `form`) and one `access_log`
+  row. Nothing in it is callable by anon or a signed-in user.

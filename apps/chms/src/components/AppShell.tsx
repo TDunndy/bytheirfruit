@@ -22,6 +22,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   useScrolledBars(pathname)
 
+  // The public "I'm new" form needs no sign-in and no shell.
+  if (pathname?.startsWith('/new')) return <>{children}</>
   if (status === 'loading') return <main className="center-page"><Spinner /></main>
   if (status === 'signed-out') return <SignIn />
   if (status === 'error') {

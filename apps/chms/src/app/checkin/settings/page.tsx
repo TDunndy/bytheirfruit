@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSession } from '@/components/Session'
 import { NoAccess } from '@/components/checkin/CheckinNav'
 import { PersonPicker } from '@/components/PersonPicker'
+import { IntakeCard } from '@/components/intake/IntakeCard'
 import { RemoveGlyph, Spinner, Switch } from '@/components/ui'
 import { errorMessage, listRoles, peopleNames, type OrgRole } from '@/lib/people'
 import { getSettings, guessTimeZone, saveSettings, setMyStaffPin, type CheckinSettings } from '@/lib/checkin'
@@ -57,6 +58,7 @@ export default function SettingsPage() {
           try { setSettings(await saveSettings(org.id, { time_zone: settings.time_zone, ...v })); await load(); setSaved('Follow-up default saved.') } catch (e) { setError(errorMessage(e)) }
         }} />
       )}
+      {can('checkin.manage') && <IntakeCard slug={org.slug} churchName={org.name} />}
       {(can('checkin.station') || can('checkin.manage')) && <PinForm onSave={async (pin) => { await setMyStaffPin(org.id, pin) }} />}
       {can('org.manage') && (
         <FieldDefs defs={defs}

@@ -59,3 +59,6 @@ verify_jwt = true
 
 [functions.pair-station]
 verify_jwt = false
+
+[functions.intake]
+verify_jwt = false
