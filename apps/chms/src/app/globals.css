@@ -1100,3 +1100,9 @@ details.disclosure[open] > summary::before { content: '▾ '; }
 .qr-card { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
 .qr-card svg { width: 160px; height: 160px; background: #fff; border-radius: 10px; padding: 8px; box-shadow: 0 0 0 var(--hairline) var(--separator); }
 .qr-card code { font-size: 13px; overflow-wrap: anywhere; }
+
+/* Group messaging: multi-select rows */
+.pick-box { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--separator-opaque); display: inline-flex; align-items: center; justify-content: center; flex: none; color: #fff; font-size: 14px; }
+.pick-box.on { background: var(--tint-fill); border-color: var(--tint-fill); }
+.cell-link.on { background: var(--tint-soft); }
+button.cell-link { width: 100%; border: 0; background: transparent; text-align: left; font: inherit; }

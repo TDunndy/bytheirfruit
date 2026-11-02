@@ -7,6 +7,7 @@ import { useSession } from '@/components/Session'
 import { StatusBadge } from '@/components/PersonParts'
 import { PersonPicker } from '@/components/PersonPicker'
 import { GroupForm } from '@/components/groups/GroupForm'
+import { MessageGroups } from '@/components/groups/MessageGroups'
 import { Avatar, BackLink, Chevron, RemoveGlyph, Spinner } from '@/components/ui'
 import { useDocumentTitle } from '@/components/useDocumentTitle'
 import { listAreas, type Area } from '@/lib/checkin'
@@ -89,6 +90,11 @@ function GroupView() {
       </header>
       {error && <p className="error" role="alert">{error}</p>}
       {group.description && <p className="lead">{group.description}</p>}
+      {(manage || can('notify.broadcast')) && members.length > 0 && !group.archived_at && (
+        <section className="section narrow">
+          <MessageGroups groupIds={[group.id]} title={group.name} />
+        </section>
+      )}
       <section className="section narrow">
         <h2 className="group-head">{members.length === 0 ? 'Members' : `${members.length} ${members.length === 1 ? 'member' : 'members'}${leaders.length ? ` · ${leaders.map((l) => l.person.first_name).join(', ')} ${leaders.length === 1 ? 'leads' : 'lead'}` : ''}`}</h2>
         <ul className="group household-members">

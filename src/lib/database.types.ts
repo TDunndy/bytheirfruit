@@ -2077,6 +2077,11 @@ isOneToOne: false
 "get_child_care":
 { Args: { "p_person_id": string }; Returns: Json
                            },
+"group_contacts":
+{ Args: { "p_channel": string,"p_group_ids": (string)[] }; Returns: {
+              "display_name": string,"for_person_id": string,"person_id": string,"value": string
+            }[]
+                           },
 "has_active_subscription":
 { Args: { "p_org_id": string }; Returns: boolean
                            },

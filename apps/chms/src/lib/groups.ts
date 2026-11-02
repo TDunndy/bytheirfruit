@@ -183,3 +183,25 @@ function addDays(d: string, n: number): string {
   x.setDate(x.getDate() + n)
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
 }
+
+// ---------------------------------------------------------------- messaging --
+export interface GroupContact { person_id: string; display_name: string; value: string; for_person_id: string }
+
+/** Email addresses or phone numbers behind one or more groups (minors through their guardians; STOP honoured). Logged per group. */
+export async function groupContacts(groupIds: string[], channel: 'email' | 'sms'): Promise<GroupContact[]> {
+  const { data, error } = await supabase.rpc('group_contacts', { p_group_ids: groupIds, p_channel: channel })
+  if (error) throw error
+  return (data ?? []) as unknown as GroupContact[]
+}
+
+/** A mailto: link that opens the leader's own mail app with everyone in BCC. */
+export function mailtoLink(emails: string[], subject: string): string {
+  return `mailto:?bcc=${encodeURIComponent(emails.join(','))}&subject=${encodeURIComponent(subject)}`
+}
+
+/** An sms: link for the device's Messages app (iOS and Android spell group texts differently). */
+export function smsLink(numbers: string[], body: string): string {
+  const ios = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent)
+  if (ios) return `sms:/open?addresses=${numbers.join(',')}&body=${encodeURIComponent(body)}`
+  return `sms:${numbers.join(',')}?body=${encodeURIComponent(body)}`
+}

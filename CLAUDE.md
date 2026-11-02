@@ -129,3 +129,9 @@ npm run db:types         # same, plus regenerate database.types.ts
   `intake_first_visit()` with the service role: a guest family, consent
   (source `web`), the first-visit task (source `form`) and one `access_log`
   row. Nothing in it is callable by anon or a signed-in user.
+- Group messaging v1: `group_contacts(group_ids, channel)` returns the emails
+  or E.164 phones behind one or more groups (a minor contributes their
+  guardians; a number that replied STOP is left out) for the groups' leaders,
+  `groups.manage` or `notify.broadcast`, and logs one `access_log` row per
+  group (`contacts.export`). The app opens the leader's own mail or Messages
+  app; church-sent messages (Phase 3) will use the same resolver.

@@ -7,6 +7,7 @@ import { Chevron, Icon, IconTile, SearchField, Switch } from '@/components/ui'
 import { listAreas, type Area } from '@/lib/checkin'
 import { errorMessage } from '@/lib/people'
 import { GROUP_KINDS, listGroups, memberCounts, type Group } from '@/lib/groups'
+import { MessageGroups } from './MessageGroups'
 
 export function GroupsList() {
   const { org, can } = useSession()
@@ -17,6 +18,8 @@ export function GroupsList() {
   const [archived, setArchived] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [picking, setPicking] = useState(false)
+  const [picked, setPicked] = useState<string[]>([])
 
   useEffect(() => {
     if (!org) return
@@ -45,10 +48,19 @@ export function GroupsList() {
           <h1>Groups</h1>
           <p className="page-sub">{loading ? 'Loading…' : count}</p>
         </div>
+        {(can('groups.manage') || can('notify.broadcast')) && !archived && groups.length > 0 && (
+          <button type="button" className="btn btn-tinted" aria-pressed={picking} onClick={() => { setPicking((p) => !p); setPicked([]) }}>{picking ? 'Done choosing' : 'Message several'}</button>
+        )}
         {can('groups.manage') && (
           <Link href="/groups/new" className="btn btn-filled btn-add"><Icon name="plus" size={18} /><span className="btn-label">Add group</span></Link>
         )}
       </header>
+      {picking && (
+        <section className="section">
+          <p className="muted small">Tick the groups to reach, then choose how.</p>
+          <MessageGroups groupIds={picked} title={picked.map((id) => groups.find((g) => g.id === id)?.name ?? '').filter(Boolean).join(', ')} compact />
+        </section>
+      )}
       <p className="sr-only" role="status">{loading ? '' : count}</p>
       <div className="toolbar">
         <SearchField className="search" placeholder="Search groups" aria-label="Search groups" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -71,6 +83,20 @@ export function GroupsList() {
                   `${c.members} ${c.members === 1 ? 'member' : 'members'}${c.leaders ? ` · ${c.leaders} ${c.leaders === 1 ? 'leader' : 'leaders'}` : ''}`,
                   g.meets, g.area_id ? areaName.get(g.area_id) : null,
                 ].filter(Boolean).join(' · ')
+                if (picking) {
+                  const on = picked.includes(g.id)
+                  return (
+                    <li key={g.id}>
+                      <button type="button" className={`cell-link${on ? ' on' : ''}`} aria-pressed={on} onClick={() => setPicked((p) => (on ? p.filter((x) => x !== g.id) : [...p, g.id]))}>
+                        <span className={`pick-box${on ? ' on' : ''}`} aria-hidden="true">{on ? '✓' : ''}</span>
+                        <span className="cell-text">
+                          <span className="cell-title">{g.name}</span>
+                          <span className="cell-sub">{sub}</span>
+                        </span>
+                      </button>
+                    </li>
+                  )
+                }
                 return (
                   <li key={g.id}>
                     <Link href={`/groups/view?id=${g.id}`} className="cell-link">

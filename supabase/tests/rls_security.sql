@@ -2703,7 +2703,7 @@ select pg_temp.ok((select role = 'co_leader' from public.group_members where gro
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
   $$update public.groups set archived_at = now(), active = false where id = '83000000-0000-0000-0000-000000000001'$$) = ''
   and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
-  $$insert into public.groups (org_id, name, kind) values ('20000000-0000-0000-0000-000000000003', 'Welcome team', 'team')$$) = '',
+  $$insert into public.groups (id, org_id, name, kind) values ('83000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000003', 'Welcome team', 'team')$$) = '',
   'an archived group frees its name');
 select pg_temp.as_postgres();
 select pg_temp.ok((select count(*) from public.domain_events where type = 'group.created') = 3
@@ -2963,6 +2963,51 @@ select pg_temp.ok(not has_function_privilege('anon', 'public.intake_first_visit(
   and not has_function_privilege('authenticated', 'public.intake_first_visit(text, jsonb)', 'execute')
   and not has_function_privilege('authenticated', 'public.intake_church(text)', 'execute'),
   'the intake functions are closed to the API roles');
+
+\echo
+\echo '== chms: group contacts ============================================'
+select pg_temp.as_postgres();
+update public.people set email = 'dee@example.com', phone = '941-555-0503' where id = '32000000-0000-0000-0000-000000000003';
+update public.people set email = 'gail@example.com' where id = '32000000-0000-0000-0000-000000000002';
+update public.people set email = 'ann@example.com', phone = '941-555-0509' where id = '32000000-0000-0000-0000-000000000009';
+update public.people set email = 'pat@example.com' where id = '32000000-0000-0000-0000-000000000005';
+-- Ann replied STOP once
+insert into public.contact_consents (org_id, phone_e164, scope, person_id, source, text_version, revoked_at, revoked_source)
+  values ('20000000-0000-0000-0000-000000000003', '+19415550509', 'safety', '32000000-0000-0000-0000-000000000009', 'admin', 'v1', now(), 'stop');
+-- the Tuesday group: Dee (leader), Kid (a child; Pat and Ann are his guardians), Ann (co-leader), Gail (member)
+select pg_temp.as_user('00000000-0000-0000-0000-000000000024');
+select pg_temp.ok((select array_agg(value order by value) from public.group_contacts(array['83000000-0000-0000-0000-000000000002']::uuid[], 'email'))
+    = array['ann@example.com', 'dee@example.com', 'gail@example.com', 'pat@example.com'],
+  'a leader gets the group''s email addresses: adults their own, the child through his guardians');
+select pg_temp.ok((select for_person_id = '32000000-0000-0000-0000-000000000006' and person_id = '32000000-0000-0000-0000-000000000005'
+                   from public.group_contacts(array['83000000-0000-0000-0000-000000000002']::uuid[], 'email') where value = 'pat@example.com')
+  and (select for_person_id = '32000000-0000-0000-0000-000000000009' from public.group_contacts(array['83000000-0000-0000-0000-000000000002']::uuid[], 'email') where value = 'ann@example.com'),
+  'a guardian who is also a member counts once, as themselves');
+select pg_temp.ok((select array_agg(value order by value) from public.group_contacts(array['83000000-0000-0000-0000-000000000002']::uuid[], 'sms'))
+    = array['+19415550199', '+19415550503'],
+  'the text list carries phone numbers, with Ann''s left out after her STOP');
+select pg_temp.ok(not exists (select 1 from public.group_contacts(array['83000000-0000-0000-0000-000000000002']::uuid[], 'email') where person_id = '32000000-0000-0000-0000-000000000006'),
+  'a child is never on the list');
+select pg_temp.ok(pg_temp.try_sql($$select * from public.group_contacts(array['83000000-0000-0000-0000-000000000001']::uuid[], 'email')$$) = '42501'
+  and pg_temp.try_sql($$select * from public.group_contacts(array['83000000-0000-0000-0000-000000000002', '83000000-0000-0000-0000-000000000001']::uuid[], 'email')$$) = '42501',
+  'a leader reaches only the groups they lead, alone or in a set');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000023');
+select pg_temp.ok(pg_temp.try_sql($$select * from public.group_contacts(array['83000000-0000-0000-0000-000000000002']::uuid[], 'email')$$) = '42501', 'a member cannot pull the list');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok((select count(*) from public.group_contacts(array['83000000-0000-0000-0000-000000000002', '83000000-0000-0000-0000-000000000003']::uuid[], 'email')) = 4
+  and pg_temp.try_sql($$select * from public.group_contacts(array['83000000-0000-0000-0000-000000000002']::uuid[], 'fax')$$) = '22023'
+  and pg_temp.try_sql($$select * from public.group_contacts(array['83000000-0000-0000-0000-000000000001']::uuid[], 'email')$$) = '42501',
+  'a manager unions several groups; an unknown channel and an archived group are refused');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a', $$select * from public.group_contacts(array['83000000-0000-0000-0000-000000000002']::uuid[], 'email')$$) = '42501',
+  'another church''s owner gets nothing');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok(pg_temp.try_sql($$select * from public.group_contacts(array['83000000-0000-0000-0000-000000000002']::uuid[], 'email')$$) = '42501', 'a station gets nothing');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.access_log where action = 'contacts.export' and detail ->> 'group_id' = '83000000-0000-0000-0000-000000000002') = 6
+  and (select count(*) from public.access_log where action = 'contacts.export' and detail ->> 'group_id' = '83000000-0000-0000-0000-000000000003') = 1
+  and not exists (select 1 from public.access_log where action = 'contacts.export' and detail::text like '%@%'),
+  'every pull is logged per group, without the addresses');
+select pg_temp.ok(not has_function_privilege('anon', 'public.group_contacts(uuid[], text)', 'execute'), 'the resolver is closed to anon');
 
 \echo
 \echo 'All tests passed.'
