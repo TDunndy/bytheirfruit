@@ -66,11 +66,32 @@ profile; restrictive policies and `BEFORE` triggers wall them off from the
 review site and the membership tables (the triggers hold inside
 `SECURITY DEFINER` code too); the claim RPC and edge function refuse them.
 
+### Pairing (1b)
+
+A check-in manager asks for a pairing code (eight characters from the
+security-code alphabet, hashed in `chms_private.station_pairing_codes`, ten
+minutes, one use, one live code per station). The `pair-station` edge
+function, which needs no token, creates the device's auth user
+(`station-<uuid>@stations.invalid`, `app_metadata.kind = 'station'`), claims
+the code through `claim_pairing_code()` (service role only; it refuses a
+person's account and retires the device paired before), and hands the device
+a session minted from a one-time magic link. The device keeps the refresh
+token and nothing else. Unpairing revokes the pairing row, so `my_station()`
+is null at once, and the function bans the retired auth users
+(`revoked_station_users` / `confirm_station_revocation`) so their refresh
+tokens die too. Nothing a church user can read carries an account id.
+
 ### Least privilege for rooms
 
 Rooms readable by a station are its scope (`station_scopes`; none means
 every room). Rosters come from `roster()` as first name + last initial,
-flags and code status, logged once per read. Room leaders (`room_leaders`)
+flags and code status, logged once per read. Families come from
+`station_lookup()` (whole phone number or scan on a kiosk; last four digits
+or a name on a staffed desk; twenty misses in ten minutes lock the station
+out), `station_household()` (criteria fields, care flags and short allergy
+text, "see staff" without its reason, today's pass), `station_pickups()`
+(guardians, authorized and restricted pickups by name, only for a child in
+the caller's rooms now) and `station_volunteers()`; each is logged once. Room leaders (`room_leaders`)
 get their rooms; `checkin.manage`, `kids.view` and `attendance.reports` get
 the church. Care notes stay RPC-only; restriction reasons need `kids.care`;
 documents open through `log_document_access()` and a signing edge function.

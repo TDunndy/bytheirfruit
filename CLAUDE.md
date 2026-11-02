@@ -81,3 +81,22 @@ npm run db:types         # same, plus regenerate database.types.ts
 - Hosted at app.bytheirfruit.church by the Cloudflare Worker `bytheirfruit-chms`
   (static assets). Workers Builds deploys every push to `main` using
   `apps/chms/wrangler.jsonc`; its `name` must match the Worker's name.
+
+## Station app (`apps/station`)
+- Vite + React SPA with its own `package.json` (`npm ci`, `typecheck`, `test`,
+  `build` inside `apps/station`); imports `@btf/core` and DB types only.
+  Hosted by the Cloudflare Worker `bytheirfruit-station` from
+  `apps/station/wrangler.jsonc` (single-page-application fallback).
+- A device is paired with a code from Check-in → Stations (`create_pairing_code`,
+  hashed, ten minutes); the `pair-station` edge function (verify_jwt off)
+  creates the station auth user and claims it (`claim_pairing_code`, service
+  role only), and bans revoked users (`revoked_station_users`). Unpair from the
+  church app (`unpair_station`) or the device (`station_unpair_self`).
+- Stations read people only through `station_lookup`, `station_household`,
+  `station_pickups`, `station_volunteers` and `roster` (migration D): first
+  names and last initials, criteria fields and care flags, never notes.
+  Kiosks look up by whole phone number or scan; last-4 and name are for
+  staffed stations; twenty misses in ten minutes lock a station out.
+- Writes go through the outbox (`src/lib/outbox.ts`) to `ingest()`: UUIDv7
+  ids, replay-safe, rejections in the staff queue. Room suggestions and
+  labels come from `@btf/core`; the browser only logs `label_print_requested`.

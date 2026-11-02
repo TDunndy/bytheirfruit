@@ -1,0 +1,29 @@
+{
+  "name": "bytheirfruit-station",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The check-in station: kiosk, staffed desk, room roster and volunteer check-in, in the browser (laptops) and later inside the iPad and Android shells.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3002",
+    "build": "vite build",
+    "preview": "vite preview --port 3002",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@btf/core": "file:../../packages/core",
+    "@supabase/supabase-js": "2.99.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.37",
+    "@types/react": "18.3.28",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "5.2.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "2.1.9"
+  }
+}

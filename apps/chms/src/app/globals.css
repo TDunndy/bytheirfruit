@@ -1075,3 +1075,9 @@ details.disclosure[open] > summary::before { content: '▾ '; }
 @media (forced-colors: active) {
   .subnav-item.active, .chip-check.on { outline: 2px solid Highlight; outline-offset: -2px; }
 }
+
+/* Pairing code card (Check-in → Stations) */
+.pair-code {
+  margin: 4px 0 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 40px; font-weight: 700; letter-spacing: 0.12em; text-align: center; color: var(--label);
+}

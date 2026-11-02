@@ -10,6 +10,7 @@ Live at https://bytheirfruit.church.
 | Public site | Next.js 14 static export (`output: 'export'`) | `src/` → Cloudflare Pages |
 | Church app (ChMS) | Next.js 14 static export at app.bytheirfruit.church, same Supabase project and accounts (ADR-0004) | `apps/chms/` → Cloudflare Worker `bytheirfruit-chms` |
 | Shared check-in logic | Ages, grades, room criteria, labels, codes (ADR-0005) | `packages/core/` (vitest) |
+| Station app | Vite + React SPA for kiosks, staffed desks, room rosters and volunteer check-in; paired devices, offline outbox, browser labels (ADR-0005) | `apps/station/` → Cloudflare Worker `bytheirfruit-station` (station.bytheirfruit.church) |
 | Church pages for crawlers | Cloudflare Pages Function injecting meta + JSON-LD into the SPA shell | `functions/church/[[path]].ts` |
 | Sitemaps | Cloudflare Pages Functions | `functions/sitemap*.ts` |
 | Database, auth, storage | Supabase project `ffqmbhftivmiubvtzhhr` | `supabase/migrations/` |

@@ -365,6 +365,39 @@ export async function setStationScope(orgId: string, stationId: string, areaIds:
   if (add.length) { const { error } = await supabase.from('station_scopes').insert(add); if (error) throw error }
 }
 
+// ---------------------------------------------------------------- pairing --
+export type PairingStatus = Database['public']['Functions']['station_pairing_status']['Returns'][number]
+
+/** Paired or not, last seen, and a live pairing code's expiry, per station. Never an account id. */
+export async function pairingStatus(orgId: string): Promise<PairingStatus[]> {
+  return many(await supabase.rpc('station_pairing_status', { p_org_id: orgId }))
+}
+
+/** A fresh eight-character pairing code for a station (ten minutes, one use). The previous unused code dies. */
+export async function createPairingCode(stationId: string): Promise<string> {
+  return one(await supabase.rpc('create_pairing_code', { p_station_id: stationId }))
+}
+
+/** 'ABCDEFGH' → 'ABCD-EFGH' for reading out. */
+export function fmtPairingCode(code: string): string {
+  return code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code
+}
+
+/** Unpairs the device on a station: the pairing row is revoked in Postgres and the edge function bans its account. */
+export async function unpairStation(stationId: string) {
+  const { data, error } = await supabase.functions.invoke('pair-station', { body: { action: 'unpair', station_id: stationId } })
+  if (error) throw new Error((await functionError(error)) ?? 'Could not unpair the device.')
+  if (!data?.ok) throw new Error(data?.error ?? 'Could not unpair the device.')
+}
+
+async function functionError(e: unknown): Promise<string | null> {
+  const ctx = typeof e === 'object' && e && 'context' in e ? (e as { context?: Response }).context : undefined
+  if (ctx && typeof ctx.json === 'function') {
+    try { const body = await ctx.json(); if (body && typeof body.error === 'string') return body.error } catch { /* not json */ }
+  }
+  return null
+}
+
 /** Sets the signed-in leader's own station PIN (4 to 8 digits). */
 export async function setMyStaffPin(orgId: string, pin: string) {
   const { error } = await supabase.rpc('set_my_staff_pin', { p_org_id: orgId, p_pin: pin })
@@ -429,6 +462,21 @@ export function fmtInstant(iso: string, timeZone?: string | null): string {
   } catch {
     return new Date(iso).toLocaleString('en-US')
   }
+}
+
+/** '5 min ago', 'yesterday', or the date, for last-seen stamps. */
+export function fmtAgo(iso: string | null | undefined): string {
+  if (!iso) return 'never'
+  const ms = Date.now() - new Date(iso).getTime()
+  const min = Math.round(ms / 60_000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} min ago`
+  const h = Math.round(min / 60)
+  if (h < 24) return `${h} h ago`
+  const d = Math.round(h / 24)
+  if (d === 1) return 'yesterday'
+  if (d < 14) return `${d} days ago`
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 /** Today as 'YYYY-MM-DD' in the church's zone (the browser's when none is known). */

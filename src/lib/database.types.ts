@@ -246,12 +246,6 @@ isOneToOne: false
       referencedRelation: "attendance_events"
       referencedColumns: ["id","org_id"]
     },{
-      foreignKeyName: "attendance_events_target_event_id_org_id_fkey"
-      columns: ["target_event_id","org_id"]
-isOneToOne: false
-      referencedRelation: "room_stays"
-      referencedColumns: ["event_id","org_id"]
-    },{
       foreignKeyName: "attendance_events_verified_by_person_id_org_id_fkey"
       columns: ["verified_by_person_id","org_id"]
 isOneToOne: false
@@ -277,12 +271,6 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "attendance_events"
       referencedColumns: ["id","org_id"]
-    },{
-      foreignKeyName: "attendance_pickup_names_event_id_org_id_fkey"
-      columns: ["event_id","org_id"]
-isOneToOne: false
-      referencedRelation: "room_stays"
-      referencedColumns: ["event_id","org_id"]
     },{
       foreignKeyName: "attendance_pickup_names_org_id_fkey"
       columns: ["org_id"]
@@ -1900,31 +1888,7 @@ isOneToOne: false
                   }
                   ComputedFields: never
                   Relationships: [
-                    {
-      foreignKeyName: "attendance_events_occurrence_id_org_id_fkey"
-      columns: ["occurrence_id","org_id"]
-isOneToOne: false
-      referencedRelation: "occurrences"
-      referencedColumns: ["id","org_id"]
-    },{
-      foreignKeyName: "attendance_events_org_id_fkey"
-      columns: ["org_id"]
-isOneToOne: false
-      referencedRelation: "organizations"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "attendance_events_person_id_org_id_fkey"
-      columns: ["person_id","org_id"]
-isOneToOne: false
-      referencedRelation: "people"
-      referencedColumns: ["id","org_id"]
-    },{
-      foreignKeyName: "attendance_events_room_id_org_id_fkey"
-      columns: ["room_id","org_id"]
-isOneToOne: false
-      referencedRelation: "rooms"
-      referencedColumns: ["id","org_id"]
-    }
+                    
                   ]
                 },"zip_centroids": {
                   Row: {
@@ -1956,6 +1920,9 @@ isOneToOne: false
               "address": string,"city": string,"claimed_at": string,"claimed_by": string,"denomination": string,"distance_miles": number,"email": string,"id": string,"latitude": number,"longitude": number,"name": string,"phone": string,"score_community": number,"score_finances": number,"score_kids": number,"score_leadership": number,"score_overall": number,"score_prayer": number,"score_service": number,"score_teaching": number,"score_welcome": number,"score_worship": number,"score_youth": number,"service_style": string,"service_times": string,"size": string,"state": string,"status": string,"subscription_status": string,"total_reviews": number,"website": string,"zip": string
             }[]
                            },
+"claim_pairing_code":
+{ Args: { "p_app_version"?: string,"p_code": string,"p_platform"?: string,"p_user_id": string }; Returns: Json
+                           },
 "close_occurrence":
 { Args: { "p_occurrence_id": string }; Returns: undefined
                            },
@@ -1964,8 +1931,14 @@ isOneToOne: false
               "computed": boolean,"regions_updated": number
             }[]
                            },
+"confirm_station_revocation":
+{ Args: { "p_user_id": string }; Returns: undefined
+                           },
 "create_org_invitation":
 { Args: { "p_email": string,"p_member_role"?: string,"p_org_id": string,"p_person_id": string }; Returns: Json
+                           },
+"create_pairing_code":
+{ Args: { "p_station_id": string }; Returns: string
                            },
 "generate_occurrences":
 { Args: { "p_from"?: string,"p_org_id": string,"p_through": string }; Returns: number
@@ -2031,6 +2004,9 @@ isOneToOne: false
 "revoke_org_invitation":
 { Args: { "p_invitation_id": string }; Returns: undefined
                            },
+"revoked_station_users":
+{ Args: Record<PropertyKey, never>; Returns: string[]
+                           },
 "roster":
 { Args: { "p_occurrence_id": string,"p_room_id": string }; Returns: {
               "allergy_short": string,"anomalies": (string)[],"checked_in_at": string,"checked_out_at": string,"codes": (string)[],"display_name": string,"guardian_first_name": string,"has_allergy": boolean,"has_medical": boolean,"has_special_needs": boolean,"person_id": string,"photo_path": string,"punctuality": string,"restriction": string,"role": string,"room_id": string,"status": string
@@ -2053,6 +2029,23 @@ isOneToOne: false
 "soft_delete_review":
 { Args: { "p_review_id": string }; Returns: undefined
                            },
+"station_heartbeat":
+{ Args: { "p_app_version"?: string,"p_platform"?: string }; Returns: undefined
+                           },
+"station_household":
+{ Args: { "p_household_id": string,"p_org_id"?: string }; Returns: Json
+                           },
+"station_lookup":
+{ Args: { "p_method": string,"p_org_id"?: string,"p_query": string }; Returns: Json
+                           },
+"station_pairing_status":
+{ Args: { "p_org_id": string }; Returns: {
+              "app_version": string,"code_expires_at": string,"last_seen_at": string,"paired_at": string,"platform": string,"station_id": string
+            }[]
+                           },
+"station_pickups":
+{ Args: { "p_org_id"?: string,"p_person_id": string }; Returns: Json
+                           },
 "station_self":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
@@ -2061,8 +2054,17 @@ isOneToOne: false
               "display_name": string,"person_id": string
             }[]
                            },
+"station_unpair_self":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"station_volunteers":
+{ Args: { "p_local_date"?: string,"p_org_id"?: string }; Returns: Json
+                           },
 "unlink_person_login":
 { Args: { "p_person_id": string }; Returns: undefined
+                           },
+"unpair_station":
+{ Args: { "p_station_id": string }; Returns: undefined
                            },
 "verify_claim_code":
 { Args: { "p_church_id": string,"p_code": string }; Returns: Json

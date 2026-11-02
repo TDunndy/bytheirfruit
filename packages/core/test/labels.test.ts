@@ -45,3 +45,15 @@ describe('labels', () => {
     expect(isLabelLayout({ elements: Array.from({ length: 41 }, () => ({ type: 'icons', x: 0, y: 0, size: 4 })) })).toBe(false)
   })
 })
+
+import { renderLabelSheetHtml } from '../src/labels'
+describe('label sheets', () => {
+  const t = defaultTemplates()
+  it('prints several labels of one template as one page each', () => {
+    const html = renderLabelSheetHtml(t.child, [{ first_name: 'Kid', code: 'ACD' }, { first_name: 'Tess', code: 'ACD' }])
+    expect(html).toContain('@page { size: 62mm 29mm; margin: 0 }')
+    expect(html.match(/class="label"/g)?.length).toBe(2)
+    expect(html).toContain('break-after: page')
+    expect(html.indexOf('>Kid<')).toBeLessThan(html.indexOf('>Tess<'))
+  })
+})

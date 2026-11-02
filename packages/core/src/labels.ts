@@ -151,3 +151,28 @@ html, body { margin: 0; padding: 0 }
 .icon { display: inline-flex; align-items: center; justify-content: center; width: 1em; height: 1em; border: 0.3mm solid #000; border-radius: 50%; font-size: 0.6em; font-weight: 700 }
 </style></head><body><div class="label">${els}</div></body></html>`
 }
+
+/**
+ * HTML for several labels of one template, one per page, for a single
+ * print job (a family's child labels, then its pickup tag as a second job
+ * when the size differs).
+ */
+export function renderLabelSheetHtml(t: LabelTemplate, items: LabelData[]): string {
+  const page = (d: LabelData) => t.layout.elements.map(e => {
+    const pos = `left:${e.x}mm;top:${e.y}mm;`
+    if (e.type === 'icons') return `<div class="icons" style="${pos}font-size:${e.size}mm">${icons(d)}</div>`
+    const content = e.type === 'text' ? text(e.field, d) : e.text
+    const style = `${pos}width:${e.w}mm;height:${e.h}mm;font-size:${e.size}pt;${e.bold ? 'font-weight:700;' : ''}text-align:${e.align ?? 'left'};`
+    return `<div class="el" style="${style}">${esc(content)}</div>`
+  }).join('')
+  const labels = items.map(d => `<div class="label">${page(d)}</div>`).join('')
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>
+@page { size: ${t.width_mm}mm ${t.height_mm}mm; margin: 0 }
+html, body { margin: 0; padding: 0 }
+.label { position: relative; width: ${t.width_mm}mm; height: ${t.height_mm}mm; overflow: hidden; page-break-after: always; break-after: page; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; color: #000 }
+.label:last-child { page-break-after: auto; break-after: auto }
+.el { position: absolute; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.icons { position: absolute; display: flex; gap: 1mm }
+.icon { display: inline-flex; align-items: center; justify-content: center; width: 1em; height: 1em; border: 0.3mm solid #000; border-radius: 50%; font-size: 0.6em; font-weight: 700 }
+</style></head><body>${labels}</body></html>`
+}

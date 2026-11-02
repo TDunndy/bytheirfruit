@@ -1324,7 +1324,7 @@ select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000022',
   $$insert into public.custom_field_values_sensitive (field_id, org_id, subject_id, value) values ('52000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000001', 'true')$$) = '23503',
   'a sensitive value cannot point at another church''s person');
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025',
-  $$insert into public.pickup_people (org_id, child_person_id, person_id, kind, valid_to) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000009', 'restricted', current_date - 1)$$) = '',
+  $$insert into public.pickup_people (org_id, child_person_id, person_id, kind, valid_to) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000009', 'restricted', (now() at time zone 'America/New_York')::date - 1)$$) = '',
   'a custody manager records a dated restriction');
 select pg_temp.ok(chms_private.pickup_status('32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000009') = 'authorized',
   'a restriction with a past end date no longer applies');
@@ -1758,7 +1758,7 @@ delete from public.person_roles where person_id = '32000000-0000-0000-0000-00000
 update public.checkin_restrictions set cleared_at = now() where person_id = '32000000-0000-0000-0000-000000000006' and cleared_at is null;
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000025', $$update public.checkin_restrictions set ends_on = current_date + 10 where person_id = '32000000-0000-0000-0000-000000000006'$$) = '42501', 'a cleared restriction is history');
 select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
-  $$insert into public.room_overrides (org_id, person_id, room_id, ends_on) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000007', '73000000-0000-0000-0000-000000000001', current_date - 1)$$) = ''
+  $$insert into public.room_overrides (org_id, person_id, room_id, ends_on) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000007', '73000000-0000-0000-0000-000000000001', (now() at time zone 'America/New_York')::date - 1)$$) = ''
   and pg_temp.try_as('00000000-0000-0000-0000-000000000021',
   $$insert into public.room_overrides (org_id, person_id, room_id) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000007', '73000000-0000-0000-0000-000000000002')$$) = '',
   'an ended override makes way for the next');
@@ -2381,6 +2381,218 @@ select pg_temp.ok(not has_function_privilege('anon', 'chms_private.room_stays_vi
   and has_function_privilege('authenticated', 'chms_private.room_stays_visible()', 'execute')
   and not has_table_privilege('anon', 'public.room_stays', 'select'),
   'room stays stay closed to anon');
+
+\echo
+\echo '== chms: check-in D (pairing and station lookups) ================='
+select pg_temp.as_postgres();
+create or replace function pg_temp.as_service() returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  execute 'set local role service_role';
+end $$;
+
+-- lookups at the Barn kiosk (whole numbers and scans only)
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+-- Pat and the guest Gus share the number, so two families come back
+select pg_temp.ok((select r ->> 'ok' = 'true' and (r ->> 'found')::int = 2 and jsonb_array_length(r -> 'households') = 2
+                     and (select count(*) from jsonb_array_elements(x.hh -> 'members') m
+                          where m ->> 'is_child' = 'true' and m ->> 'display_name' = 'Kid P.' and m ->> 'matched' = 'false') = 1
+                     and (select count(*) from jsonb_array_elements(x.hh -> 'members') m
+                          where m ->> 'person_id' = '32000000-0000-0000-0000-000000000005' and m ->> 'can_check_in' = 'true' and m ->> 'matched' = 'true') = 1
+                     and not exists (select 1 from jsonb_array_elements(x.hh -> 'members') m
+                                     where m ->> 'person_id' = '32000000-0000-0000-0000-000000000008' or m ? 'last_name' or m ? 'birthdate')
+                   from public.station_lookup('(941) 555-0199', 'phone') r,
+                   lateral (select h from jsonb_array_elements(r -> 'households') h where h ->> 'id' = '42000000-0000-0000-0000-000000000001') x(hh)),
+  'a kiosk finds the families on a whole number: first names and last initials, no ended members');
+select pg_temp.ok((select r ->> 'error' from public.station_lookup('0199', 'last4') r) = 'method_not_allowed'
+  and (select r ->> 'error' from public.station_lookup('Pat', 'name') r) = 'method_not_allowed',
+  'a kiosk takes no partial numbers or names');
+select pg_temp.ok((select r ->> 'ok' = 'true' and (r ->> 'found')::int = 0 and r -> 'households' = '[]'::jsonb from public.station_lookup('941-555-0100', 'phone') r),
+  'an unknown number finds nothing');
+select pg_temp.ok((select r ->> 'error' from public.station_lookup('12', 'phone') r) = 'invalid', 'a malformed number is refused before any lookup');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.access_log where action = 'station.lookup' and station_id = '76000000-0000-0000-0000-000000000001' and actor_kind = 'station') = 2
+  and not exists (select 1 from public.access_log where action = 'station.lookup' and detail::text like '%0199%'),
+  'each lookup is logged once, without the number');
+insert into public.checkin_keys (org_id, household_id, kind, value) values ('20000000-0000-0000-0000-000000000003', '42000000-0000-0000-0000-000000000001', 'qr', 'BTF-FAMILY-0001');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((select r -> 'households' -> 0 ->> 'id' = '42000000-0000-0000-0000-000000000001' from public.station_lookup('BTF-FAMILY-0001', 'scan') r),
+  'a scanned family key finds the family');
+
+-- the staffed front desk may use the last four digits or a name
+select pg_temp.as_station('00000000-0000-0000-0000-000000000027', '76000000-0000-0000-0000-000000000002');
+select pg_temp.ok((select (r ->> 'found')::int = 2 and exists (select 1 from jsonb_array_elements(r -> 'households') h where h ->> 'id' = '42000000-0000-0000-0000-000000000001') from public.station_lookup('0199', 'last4') r)
+  and (select (r ->> 'found')::int = 1 and r -> 'people' -> 0 ->> 'display_name' = 'Pat P.' from public.station_lookup('pat par', 'name') r),
+  'a staffed station looks up by the last four digits or a name');
+select public.station_lookup('941-555-0' || lpad(g::text, 3, '0'), 'phone') from generate_series(200, 219) g;
+select pg_temp.ok((select r ->> 'error' from public.station_lookup('941-555-0199', 'phone') r) = 'locked',
+  'twenty misses in ten minutes lock the station out, even for a real number');
+
+-- a leader running the station app on their own login
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select public.station_lookup('0199', 'last4', '20000000-0000-0000-0000-000000000003')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-00000000000a', $$select public.station_lookup('0199', 'last4', '20000000-0000-0000-0000-000000000003')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$select public.station_lookup('0199', 'last4')$$) = '42501',
+  'a greeter, another church''s owner, or a leader naming no church is refused');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok((select (r ->> 'found')::int >= 1 from public.station_lookup('0199', 'last4', '20000000-0000-0000-0000-000000000003') r),
+  'a check-in manager looks families up from their own login');
+select pg_temp.as_postgres();
+
+-- the family screen
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((select h ->> 'id' = '42000000-0000-0000-0000-000000000001'
+                     and (select m ->> 'birthdate' = '2020-01-01' and m -> 'flags' ->> 'allergy' = 'true' and m -> 'flags' ->> 'medical' = 'true'
+                                 and m ->> 'allergy_short' = 'Peanut' and m ->> 'see_staff' = 'false' and m ->> 'is_child' = 'true'
+                          from jsonb_array_elements(h -> 'members') m where m ->> 'person_id' = '32000000-0000-0000-0000-000000000006')
+                     and (select m ->> 'can_check_in' = 'true' and not (m ? 'birthdate') and not (m ? 'flags') and m ->> 'credential_status' = 'none'
+                          from jsonb_array_elements(h -> 'members') m where m ->> 'person_id' = '32000000-0000-0000-0000-000000000005')
+                     and h::text not like '%Peanuts%' and h::text not like '%Inhaler%' and h -> 'attendance' = '[]'::jsonb
+                   from public.station_household('42000000-0000-0000-0000-000000000001') h),
+  'the family screen carries each child''s criteria fields and flags, never the care notes');
+select pg_temp.ok(pg_temp.try_sql($$select public.station_household('40000000-0000-0000-0000-000000000001')$$) = '42501', 'another church''s family is out of reach');
+
+-- today's service: the kiosk checks the child in, then the pass shows on the family screen
+select pg_temp.as_postgres();
+insert into public.occurrences (id, org_id, schedule_id, local_date, starts_at, ends_at) values
+  ('78000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000003', '74000000-0000-0000-0000-000000000003',
+   chms_private.local_today('20000000-0000-0000-0000-000000000003'), now() - interval '1 hour', now() + interval '1 hour');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'session.start', 'id', '80000000-0000-0000-0000-000000000091', 'household_id', '42000000-0000-0000-0000-000000000001',
+      'guardian_person_id', '32000000-0000-0000-0000-000000000005', 'lookup_method', 'phone', 'device_at', now()),
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000101', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000011',
+      'person_id', '32000000-0000-0000-0000-000000000006', 'room_id', '73000000-0000-0000-0000-000000000001', 'session_id', '80000000-0000-0000-0000-000000000091',
+      'code', 'HJK', 'device_at', now())
+  ))) = array['accepted', 'accepted'], 'the kiosk checks the child in today');
+select pg_temp.ok((select (select count(*) from jsonb_array_elements(h -> 'attendance') a
+                           where a ->> 'person_id' = '32000000-0000-0000-0000-000000000006' and a ->> 'status' = 'in' and a -> 'codes' = '["HJK"]'::jsonb
+                             and a ->> 'session_id' = '80000000-0000-0000-0000-000000000091') = 1
+                   from public.station_household('42000000-0000-0000-0000-000000000001') h),
+  'today''s pass and code show on the family screen');
+
+-- pickups for a child in the station's rooms
+select pg_temp.ok((select (select count(*) from jsonb_array_elements(p -> 'guardians') g where g ->> 'person_id' = '32000000-0000-0000-0000-000000000005' and g ->> 'display_name' = 'Pat P.') = 1
+                     and jsonb_typeof(p -> 'authorized') = 'array' and jsonb_typeof(p -> 'restricted') = 'array'
+                   from public.station_pickups('32000000-0000-0000-0000-000000000006') p),
+  'the check-out screen lists the guardians who may pick up');
+select pg_temp.ok(pg_temp.try_sql($$select public.station_pickups('32000000-0000-0000-0000-000000000007')$$) = '42501',
+  'no pickup list for a child who is not in one of the station''s rooms');
+select pg_temp.as_postgres();
+update public.household_members set is_guardian = true, can_check_in = true
+  where household_id = '42000000-0000-0000-0000-000000000001' and person_id = '32000000-0000-0000-0000-000000000009';
+insert into public.pickup_people (org_id, child_person_id, person_id, kind, note)
+  values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000006', '32000000-0000-0000-0000-000000000009', 'restricted', 'court order on file');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((select (select count(*) from jsonb_array_elements(p -> 'guardians') g where g ->> 'person_id' = '32000000-0000-0000-0000-000000000009') = 0
+                     and (select count(*) from jsonb_array_elements(p -> 'restricted') r
+                          where r ->> 'person_id' = '32000000-0000-0000-0000-000000000009' and r ->> 'display_name' = 'Ann A.') = 1
+                     and p::text not like '%court order%' and p::text not like '%note%'
+                   from public.station_pickups('32000000-0000-0000-0000-000000000006') p),
+  'a restricted relative is named as restricted, never as a guardian, without the reason');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.access_log where action = 'pickups.read' and subject_person_id = '32000000-0000-0000-0000-000000000006'
+                   and station_id = '76000000-0000-0000-0000-000000000001' and actor_kind = 'station') = 2,
+  'pickup reads are logged against the child');
+
+-- today's volunteers
+insert into public.volunteer_slots (id, org_id, occurrence_id, room_id, label, arrive_minutes_before) values
+  ('77000000-0000-0000-0000-000000000011', '20000000-0000-0000-0000-000000000003', '78000000-0000-0000-0000-000000000011', '73000000-0000-0000-0000-000000000002', 'Cubs helper', 15);
+insert into public.volunteer_assignments (org_id, slot_id, person_id, local_date) values
+  ('20000000-0000-0000-0000-000000000003', '77000000-0000-0000-0000-000000000011', '32000000-0000-0000-0000-000000000004', chms_private.local_today('20000000-0000-0000-0000-000000000003'));
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((select (select count(*) from jsonb_array_elements(r -> 'volunteers') x
+                           where x ->> 'person_id' = '32000000-0000-0000-0000-000000000004' and x ->> 'display_name' = 'Eli E.' and x ->> 'label' = 'Cubs helper'
+                             and x ->> 'room_id' = '73000000-0000-0000-0000-000000000002' and x ->> 'occurrence_id' = '78000000-0000-0000-0000-000000000011'
+                             and x ->> 'credential_status' = 'none' and x ->> 'kids_area' = 'true' and not (x ? 'attendance_status')) = 1
+                   from public.station_volunteers() r),
+  'the volunteer station sees today''s schedule with each volunteer''s background-check status');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000102', 'type', 'check_in', 'role', 'volunteer', 'occurrence_id', '78000000-0000-0000-0000-000000000011',
+      'person_id', '32000000-0000-0000-0000-000000000004', 'room_id', '73000000-0000-0000-0000-000000000002', 'device_at', now())
+  ))) = array['accepted'], 'a volunteer checks in without a family pass');
+select pg_temp.ok((select (select x ->> 'attendance_status' = 'in' and x ->> 'punctuality' is not null from jsonb_array_elements(r -> 'volunteers') x
+                           where x ->> 'person_id' = '32000000-0000-0000-0000-000000000004')
+                   from public.station_volunteers() r), 'and the schedule shows them in');
+select pg_temp.ok(pg_temp.try_sql($$select public.station_volunteers(current_date + 30)$$) = '22023', 'the schedule is for the coming week only');
+
+-- pairing: a manager asks for a code; the device claims it through the service role
+select pg_temp.as_postgres();
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select public.create_pairing_code('76000000-0000-0000-0000-000000000002')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-00000000000a', $$select public.create_pairing_code('76000000-0000-0000-0000-000000000002')$$) = '42501',
+  'only a check-in manager of that church gets a pairing code');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok(pg_temp.try_sql($$select public.create_pairing_code('76000000-0000-0000-0000-000000000002')$$) = '42501', 'a station cannot mint pairing codes');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select set_config('test.pair_code', public.create_pairing_code('76000000-0000-0000-0000-000000000002'), true);
+select pg_temp.ok(current_setting('test.pair_code') ~ '^[ACDEFHJKMNPRTUVWXY34679]{8}$', 'the code is eight characters from the no-look-alike alphabet');
+select pg_temp.ok((select code_expires_at > now() and paired_at is not null from public.station_pairing_status('20000000-0000-0000-0000-000000000003')
+                   where station_id = '76000000-0000-0000-0000-000000000002'),
+  'the Stations screen shows the live code''s expiry and the current pairing');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select * from public.station_pairing_status('20000000-0000-0000-0000-000000000003')$$) = '42501',
+  'a greeter sees no pairing state');
+select pg_temp.as_postgres();
+insert into auth.users (id, email, raw_app_meta_data) values ('00000000-0000-0000-0000-000000000029', 'station-3@stations.invalid', '{"kind": "station"}');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$select public.claim_pairing_code(current_setting('test.pair_code'), '00000000-0000-0000-0000-000000000029')$$) = '42501'
+  and pg_temp.try_as(null, $$select public.claim_pairing_code('AAAAAAAA', '00000000-0000-0000-0000-000000000029')$$, 'anon') = '42501',
+  'only the service role claims a code');
+select pg_temp.as_service();
+select pg_temp.ok((select r ->> 'error' from public.claim_pairing_code('AAAAAAAA', '00000000-0000-0000-0000-000000000029') r) = 'code_invalid', 'a wrong code is refused');
+select pg_temp.ok((select r ->> 'error' from public.claim_pairing_code(current_setting('test.pair_code'), '00000000-0000-0000-0000-000000000022') r) = 'not_a_station_user',
+  'a person''s account is never paired as a device');
+select pg_temp.ok((select r ->> 'ok' = 'true' and r ->> 'station_id' = '76000000-0000-0000-0000-000000000002' and r ->> 'org_id' = '20000000-0000-0000-0000-000000000003' and r ->> 'mode' = 'staffed'
+                   from public.claim_pairing_code(lower(current_setting('test.pair_code')), '00000000-0000-0000-0000-000000000029', 'web', '1.0.0') r),
+  'the device claims the code (in any case)');
+select pg_temp.ok((select r ->> 'error' from public.claim_pairing_code(current_setting('test.pair_code'), '00000000-0000-0000-0000-000000000029') r) = 'code_invalid', 'a code is claimed once');
+select pg_temp.ok('00000000-0000-0000-0000-000000000027'::uuid = any (array(select u from public.revoked_station_users() u)),
+  'the device paired before is retired and waits for its token ban');
+select public.confirm_station_revocation('00000000-0000-0000-0000-000000000027');
+select pg_temp.ok(not ('00000000-0000-0000-0000-000000000027'::uuid = any (array(select u from public.revoked_station_users() u))), 'the ban is confirmed');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000029', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok((public.station_self() ->> 'station_id') = '76000000-0000-0000-0000-000000000002' and (public.station_self() ->> 'status') = 'active',
+  'the new device is the front desk, whatever its token claims');
+select public.station_heartbeat('web', '1.0.1');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000027', '76000000-0000-0000-0000-000000000002');
+select pg_temp.ok((public.station_self() ->> 'status') = 'unpaired' and pg_temp.try_sql($$select public.station_heartbeat()$$) = '42501',
+  'the old device learns it was unpaired and can no longer report in');
+select pg_temp.as_postgres();
+select pg_temp.ok((select last_seen_at >= now() - interval '1 minute' and app_version = '1.0.1' and platform = 'web'
+                   from chms_private.station_principals where user_id = '00000000-0000-0000-0000-000000000029'), 'heartbeats update last seen');
+insert into chms_private.station_pairing_codes (station_id, org_id, code_hash, expires_at)
+  values ('76000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003', chms_private.hash_pairing_code('EXPIRED1'), now() - interval '1 minute');
+insert into auth.users (id, email, raw_app_meta_data) values ('00000000-0000-0000-0000-000000000031', 'station-4@stations.invalid', '{"kind": "station"}');
+select pg_temp.as_service();
+select pg_temp.ok((select r ->> 'error' from public.claim_pairing_code('EXPIRED1', '00000000-0000-0000-0000-000000000031') r) = 'code_invalid', 'an expired code is refused');
+select pg_temp.as_postgres();
+
+-- unpairing
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select public.unpair_station('76000000-0000-0000-0000-000000000002')$$) = '42501', 'a greeter cannot unpair a station');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021', $$select public.unpair_station('76000000-0000-0000-0000-000000000002')$$) = '', 'the manager unpairs the front desk');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000029', '76000000-0000-0000-0000-000000000002');
+select pg_temp.ok((public.station_self() ->> 'status') = 'unpaired', 'the device stops at once');
+select pg_temp.as_service();
+select pg_temp.ok('00000000-0000-0000-0000-000000000029'::uuid = any (array(select u from public.revoked_station_users() u)), 'its token ban is pending');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok((select paired_at is null and code_expires_at is null from public.station_pairing_status('20000000-0000-0000-0000-000000000003')
+                   where station_id = '76000000-0000-0000-0000-000000000002'), 'the Stations screen shows it unpaired');
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select public.station_unpair_self();
+select pg_temp.ok((public.station_self() ->> 'status') = 'unpaired', 'a device unpairs itself');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.domain_events where type = 'station.pairing_started') = 1
+  and (select count(*) from public.domain_events where type = 'station.paired') = 1
+  and (select count(*) from public.domain_events where type = 'station.unpaired') = 2,
+  'pairing is on the event bus');
+select pg_temp.ok(not has_function_privilege('anon', 'public.station_lookup(text, text, uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.station_household(uuid, uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.create_pairing_code(uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'public.claim_pairing_code(text, uuid, text, text)', 'execute')
+  and not has_function_privilege('authenticated', 'public.revoked_station_users()', 'execute')
+  and not has_function_privilege('authenticated', 'public.confirm_station_revocation(uuid)', 'execute')
+  and not has_function_privilege('anon', 'chms_private.station_context(uuid)', 'execute')
+  and not has_table_privilege('authenticated', 'chms_private.station_pairing_codes', 'select'),
+  'station RPCs are closed to anon; claiming and revocation to everyone but the service role');
 
 \echo
 \echo 'All tests passed.'

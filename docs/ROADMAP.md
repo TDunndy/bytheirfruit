@@ -44,7 +44,8 @@ Everything marked done below was applied to production on 2026-10-22 (hardening 
 - **next** Auth hook that embeds org roles in the JWT so RLS checks avoid a join.
 - **done** Billing paused for the beta (2026-10-24): church accounts are free; no prices or payment buttons on the site (ADR-0003).
 - **later** When billing returns: server-created Stripe Checkout sessions and Customer Portal; `subscriptions` becomes the single source of truth (ADR-0003).
-- **next** ChMS phase 1, People (ADR-0004): people, households, church-named roles with permissions, pastoral notes, audit, leader invites, Subsplash import. Then Groups, Health v1, Events, volunteering and kids check-in, giving.
+- **done** ChMS phase 1, People (ADR-0004): people, households, church-named roles with permissions, pastoral notes, audit, leader invites.
+- **now** Check-in (ADR-0005, `docs/plans/checkin-plan.md`): 1a core data and admin screens are in production; 1b web station (`apps/station`: pairing, kiosk, staffed desk, roster, volunteers, browser labels) is built and awaits the LWR laptop dry run. Then 1c reports and Subsplash import, native iPad app, notifications, rules. Groups with involvement, first-time follow-ups and group messaging follow 1b (plan in the session's plan file).
 - **next** Nightly rollups (`church_metrics_daily`) via pg_cron; formalize `score_snapshots` and `regional_benchmarks` as views over them.
 - **later** Correlations that make the review data valuable to churches: welcome score vs first-time-visitor return rate, kids score vs kids check-in growth, leadership score vs volunteer retention.
 - **later** City and state landing pages generated from the 270k listings (largest organic growth lever).

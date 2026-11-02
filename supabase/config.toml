@@ -56,3 +56,6 @@ verify_jwt = true
 
 [functions.notify-admin-report]
 verify_jwt = true
+
+[functions.pair-station]
+verify_jwt = false
