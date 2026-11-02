@@ -11,6 +11,13 @@ import { MERGE_FIELDS, defaultKeep, mergePeople, type FieldPick } from '@/lib/me
  * field that differs, and may add the kept person to the other family too.
  * The archived record keeps its history; the reports read it as the kept one.
  */
+/** A short name for one side; when both first names match, say what tells them apart. */
+function sideLabel(p: Person, other: Person): string {
+  if (p.first_name !== other.first_name) return p.first_name
+  if (p.tags.includes('guest') !== other.tags.includes('guest')) return `${p.first_name} (${p.tags.includes('guest') ? 'guest' : p.membership_status})`
+  return `${p.first_name} (${p.membership_status})`
+}
+
 export function MergeSheet({ a, b, onDone, onCancel }: { a: Person; b: Person; onDone: (keptId: string) => void; onCancel: () => void }) {
   const [keepId, setKeepId] = useState(defaultKeep(a, b).id)
   const [picks, setPicks] = useState<FieldPick>({})
@@ -64,7 +71,7 @@ export function MergeSheet({ a, b, onDone, onCancel }: { a: Person; b: Person; o
         </ul>
         <div className="mt">
           <SegmentedControl label="Keep" name="merge-keep" value={keepId} onChange={setKeepId}
-            options={[{ value: a.id, label: `Keep ${a.first_name}` }, { value: b.id, label: `Keep ${b.first_name}` }]} />
+            options={[{ value: a.id, label: `Keep ${sideLabel(a, b)}` }, { value: b.id, label: `Keep ${sideLabel(b, a)}` }]} />
         </div>
         <p className="group-foot">The other record is archived. Its check-ins, notes, groups, pickups and care notes carry over; its history stays readable under the kept name.</p>
       </fieldset>
