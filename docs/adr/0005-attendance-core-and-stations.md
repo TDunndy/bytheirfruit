@@ -123,7 +123,10 @@ route a child the same way the database would.
 
 - Reports and the rules engine read `attendance` (one row per child per
   occurrence, decision Q1) plus `attendance_baselines`; they never need the
-  raw log, but it is there.
+  raw log, but it is there. Reports are SECURITY DEFINER functions that gate
+  and log themselves (1c), and they resolve merged people through
+  `person_merges` at read time: a merge archives the duplicate and records
+  what it became; nothing in the log or the projection is rewritten.
 - The station app owns an outbox and replays it in order; the server never
   needs to be told "this is a retry".
 - Pairing (1b) adds the edge function and a pairing-code table; nothing in

@@ -135,3 +135,29 @@ npm run db:types         # same, plus regenerate database.types.ts
   `groups.manage` or `notify.broadcast`, and logs one `access_log` row per
   group (`contacts.export`). The app opens the leader's own mail or Messages
   app; church-sent messages (Phase 3) will use the same resolver.
+
+## Reports (`report_*` RPCs, migration `chms_reports`)
+- Every report is a SECURITY DEFINER function gated by `attendance.reports`
+  (`chms_private.require_report`), plus `people.view` where adults are named
+  and `kids.view` where children are: `report_occurrences`,
+  `report_occurrence_timeline`, `report_ops`, `report_arrivals` (counts);
+  `report_children`, `report_child_history` (+ kids.view); `report_volunteers`
+  (+ people.view); `report_families` (+ both). Stations are refused. Each call
+  logs one `access_log` row (`report.<name>`, count = rows, the filter in
+  detail); the app's CSV export serialises what was read and is shown only to
+  `people.export`. Ranges are bounded to 400 days.
+- `report_families` is the Monday serve-policy report: child check-ins in
+  kids rooms this year (one per child per service, decision Q1) counted toward
+  the pass's household while the child still belongs to it, else every
+  household the child belongs to; plus `attendance_baselines.count`;
+  `>= threshold` (10); excluded by an active flag, a parent serving in a kids
+  room in the last 90 days, or no check-in in three months
+  (`greatest(last check-in, baseline.last_attended_on)`); area by most
+  check-ins, ties to the youngest `age_band`.
+- Merges are resolved at read time: `person_merges` (append-only, written only
+  by `merge_people()`) maps a merged record to the one kept, and reports fold a
+  person's history through `chms_private.canonical_people(org)`. The
+  attendance projection and the log are never rewritten.
+- `chms_private.occurrence_stays(occurrence)` is the per-occurrence twin of
+  `room_stays_visible()`; change the two together. Move-Up is computed in the
+  browser with `nextRoom` from `@btf/core` over `report_children` rows.

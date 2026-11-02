@@ -411,8 +411,9 @@ export async function listBaselines(orgId: string, year: number): Promise<Baseli
   return many(await supabase.from('attendance_baselines').select('*').eq('org_id', orgId).eq('year', year))
 }
 
-export async function saveBaseline(orgId: string, householdId: string, year: number, count: number, note: string | null) {
-  const { error } = await supabase.from('attendance_baselines').upsert({ org_id: orgId, household_id: householdId, year, count, note }, { onConflict: 'household_id,year' })
+export async function saveBaseline(orgId: string, householdId: string, year: number, count: number, note: string | null, lastAttendedOn: string | null = null) {
+  const { error } = await supabase.from('attendance_baselines')
+    .upsert({ org_id: orgId, household_id: householdId, year, count, note, last_attended_on: lastAttendedOn }, { onConflict: 'household_id,year' })
   if (error) throw error
 }
 

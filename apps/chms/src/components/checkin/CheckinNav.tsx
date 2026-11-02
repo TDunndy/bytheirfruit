@@ -11,6 +11,7 @@ const TABS: { href: string; label: string; needs?: Permission[] }[] = [
   { href: '/checkin/volunteers', label: 'Volunteers', needs: ['checkin.manage', 'checkin.station', 'attendance.reports'] },
   { href: '/checkin/labels', label: 'Labels', needs: ['checkin.manage', 'checkin.station'] },
   { href: '/checkin/stations', label: 'Stations', needs: ['checkin.manage', 'checkin.station'] },
+  { href: '/checkin/reports', label: 'Reports', needs: ['attendance.reports'] },
   { href: '/checkin/baselines', label: 'Past check-ins', needs: ['checkin.manage', 'attendance.reports'] },
   { href: '/checkin/settings', label: 'Settings', needs: ['checkin.manage', 'checkin.station', 'org.manage'] },
 ]

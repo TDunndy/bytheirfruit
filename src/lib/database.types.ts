@@ -131,14 +131,14 @@ isOneToOne: false
                   ]
                 },"attendance_baselines": {
                   Row: {
-                    "count": number,"created_at": string,"household_id": string,"id": string,"note": string | null,"org_id": string,"set_by_person_id": string | null,"updated_at": string,"year": number
+                    "count": number,"created_at": string,"household_id": string,"id": string,"last_attended_on": string | null,"note": string | null,"org_id": string,"set_by_person_id": string | null,"updated_at": string,"year": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "count": number,"created_at"?: string,"household_id": string,"id"?: string,"note"?: string | null,"org_id": string,"set_by_person_id"?: string | null,"updated_at"?: string,"year": number
+                    "count": number,"created_at"?: string,"household_id": string,"id"?: string,"last_attended_on"?: string | null,"note"?: string | null,"org_id": string,"set_by_person_id"?: string | null,"updated_at"?: string,"year": number
                   }
                   Update: {
-                    "count"?: number,"created_at"?: string,"household_id"?: string,"id"?: string,"note"?: string | null,"org_id"?: string,"set_by_person_id"?: string | null,"updated_at"?: string,"year"?: number
+                    "count"?: number,"created_at"?: string,"household_id"?: string,"id"?: string,"last_attended_on"?: string | null,"note"?: string | null,"org_id"?: string,"set_by_person_id"?: string | null,"updated_at"?: string,"year"?: number
                   }
                   Relationships: [
                     {
@@ -1169,6 +1169,44 @@ isOneToOne: false
       referencedColumns: ["id","org_id"]
     }
                   ]
+                },"person_merges": {
+                  Row: {
+                    "detail": NonNullable<Json>,"id": string,"kept_person_id": string,"merged_at": string,"merged_by_person_id": string | null,"merged_person_id": string,"org_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "detail"?: NonNullable<Json>,"id"?: string,"kept_person_id": string,"merged_at"?: string,"merged_by_person_id"?: string | null,"merged_person_id": string,"org_id": string
+                  }
+                  Update: {
+                    "detail"?: NonNullable<Json>,"id"?: string,"kept_person_id"?: string,"merged_at"?: string,"merged_by_person_id"?: string | null,"merged_person_id"?: string,"org_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "person_merges_kept_person_id_org_id_fkey"
+      columns: ["kept_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "person_merges_merged_by_person_id_org_id_fkey"
+      columns: ["merged_by_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "person_merges_merged_person_id_org_id_fkey"
+      columns: ["merged_person_id","org_id"]
+isOneToOne: false
+      referencedRelation: "people"
+      referencedColumns: ["id","org_id"]
+    },{
+      foreignKeyName: "person_merges_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"person_notes": {
                   Row: {
                     "author_person_id": string | null,"body": string,"created_at": string,"id": string,"org_id": string,"person_id": string,"updated_at": string,"visibility": string
@@ -2137,6 +2175,46 @@ isOneToOne: false
                            },
 "refresh_zip_centroids":
 { Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"report_arrivals":
+{ Args: { "p_local_date": string,"p_org_id": string,"p_step_minutes"?: number }; Returns: {
+              "at": string,"checkins": number,"sessions": number,"station_id": string,"station_name": string
+            }[]
+                           },
+"report_child_history":
+{ Args: { "p_person_id": string }; Returns: {
+              "anomalies": (string)[],"checked_in_at": string,"checked_out_at": string,"first_room_name": string,"local_date": string,"occurrence_id": string,"pickup_status": string,"role": string,"room_name": string,"schedule_name": string,"status": string
+            }[]
+                           },
+"report_children":
+{ Args: { "p_from": string,"p_org_id": string,"p_to": string }; Returns: {
+              "attended": number,"birthdate": string,"by_month": Json,"consecutive_absences": number,"custom": Json,"first_attended": string,"first_name": string,"gender": string,"grade_override": number,"grade_override_year": number,"household_id": string,"household_name": string,"last_attended": string,"last_name": string,"last_room_id": string,"last_room_name": string,"person_id": string,"preferred_name": string,"tags": (string)[]
+            }[]
+                           },
+"report_families":
+{ Args: { "p_as_of"?: string,"p_org_id": string,"p_threshold"?: number,"p_year": number }; Returns: {
+              "area_id": string,"area_name": string,"baseline": number,"checkins": number,"children": Json,"exclusion": string,"flags": (string)[],"household_id": string,"household_name": string,"last_seen": string,"over_threshold": boolean,"parents": (string)[],"serves_ytd": number,"serving_adult": boolean,"total": number
+            }[]
+                           },
+"report_occurrence_timeline":
+{ Args: { "p_occurrence_id": string,"p_step_minutes"?: number }; Returns: {
+              "adults": number,"at": string,"children": number,"room_id": string,"room_name": string
+            }[]
+                           },
+"report_occurrences":
+{ Args: { "p_from": string,"p_org_id": string,"p_to": string }; Returns: {
+              "anomalies": number,"area_id": string,"area_kind": string,"area_name": string,"attendees": number,"children": number,"first_timers": number,"local_date": string,"occurrence_id": string,"room_id": string,"room_name": string,"schedule_name": string,"starts_at": string,"status": string,"volunteers": number
+            }[]
+                           },
+"report_ops":
+{ Args: { "p_from": string,"p_org_id": string,"p_to": string }; Returns: {
+              "alerts": number,"anomalies": number,"avg_session_seconds": number,"checkins": number,"completed_sessions": number,"delayed_events": number,"local_date": string,"offline_sessions": number,"print_failures": number,"prints": number,"reprints": number,"sessions": number,"stations_used": number
+            }[]
+                           },
+"report_volunteers":
+{ Args: { "p_from": string,"p_org_id": string,"p_to": string }; Returns: {
+              "assignment_status": string,"attended": boolean,"checked_in_at": string,"local_date": string,"minutes_vs_expected": number,"name": string,"occurrence_id": string,"person_id": string,"punctuality": string,"role_name": string,"room_id": string,"room_name": string,"schedule_name": string,"scheduled": boolean,"slot_label": string
+            }[]
                            },
 "review_church_claim":
 { Args: { "p_approve": boolean,"p_claim_id": string,"p_note"?: string }; Returns: Json

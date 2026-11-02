@@ -5,7 +5,7 @@ import { useSession } from '@/components/Session'
 import { NoAccess } from '@/components/checkin/CheckinNav'
 import { IconTile, SearchField, Spinner } from '@/components/ui'
 import { errorMessage } from '@/lib/people'
-import { listBaselines, listHouseholds, saveBaseline, type Baseline } from '@/lib/checkin'
+import { fmtDate, listBaselines, listHouseholds, saveBaseline, type Baseline } from '@/lib/checkin'
 
 export default function BaselinesPage() {
   const { org, can } = useSession()
@@ -14,6 +14,7 @@ export default function BaselinesPage() {
   const [baselines, setBaselines] = useState<Baseline[]>([])
   const [q, setQ] = useState('')
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [dates, setDates] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [loaded, setLoaded] = useState(false)
@@ -24,7 +25,7 @@ export default function BaselinesPage() {
     if (!org || !allowed) return
     try {
       const [h, b] = await Promise.all([listHouseholds(org.id), listBaselines(org.id, year)])
-      setHouseholds(h); setBaselines(b); setDrafts({}); setError(''); setLoaded(true)
+      setHouseholds(h); setBaselines(b); setDrafts({}); setDates({}); setError(''); setLoaded(true)
     } catch (e) { setError(errorMessage(e)) }
   }, [org, allowed, year])
   useEffect(() => { load() }, [load])
@@ -38,17 +39,19 @@ export default function BaselinesPage() {
   if (!loaded && !error) return <Spinner />
 
   const save = async (householdId: string) => {
-    const raw = drafts[householdId]
-    if (raw === undefined) return
-    const n = Number(raw)
+    const b = byHousehold.get(householdId)
+    const raw = drafts[householdId] ?? (b ? String(b.count) : '')
+    const date = dates[householdId] ?? b?.last_attended_on ?? ''
+    if (raw === '' && !date) return
+    const n = raw === '' ? 0 : Number(raw)
     if (!Number.isInteger(n) || n < 0) { setError('Enter a whole number.'); return }
     setStatus('')
-    try { await saveBaseline(org.id, householdId, year, n, null); await load(); setStatus('Saved') } catch (e) { setError(errorMessage(e)) }
+    try { await saveBaseline(org.id, householdId, year, n, b?.note ?? null, date || null); await load(); setStatus('Saved') } catch (e) { setError(errorMessage(e)) }
   }
 
   return (
     <div className="stack">
-      <p className="lead">Each family&apos;s child check-ins so far this year, typed in once from the old system. The serve policy adds them to what is recorded from now on.</p>
+      <p className="lead">Each family&apos;s child check-ins so far this year, typed in once from the old system, and the date they were last seen there. The serve policy adds the count to what is recorded from now on and uses the date to tell who has stopped coming.</p>
       <p className="sr-only" role="status">{status}</p>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="toolbar">
@@ -67,6 +70,8 @@ export default function BaselinesPage() {
         {shown.slice(0, 300).map((h) => {
           const b = byHousehold.get(h.id)
           const draft = drafts[h.id]
+          const date = dates[h.id] ?? b?.last_attended_on ?? ''
+          const dirty = (draft !== undefined && draft !== (b ? String(b.count) : '')) || (dates[h.id] !== undefined && dates[h.id] !== (b?.last_attended_on ?? ''))
           return (
             <li key={h.id} className="cell">
               <IconTile name="house" />
@@ -76,9 +81,12 @@ export default function BaselinesPage() {
                   <input type="number" min={0} max={10000} aria-label={`${h.name} check-ins in ${year}`} value={draft ?? (b ? String(b.count) : '')} placeholder="0"
                     onChange={(e) => setDrafts({ ...drafts, [h.id]: e.target.value })}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(h.id) } }} />
-                  {draft !== undefined && draft !== (b ? String(b.count) : '') && <button className="btn btn-tinted btn-small" onClick={() => save(h.id)}>Save</button>}
+                  <input type="date" className="baseline-date" aria-label={`${h.name} last attended`} value={date} data-empty={!date}
+                    onChange={(e) => setDates({ ...dates, [h.id]: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(h.id) } }} />
+                  {dirty && <button className="btn btn-tinted btn-small" onClick={() => save(h.id)}>Save</button>}
                 </span>
-              ) : <span className="cell-value">{b ? b.count : '—'}</span>}
+              ) : <span className="cell-value">{b ? `${b.count}${b.last_attended_on ? ` · last ${fmtDate(b.last_attended_on)}` : ''}` : '—'}</span>}
             </li>
           )
         })}

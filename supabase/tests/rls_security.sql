@@ -3010,5 +3010,252 @@ select pg_temp.ok((select count(*) from public.access_log where action = 'contac
 select pg_temp.ok(not has_function_privilege('anon', 'public.group_contacts(uuid[], text)', 'execute'), 'the resolver is closed to anon');
 
 \echo
+\echo '== chms: reports ================================================='
+select pg_temp.as_postgres();
+-- Ana reads reports and nothing else
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-000000000041', 'ana@checkin.org');
+insert into public.org_members (org_id, user_id, role) values ('20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000041', 'volunteer');
+insert into public.people (id, org_id, first_name, last_name) values ('32000000-0000-0000-0000-000000000034', '20000000-0000-0000-0000-000000000003', 'Ana', 'Analyst');
+insert into public.person_logins (person_id, org_id, user_id) values ('32000000-0000-0000-0000-000000000034', '20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000041');
+insert into public.org_roles (id, org_id, name, permissions) values ('44000000-0000-0000-0000-000000000031', '20000000-0000-0000-0000-000000000003', 'Analyst', '{attendance.reports}');
+insert into public.person_roles (person_id, role_id, org_id) values ('32000000-0000-0000-0000-000000000034', '44000000-0000-0000-0000-000000000031', '20000000-0000-0000-0000-000000000003');
+-- three past Sundays of the second service: two that ran and one cancelled
+insert into public.occurrences (id, org_id, schedule_id, local_date, starts_at, ends_at, status) values
+  ('78000000-0000-0000-0000-000000000021', '20000000-0000-0000-0000-000000000003', '74000000-0000-0000-0000-000000000003', '2026-10-04', '2026-10-04 16:30:00+00', '2026-10-04 18:00:00+00', 'closed'),
+  ('78000000-0000-0000-0000-000000000022', '20000000-0000-0000-0000-000000000003', '74000000-0000-0000-0000-000000000003', '2026-10-11', '2026-10-11 16:30:00+00', '2026-10-11 18:00:00+00', 'closed'),
+  ('78000000-0000-0000-0000-000000000023', '20000000-0000-0000-0000-000000000003', '74000000-0000-0000-0000-000000000003', '2026-10-18', '2026-10-18 16:30:00+00', '2026-10-18 18:00:00+00', 'cancelled');
+-- the Abels: Abe belongs to two families (decision C) and is checked in by staff without a pass
+insert into public.households (id, org_id, name) values ('42000000-0000-0000-0000-000000000031', '20000000-0000-0000-0000-000000000003', 'The Abels');
+insert into public.people (id, org_id, first_name, last_name, birthdate) values
+  ('32000000-0000-0000-0000-000000000041', '20000000-0000-0000-0000-000000000003', 'Abe', 'Abel', '2021-05-05'),
+  ('32000000-0000-0000-0000-000000000042', '20000000-0000-0000-0000-000000000003', 'Al', 'Abel', '1990-01-01');
+insert into public.household_members (household_id, person_id, org_id, relationship, is_guardian, can_check_in) values
+  ('42000000-0000-0000-0000-000000000031', '32000000-0000-0000-0000-000000000042', '20000000-0000-0000-0000-000000000003', 'head', true, true),
+  ('42000000-0000-0000-0000-000000000031', '32000000-0000-0000-0000-000000000041', '20000000-0000-0000-0000-000000000003', 'child', false, false),
+  ('42000000-0000-0000-0000-000000000009', '32000000-0000-0000-0000-000000000041', '20000000-0000-0000-0000-000000000003', 'child', false, false);
+-- Uri was scheduled on 2026-10-04 and never came; The Imported are exempt from the serve policy
+insert into public.volunteer_assignments (org_id, slot_id, person_id, local_date) values
+  ('20000000-0000-0000-0000-000000000003', '77000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000008', '2026-10-04');
+insert into public.household_flags (org_id, household_id, flag, note) values ('20000000-0000-0000-0000-000000000003', '42000000-0000-0000-0000-000000000023', 'exempt', 'serves on Wednesdays');
+-- staff record Abe in the Barn, then in K/5 (with Ira), weeks after the fact; Rae serves today without being scheduled
+select pg_temp.as_user('00000000-0000-0000-0000-000000000021');
+select pg_temp.ok(pg_temp.statuses(public.ingest(jsonb_build_array(
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000131', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000021',
+      'person_id', '32000000-0000-0000-0000-000000000041', 'room_id', '73000000-0000-0000-0000-000000000001', 'device_at', '2026-10-04T16:40:00Z'),
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000132', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000022',
+      'person_id', '32000000-0000-0000-0000-000000000041', 'room_id', '73000000-0000-0000-0000-000000000004', 'device_at', '2026-10-11T16:35:00Z'),
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000133', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in', 'occurrence_id', '78000000-0000-0000-0000-000000000022',
+      'person_id', '32000000-0000-0000-0000-000000000026', 'room_id', '73000000-0000-0000-0000-000000000004', 'device_at', '2026-10-11T16:36:00Z'),
+    jsonb_build_object('op', 'event', 'id', '81000000-0000-0000-0000-000000000134', 'org_id', '20000000-0000-0000-0000-000000000003', 'type', 'check_in', 'role', 'volunteer', 'occurrence_id', '78000000-0000-0000-0000-000000000011',
+      'person_id', '32000000-0000-0000-0000-000000000024', 'room_id', '73000000-0000-0000-0000-000000000002', 'device_at', now())
+  ))) = array['accepted', 'accepted', 'accepted', 'accepted'], 'staff record past check-ins and a walk-up serve');
+select pg_temp.as_postgres();
+
+-- who may read what
+select pg_temp.as_station('00000000-0000-0000-0000-000000000026', '76000000-0000-0000-0000-000000000001');
+select pg_temp.ok(pg_temp.try_sql($$select * from public.report_occurrences('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31')$$) = '42501'
+  and pg_temp.try_sql($$select * from public.report_ops('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31')$$) = '42501'
+  and pg_temp.try_sql($$select * from public.report_child_history('32000000-0000-0000-0000-000000000006')$$) = '42501',
+  'a station reads no report');
+select pg_temp.as_postgres();
+select pg_temp.ok(not has_function_privilege('anon', 'public.report_occurrences(uuid, date, date)', 'execute')
+  and not has_function_privilege('anon', 'public.report_occurrence_timeline(uuid, integer)', 'execute')
+  and not has_function_privilege('anon', 'public.report_children(uuid, date, date)', 'execute')
+  and not has_function_privilege('anon', 'public.report_child_history(uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.report_families(uuid, integer, date, integer)', 'execute')
+  and not has_function_privilege('anon', 'public.report_volunteers(uuid, date, date)', 'execute')
+  and not has_function_privilege('anon', 'public.report_ops(uuid, date, date)', 'execute')
+  and not has_function_privilege('anon', 'public.report_arrivals(uuid, date, integer)', 'execute')
+  and not has_function_privilege('authenticated', 'chms_private.canonical_people(uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'chms_private.occurrence_stays(uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'chms_private.require_report(uuid, text[])', 'execute'),
+  'reports are closed to anon and the helpers to everyone');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-00000000000a', $$select * from public.report_occurrences('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-00000000000a', $$select * from public.report_families('20000000-0000-0000-0000-000000000003', 2026)$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-00000000000a', $$select * from public.report_child_history('32000000-0000-0000-0000-000000000006')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-00000000000a', $$select * from public.report_occurrence_timeline('78000000-0000-0000-0000-000000000001')$$) = '42501',
+  'another church''s owner gets nothing');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select * from public.report_occurrences('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select * from public.report_children('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000023', $$select * from public.report_arrivals('20000000-0000-0000-0000-000000000003', '2027-03-07')$$) = '42501',
+  'people.view alone reads no report');
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000041', $$select * from public.report_occurrences('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31')$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000041', $$select * from public.report_occurrence_timeline('78000000-0000-0000-0000-000000000001')$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000041', $$select * from public.report_ops('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31')$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000041', $$select * from public.report_arrivals('20000000-0000-0000-0000-000000000003', '2027-03-07')$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000041', $$select * from public.report_children('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000041', $$select * from public.report_child_history('32000000-0000-0000-0000-000000000006')$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000041', $$select * from public.report_families('20000000-0000-0000-0000-000000000003', 2026)$$) = '42501'
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000041', $$select * from public.report_volunteers('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31')$$) = '42501',
+  'attendance.reports alone reads the counts, never the names');
+
+-- staff (reports, people.view, kids.view) read everything; one call each, kept for the checks below
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+create temp table rep_occ as select * from public.report_occurrences('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31');
+create temp table rep_tl as select * from public.report_occurrence_timeline('78000000-0000-0000-0000-000000000001', 5);
+create temp table rep_kids as select * from public.report_children('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31');
+create temp table rep_kids2 as select * from public.report_children('20000000-0000-0000-0000-000000000003', '2026-10-01', (now() at time zone 'America/New_York')::date);
+create temp table rep_hist as select * from public.report_child_history('32000000-0000-0000-0000-000000000006');
+create temp table rep_fam26 as select * from public.report_families('20000000-0000-0000-0000-000000000003', 2026, null, 10);
+create temp table rep_fam26b as select * from public.report_families('20000000-0000-0000-0000-000000000003', 2026, null, 1);
+create temp table rep_fam27 as select * from public.report_families('20000000-0000-0000-0000-000000000003', 2027, '2027-03-31', 10);
+create temp table rep_fam27b as select * from public.report_families('20000000-0000-0000-0000-000000000003', 2027, '2027-07-01', 10);
+create temp table rep_vol as select * from public.report_volunteers('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31');
+create temp table rep_vol2 as select * from public.report_volunteers('20000000-0000-0000-0000-000000000003', '2026-10-01', (now() at time zone 'America/New_York')::date);
+create temp table rep_ops as select * from public.report_ops('20000000-0000-0000-0000-000000000003', '2027-03-01', '2027-03-31');
+create temp table rep_ops2 as select * from public.report_ops('20000000-0000-0000-0000-000000000003', '2026-10-01', (now() at time zone 'America/New_York')::date);
+create temp table rep_arr as select * from public.report_arrivals('20000000-0000-0000-0000-000000000003', '2027-03-07', 5);
+select pg_temp.ok(pg_temp.try_sql($$select * from public.report_occurrences('20000000-0000-0000-0000-000000000003', '2026-01-01', '2027-03-01')$$) = '22023'
+  and pg_temp.try_sql($$select * from public.report_children('20000000-0000-0000-0000-000000000003', '2027-03-31', '2027-03-01')$$) = '22023'
+  and pg_temp.try_sql($$select * from public.report_occurrence_timeline('78000000-0000-0000-0000-000000000001', 0)$$) = '22023'
+  and pg_temp.try_sql($$select * from public.report_families('20000000-0000-0000-0000-000000000003', 2026, '2027-01-01')$$) = '22023'
+  and pg_temp.try_sql($$select * from public.report_arrivals('20000000-0000-0000-0000-000000000003', '2027-03-07', 61)$$) = '22023',
+  'ranges, years and steps are bounded');
+select pg_temp.as_postgres();
+
+-- per occurrence
+select pg_temp.ok((select children = 1 and volunteers = 2 and attendees = 0 and first_timers = 1 and anomalies = 0 from rep_occ
+                   where occurrence_id = '78000000-0000-0000-0000-000000000001' and room_name = 'Ducklings')
+  and (select children = 1 and volunteers = 0 from rep_occ where occurrence_id = '78000000-0000-0000-0000-000000000001' and room_name = 'Cubs')
+  and (select count(*) from rep_occ where occurrence_id = '78000000-0000-0000-0000-000000000001') = 2,
+  'a service counts each room: Tess is a first-timer, Kid''s family came with a baseline');
+select pg_temp.ok((select children = 2 and first_timers = 1 and area_name = 'K/5' from rep_occ where occurrence_id = '78000000-0000-0000-0000-000000000002')
+  and (select attendees = 4 and anomalies = 1 from rep_occ where occurrence_id = '78000000-0000-0000-0000-000000000003' and room_name = 'Colts')
+  and (select count(*) from rep_occ where occurrence_id = '78000000-0000-0000-0000-000000000003') = 3
+  and (select count(*) from rep_occ where room_id is null and children = 0) >= 4,
+  'a guest child is a first-timer; adults are attendees; a service that nobody attended still lists');
+-- the ratio through the morning
+select pg_temp.ok((select children = 1 and adults = 2 from rep_tl where at = '2027-03-07 17:30:00+00' and room_name = 'Ducklings')
+  and (select children = 1 and adults = 0 from rep_tl where at = '2027-03-07 17:30:00+00' and room_name = 'Cubs')
+  and (select children = 1 and adults = 1 from rep_tl where at = '2027-03-07 17:15:00+00' and room_name = 'Ducklings')
+  and (select children = 0 and adults = 2 from rep_tl where at = '2027-03-07 17:45:00+00' and room_name = 'Ducklings')
+  and (select min(at) = '2027-03-07 16:30:00+00' and max(at) <= '2027-03-07 19:00:00+00' from rep_tl),
+  'the timeline shows who was in each room every five minutes');
+
+-- per child
+select pg_temp.ok((select attended = 5 and by_month = '{"2027-03": 5}'::jsonb and first_attended = '2026-11-02' and last_attended = '2027-03-28' and last_room_name = 'Cubs'
+                     and household_name = 'The Parents' and birthdate = '2020-01-01'
+                   from rep_kids where person_id = '32000000-0000-0000-0000-000000000006')
+  and (select attended = 2 from rep_kids where first_name = 'Tess')
+  and (select attended = 0 and first_attended is null and consecutive_absences = 0 from rep_kids where first_name = 'Oli')
+  and (select count(*) from rep_kids) = 13,
+  'every child is listed, with check-ins in the range by month and first and last ever');
+select pg_temp.ok((select attended = 2 and by_month = '{"2026-10": 2}'::jsonb and consecutive_absences = 1 and household_name = 'The Teen Family' and last_room_name = 'Kindergarten'
+                   from rep_kids2 where person_id = '32000000-0000-0000-0000-000000000041')
+  and (select attended = 2 and by_month = '{"2026-10": 1, "2026-11": 1}'::jsonb and consecutive_absences = 0 from rep_kids2 where first_name = 'Ira')
+  and (select attended = 1 from rep_kids2 where first_name = 'Nate'),
+  'absences count services of the child''s own schedules that ran (not the cancelled one); two check-ins at one service count once');
+select pg_temp.ok((select count(*) from rep_hist) = 6
+  and (select first_room_name = 'Ducklings' and room_name = 'Cubs' and status = 'out' from rep_hist where local_date = '2027-03-28')
+  and (select count(*) from rep_hist where status = 'in') = 1
+  and (select local_date from rep_hist limit 1) = '2027-03-28',
+  'a child''s history lists every service, newest first, with the rooms');
+
+-- per family: the Monday numbers
+select pg_temp.ok((select checkins = 2 and baseline = 12 and total = 14 and over_threshold and exclusion = 'exempt' and flags = '{exempt}' and area_name = 'K/5'
+                   from rep_fam26 where household_id = '42000000-0000-0000-0000-000000000023')
+  and (select checkins = 1 and baseline = 7 and total = 8 and not over_threshold and exclusion is null and last_seen = (now() at time zone 'America/New_York')::date
+         and parents = array['Pat Parent', 'Ann Aunt'] and children -> 0 ->> 'name' = 'Kid Parent' and children -> 0 ->> 'room_name' = 'Ducklings'
+       from rep_fam26 where household_id = '42000000-0000-0000-0000-000000000001')
+  and (select count(*) from rep_fam26) = 6
+  and not exists (select 1 from rep_fam26 where household_id = '42000000-0000-0000-0000-000000000010'),
+  'check-ins plus the baseline against the threshold; an exempt family is excluded; a family with nothing this year is not listed');
+select pg_temp.ok((select checkins = 2 and area_name = 'The Barn' from rep_fam26 where household_id = '42000000-0000-0000-0000-000000000031')
+  and (select checkins = 2 and jsonb_array_length(children) = 2 from rep_fam26 where household_id = '42000000-0000-0000-0000-000000000009')
+  and (select checkins = 1 from rep_fam26 where household_id = '42000000-0000-0000-0000-000000000020')
+  and (select serves_ytd = 1 and serving_adult and exclusion = 'serving' from rep_fam26 where household_id = '42000000-0000-0000-0000-000000000022'),
+  'a child checked in without a pass counts for both families; a tie goes to the Barn; one per child per service; a serving adult excludes the family');
+select pg_temp.ok((select bool_and(over_threshold) from rep_fam26b) and (select count(*) from rep_fam26b) = 6, 'the threshold is a parameter');
+select pg_temp.ok((select checkins = 5 and total = 5 and area_name = 'The Barn' and last_seen = '2027-03-28' and exclusion is null from rep_fam27 where household_id = '42000000-0000-0000-0000-000000000001')
+  and (select checkins = 2 from rep_fam27 where household_id = '42000000-0000-0000-0000-000000000010')
+  and (select checkins = 2 and last_seen = '2027-03-21' from rep_fam27 where household_id = '42000000-0000-0000-0000-000000000009')
+  and (select count(*) from rep_fam27) = 3
+  and (select exclusion = 'lapsed' from rep_fam27b where household_id = '42000000-0000-0000-0000-000000000001'),
+  'a pass counts for the family it was made with; three months without a check-in is lapsed');
+-- the baseline's last-attended date keeps an imported family from reading as lapsed
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.attendance_baselines (org_id, household_id, year, count, last_attended_on) values ('20000000-0000-0000-0000-000000000003', '42000000-0000-0000-0000-000000000001', 2027, 0, '2027-06-15')$$) = ''
+  and pg_temp.try_as('00000000-0000-0000-0000-000000000022',
+  $$update public.attendance_baselines set last_attended_on = '2027-06-20' where household_id = '42000000-0000-0000-0000-000000000001' and year = 2027$$) = '',
+  'a manager records when a family was last seen in the old system');
+select pg_temp.ok((select last_attended_on = '2027-06-15' from public.attendance_baselines where household_id = '42000000-0000-0000-0000-000000000001' and year = 2027),
+  'a report reader''s update touches nothing');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select last_seen = '2027-06-15' and total = 5 and exclusion is null
+                   from public.report_families('20000000-0000-0000-0000-000000000003', 2027, '2027-07-01', 10) where household_id = '42000000-0000-0000-0000-000000000001'),
+  'and the family is no longer lapsed');
+select pg_temp.as_postgres();
+
+-- volunteers
+select pg_temp.ok((select count(*) from rep_vol) = 3
+  and (select scheduled and not attended and punctuality is null from rep_vol where name = 'Eli Elder' and schedule_name = 'First service')
+  and (select scheduled and attended and punctuality = 'on_time' and minutes_vs_expected = 2 from rep_vol where name = 'Eli Elder' and schedule_name = 'Second service')
+  and (select punctuality = 'late' and minutes_vs_expected = 15 and room_name = 'Ducklings' from rep_vol where name = 'Dee Deacon'),
+  'each need shows who was scheduled and how they arrived; a future service is still pending');
+select pg_temp.ok((select count(*) from rep_vol2) = 3
+  and (select punctuality = 'no_show' and scheduled and not attended from rep_vol2 where name = 'Uri Uncle')
+  and (select punctuality = 'late' and slot_label = 'Cubs helper' from rep_vol2 where name = 'Eli Elder')
+  and (select punctuality = 'unscheduled' and not scheduled and attended and room_name = 'Cubs' from rep_vol2 where name = 'Rae Regular'),
+  'a scheduled volunteer who never came is a no-show; a walk-up is unscheduled');
+
+-- ops
+select pg_temp.ok((select count(*) from rep_ops) = 4
+  and (select sessions = 2 and completed_sessions = 1 and checkins = 5 and prints = 1 and reprints = 1 and print_failures = 0 and alerts = 3 and stations_used = 1
+       from rep_ops where local_date = '2027-03-07')
+  and (select reprints = 2 and anomalies = 1 and stations_used = 2 from rep_ops where local_date = '2027-03-28')
+  and (select anomalies = 3 from rep_ops where local_date = '2027-03-21'),
+  'a day shows its passes, check-ins, prints and reprints, anomalies, alerts and stations');
+select pg_temp.ok((select count(*) from rep_ops2) = 3
+  and (select delayed_events = 1 and checkins = 1 and sessions = 0 from rep_ops2 where local_date = '2026-10-04')
+  and (select delayed_events = 2 from rep_ops2 where local_date = '2026-10-11')
+  and (select sessions = 1 and anomalies = 1 and alerts = 2 from rep_ops2 where local_date = (now() at time zone 'America/New_York')::date),
+  'events that reached the server long after the device''s moment are counted as synced late');
+select pg_temp.ok((select count(*) from rep_arr) = 5
+  and (select sessions = 1 and checkins = 1 and station_name = 'Barn kiosk' from rep_arr where at = '2027-03-07 17:00:00+00')
+  and (select sessions = 0 and checkins = 1 from rep_arr where at = '2027-03-07 17:30:00+00'),
+  'arrivals are bucketed by five minutes per station');
+
+-- every read is logged once, with the filter and the count, never the data
+select pg_temp.ok((select count(*) from public.access_log where action = 'report.families' and actor_person_id = '32000000-0000-0000-0000-000000000001'
+                   and detail ->> 'year' = '2026' and detail ->> 'threshold' = '1' and subject_count = 6) = 1
+  and (select count(*) from public.access_log where action = 'report.child_history' and subject_person_id = '32000000-0000-0000-0000-000000000006' and subject_count = 6) = 1
+  and (select count(*) from public.access_log where action = 'report.occurrence_timeline' and detail ->> 'occurrence_id' = '78000000-0000-0000-0000-000000000001' and detail ->> 'step' = '5'
+                                                 and actor_person_id = '32000000-0000-0000-0000-000000000001') = 1
+  and (select count(*) from public.access_log where action = 'report.arrivals' and detail ->> 'local_date' = '2027-03-07' and subject_count = 5
+                                                 and actor_person_id = '32000000-0000-0000-0000-000000000001') = 1
+  and (select count(*) from public.access_log where action like 'report.%' and actor_person_id = '32000000-0000-0000-0000-000000000034') = 4
+  and (select count(*) from public.access_log where action like 'report.%' and actor_person_id = '32000000-0000-0000-0000-000000000002') = 0
+  and not exists (select 1 from public.access_log where action like 'report.%' and (detail::text like '%@%' or detail::text ~ '555'))
+  and (select count(*) from public.access_log where action like 'report.%' and subject_count is null) = 0,
+  'every report read is logged with its filter and row count; a refused read is not');
+
+-- merges are resolved at read time
+select pg_temp.ok(pg_temp.try_as('00000000-0000-0000-0000-000000000021',
+  $$insert into public.person_merges (org_id, kept_person_id, merged_person_id) values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000007', '32000000-0000-0000-0000-000000000033')$$) = '42501',
+  'nobody writes the merge log by hand');
+insert into public.person_merges (org_id, kept_person_id, merged_person_id, merged_by_person_id, detail)
+  values ('20000000-0000-0000-0000-000000000003', '32000000-0000-0000-0000-000000000007', '32000000-0000-0000-0000-000000000033', '32000000-0000-0000-0000-000000000001', '{"test": true}');
+select pg_temp.ok(pg_temp.try_sql($$update public.person_merges set detail = '{}' where merged_person_id = '32000000-0000-0000-0000-000000000033'$$) = '42501'
+  and pg_temp.try_sql($$delete from public.person_merges where merged_person_id = '32000000-0000-0000-0000-000000000033'$$) = '42501'
+  and pg_temp.try_sql($$truncate public.person_merges$$) = '42501',
+  'the merge log is append-only, for the owner too');
+select pg_temp.ok(chms_private.resolve_person('32000000-0000-0000-0000-000000000033') = '32000000-0000-0000-0000-000000000007'
+  and chms_private.resolve_person('32000000-0000-0000-0000-000000000006') = '32000000-0000-0000-0000-000000000006'
+  and (select count(*) from chms_private.canonical_people('20000000-0000-0000-0000-000000000003')) = 1
+  and (select count(*) from chms_private.canonical_people('20000000-0000-0000-0000-000000000001')) = 0,
+  'a merged record resolves to the one kept; everyone else is themselves');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000023');
+select pg_temp.ok((select count(*) from public.person_merges) = 0, 'a children''s merge needs kids.view to be seen');
+select pg_temp.as_user('00000000-0000-0000-0000-000000000022');
+select pg_temp.ok((select count(*) from public.person_merges where merged_person_id = '32000000-0000-0000-0000-000000000033') = 1, 'staff see it');
+select pg_temp.ok((select count(*) from public.report_child_history('32000000-0000-0000-0000-000000000033')) = 2
+  and (select count(*) from public.report_child_history('32000000-0000-0000-0000-000000000007')) = 2,
+  'a merged child''s history is the kept child''s history');
+select pg_temp.as_postgres();
+select pg_temp.ok((select count(*) from public.access_log where action = 'report.child_history' and subject_person_id = '32000000-0000-0000-0000-000000000007') = 2
+  and not exists (select 1 from public.access_log where action = 'report.child_history' and subject_person_id = '32000000-0000-0000-0000-000000000033'),
+  'and is logged against the kept child');
+
+\echo
 \echo 'All tests passed.'
 rollback;

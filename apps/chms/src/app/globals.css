@@ -818,7 +818,7 @@ select { cursor: pointer; }
 
 /* Below about 900px (iPad portrait, phones) the directory is a list of rows, not a table. */
 @media (max-width: 899px) {
-  .table-wrap { display: none; }
+  .table-wrap.directory { display: none; }
   .people-list { display: block; }
 }
 
@@ -1106,3 +1106,14 @@ details.disclosure[open] > summary::before { content: '▾ '; }
 .pick-box.on { background: var(--tint-fill); border-color: var(--tint-fill); }
 .cell-link.on { background: var(--tint-soft); }
 button.cell-link { width: 100%; border: 0; background: transparent; text-align: left; font: inherit; }
+
+/* ---- reports ---- */
+.report-head { margin: 4px 0 20px; }
+.report-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; margin-top: 6px; }
+.report-title { font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; }
+.report-lead { color: var(--label-2); margin: 0; max-width: 640px; }
+.table td.wrap { white-space: normal; }
+.table .total-row td { font-weight: 600; }
+.num-input { width: 80px; text-align: right; }
+.baseline-edit .baseline-date { width: 150px; text-align: left; }
+.baseline-edit .baseline-date[data-empty="true"] { color: var(--label-2); }

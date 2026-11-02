@@ -108,7 +108,7 @@ export default function PeoplePage() {
       {error && <p className="error" role="alert">{error}</p>}
 
       {/* Wide screens: a table. Phones: a list of rows (only one of the two is displayed). */}
-      <div className="table-wrap">
+      <div className="table-wrap directory">
         <table className="table">
           <thead>
             <tr>
